@@ -1,58 +1,35 @@
-<!-- rumdl-disable MD041 -->
+# Console
 
-<div align="center">
+A planned dashboard for managing AI agent sessions across workspaces and machines.
 
-# Project Template
+[![Quality Gate](https://img.shields.io/github/actions/workflow/status/HYP3R00T/console/ci.yml?branch=main&style=for-the-badge&label=Quality%20Gate&logo=githubactions)](https://github.com/HYP3R00T/console/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/HYP3R00T/console?style=for-the-badge&label=License)](LICENSE)
 
-A minimal, reusable foundation for consistent development environments and maintainable project workflows.
+## Status
 
-[Documentation](https://hyp3r00t.github.io/project-template/) · [Use this template](https://github.com/HYP3R00T/project-template/generate) · [Contributing](CONTRIBUTING.md)
+Console is in initial setup. This repository currently contains the development environment and repository checks; application code and dependencies will be added later.
 
-[![Quality Gate](https://img.shields.io/github/actions/workflow/status/HYP3R00T/project-template/ci.yaml?branch=main&style=for-the-badge&label=Quality%20Gate&logo=githubactions)](https://github.com/HYP3R00T/project-template/actions/workflows/ci.yaml)
-[![License: MIT](https://img.shields.io/github/license/HYP3R00T/project-template?style=for-the-badge&label=License)](LICENSE)
+The initial goal is a web client connected to an agent backend, with support for creating, viewing, and returning to sessions in a workspace. Remote machines and automation management are planned extensions.
 
-</div>
+## Development
 
-<!-- Add a project screenshot or demonstration here. -->
+Open the repository in Visual Studio Code with Docker and the Dev Containers extension installed, then run **Dev Containers: Reopen in Container**. Container setup installs the tools declared in `mise.toml` and configures Git hooks.
 
-## About
+For an existing Linux development environment with Mise and uv installed:
 
-This repository provides a language-agnostic starting point for projects that need a predictable Linux development environment across Windows, macOS, and Linux hosts. The Dev Container supplies the environment, while Mise provides a shared interface for installing and running project tools.
+```bash
+bash scripts/setup.sh
+bash scripts/enter_project.sh
+```
 
-The template also establishes repository hygiene, automated checks, contribution expectations, and documentation publishing without choosing a programming language or application architecture. Derived projects can add only the runtimes and checks they actually need.
+Run the repository checks:
 
-## Features
+```bash
+prek run --all-files
+```
 
-- Reproducible development through a Docker-based Dev Container.
-- Cross-platform project entry scripts for Unix-like systems and Windows.
-- Tool and task management with [Mise](https://mise.jdx.dev/).
-- Local Git hooks and repository checks powered by [prek](https://prek.j178.dev/).
-- A pull-request quality gate that runs the same checks as local development.
-- Structured issue forms, contribution guidance, security reporting, and code ownership.
-- Manual, project-level skills for refining one issue and delivering it to a verified pull request.
-- Developer documentation published with [Zensical](https://zensical.org/).
-- Automated GitHub Actions dependency updates through Dependabot.
-
-## Use this template
-
-1. Select [**Use this template**](https://github.com/HYP3R00T/project-template/generate) and create a repository.
-2. Open the new repository in Visual Studio Code.
-3. Run **Dev Containers: Reopen in Container** from the Command Palette.
-4. Wait for the setup to install the declared tools and configure the Git hooks.
-5. Add the runtimes, dependencies, checks, and tasks required by the project.
-
-For environment requirements and verification commands, read the [documentation](https://hyp3r00t.github.io/project-template/).
-
-## Contributing
-
-Contributions are welcome when they are focused, understandable, and maintainable. Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a change.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution and verification guidance.
 
 ## License
 
-This project is available under the [MIT License](LICENSE).
-
-<div align="center">
-
-Developed with ❤️ by [HYP3R00T](https://github.com/HYP3R00T)
-
-</div>
+[MIT](LICENSE).

@@ -2,6 +2,7 @@
 prek = "latest"
 rumdl = "latest"
 shellcheck = { version = "latest", os = ["linux", "macos"] }
+tombi = "latest"
 
 [settings]
 experimental = true
@@ -11,12 +12,7 @@ lockfile = true
 use_git_credentials = true
 
 [hooks]
-enter = { run = "bash ./scripts/enter_project.sh", run_windows = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/enter_project.ps1" }
+enter = { run = "bash ./scripts/enter_project.sh" }
 
 [env]
 _.file = ".env"  # for sensitive data
-UV_LINK_MODE = "copy"
-
-[tasks.docs]
-description = "Serve the documentation locally"
-run = "uvx zensical serve"

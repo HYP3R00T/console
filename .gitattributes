@@ -9,9 +9,9 @@
 *.DOC      diff=astextplain
 *.docx     diff=astextplain
 *.DOCX     diff=astextplain
-*.dot      diff=astextplain
+*.dot      diff=astextplain text
 *.DOT      diff=astextplain
-*.pdf      diff=astextplain
+*.pdf      binary
 *.PDF      diff=astextplain
 *.rtf      diff=astextplain
 *.RTF      diff=astextplain
@@ -87,6 +87,180 @@ Containerfile text eol=lf
 *.patch    -text
 
 # Exclude repository metadata from generated archives.
-.gitattributes export-ignore
+.gitattributes export-ignore text
 .gitignore     export-ignore
 .gitkeep       export-ignore
+
+## GITATTRIBUTES FOR WEB PROJECTS
+#
+# These settings are for any web project.
+#
+# Details per file setting:
+#   text    These files should be normalized (i.e. convert CRLF to LF).
+#   binary  These files are binary and should be left untouched.
+#
+# Note that binary is a macro for -text -diff.
+######################################################################
+
+# Source code
+*.coffee   text
+*.css      text diff=css
+*.htm      text diff=html
+*.html     text diff=html
+*.inc      text
+*.ini      text
+*.js       text
+*.mjs      text
+*.cjs      text
+*.jsx      text
+*.less     text
+*.ls       text
+*.map      text -diff
+*.od       text
+*.onlydata text
+*.php      text diff=php
+*.pl       text
+*.py       text diff=python
+*.rb       text diff=ruby
+*.sass     text
+*.scm      text
+*.scss     text diff=css
+.husky/*   text eol=lf
+*.styl     text
+*.tag      text
+*.ts       text
+*.tsx      text
+*.xhtml    text diff=html
+
+# Documentation
+*.ipynb           text eol=lf
+*.markdown        text diff=markdown
+*.mdwn            text diff=markdown
+*.mdown           text diff=markdown
+*.mkd             text diff=markdown
+*.mkdn            text diff=markdown
+*.mdtxt           text
+*.mdtext          text
+AUTHORS           text
+CHANGELOG         text
+CHANGES           text
+CONTRIBUTING      text
+COPYING           text
+copyright         text
+*COPYRIGHT*       text
+INSTALL           text
+license           text
+LICENSE           text
+NEWS              text
+readme            text
+*README*          text
+TODO              text
+
+# Templates
+*.ejs             text
+*.erb             text
+*.haml            text
+*.handlebars      text
+*.hbs             text
+*.hbt             text
+*.jade            text
+*.latte           text
+*.njk             text
+*.phtml           text
+*.svelte          text
+*.tmpl            text
+*.tpl             text
+*.twig            text
+*.vue             text
+
+# Configs
+*.cnf             text
+*.conf            text
+*.config          text
+.editorconfig     text
+*.env             text
+.gitconfig        text
+.htaccess         text
+*.lock            text -diff
+package.json      text eol=lf
+package-lock.json text eol=lf -diff
+pnpm-lock.yaml    text eol=lf -diff
+.prettierrc       text
+yarn.lock         text -diff
+browserslist      text
+Makefile          text
+makefile          text
+# Fixes syntax highlighting on GitHub to allow comments
+tsconfig.json     linguist-language=JSON-with-Comments
+
+# Heroku
+Procfile          text
+
+# Graphics
+*.ai       binary
+*.bmp      binary
+*.gifv     binary
+*.jng      binary
+*.jp2      binary
+*.jpx      binary
+*.jxr      binary
+*.psb      binary
+*.psd      binary
+*.svgz     binary
+*.wbmp     binary
+*.webp     binary
+
+# Audio
+*.kar      binary
+*.m4a      binary
+*.mid      binary
+*.midi     binary
+*.mp3      binary
+*.ogg      binary
+*.ra       binary
+
+# Video
+*.3gpp     binary
+*.3gp      binary
+*.as       binary
+*.asf      binary
+*.asx      binary
+*.avi      binary
+*.fla      binary
+*.flv      binary
+*.m4v      binary
+*.mng      binary
+*.mov      binary
+*.mp4      binary
+*.mpeg     binary
+*.mpg      binary
+*.ogv      binary
+*.swc      binary
+*.swf      binary
+*.webm     binary
+
+# Archives
+*.jar      binary
+
+# Fonts
+*.ttf      binary
+*.eot      binary
+*.otf      binary
+*.woff     binary
+*.woff2    binary
+
+# Executables
+*.exe      binary
+*.pyc      binary
+# Prevents massive diffs caused by vendored, minified files
+**/.yarn/releases/**   binary
+**/.yarn/plugins/**    binary
+
+# RC files (like .babelrc or .eslintrc)
+*.*rc      text
+
+# Ignore files (like .npmignore or .gitignore)
+*.*ignore  text
+
+# Prevents massive diffs from built files
+dist/**    binary
