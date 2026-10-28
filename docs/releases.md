@@ -3,8 +3,8 @@
 Changesets is installed through mise (`npm:@changesets/cli`), alongside the other shared tools.
 Run `mise install` before using the commands below.
 
-The current `server` and `web` directories are placeholders. There are no versioned application
-packages yet. Add a package's `name` and `version` to its manifest when it becomes a real workspace package.
+The server and web app are private workspace packages.
+Add a package's `name` and `version` to its manifest when it becomes a real workspace package.
 Keep applications that are not intended for npm publication marked `private`.
 
 ## Record a package change

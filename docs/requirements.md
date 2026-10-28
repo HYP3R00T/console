@@ -1,6 +1,6 @@
 # Console requirements
 
-Status: working product baseline for review; application functionality is not implemented.
+Status: working product baseline for review. Server/web scaffolds and their health connection are implemented; agent workflows remain planned.
 
 This document records what Console is intended to do and why. [Architecture](architecture.md)
 describes how we intend to provide it, including choices that remain unresolved. Requirements
@@ -72,6 +72,10 @@ They are extensions to refine separately, not dependencies of the initial manual
 Automatic triggers should eventually submit bounded assignments through the same execution path.
 Automatic initiation and permission to merge or deploy remain independent choices.
 
+Future team access should allow multiple authenticated people to connect to the same backend.
+The backend must enforce each user's access; session visibility and concurrent-control behavior
+need explicit design. Selecting Next.js for the client does not implement these capabilities.
+
 ## Outside the initial scope
 
 - Replacing source control, GitHub issues, CI/CD, or general monitoring platforms.
@@ -95,7 +99,7 @@ settle consequential choices, and identify executable checks as implementation m
 ## Decisions still needed
 
 - First user workflow and proof task, including read-only versus code-editing tools.
-- Execution engine, model access, persistence design, API, and frontend framework.
+- Model access, persistence design, and API contracts; Pi Durable is selected but not integrated, and Next.js is selected for the client.
 - Supported lifecycle states, recovery/replay boundaries, cancellation, retention, and concurrency limits.
 - Access control, resource/cost limits, and the first deployment environment.
 
