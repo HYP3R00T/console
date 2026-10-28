@@ -1,5 +1,7 @@
 # Repository instructions
 
+- Read [requirements](docs/requirements.md) for product intent and [architecture](docs/architecture.md)
+  for system design. Both distinguish planned behavior from implemented functionality; update them when affected by a change.
 - Inspect relevant source, configuration, and the working tree before changes; preserve unrelated work.
 - Work within the requested scope. Clarify material product choices rather than inventing requirements.
 - Use configured tools and existing conventions; do not weaken checks to make work pass.
