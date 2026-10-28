@@ -194,6 +194,31 @@ export function registerSessionRoutes(
     "/sessions/:id",
     "/sessions/:id/conversations/:conversationId",
   ]) {
+    app.patch<{
+      Params: { id: string; conversationId?: string };
+      Body: { name: string; enabled: boolean };
+    }>(
+      `${base}/extensions`,
+      {
+        schema: {
+          params,
+          body: {
+            type: "object",
+            required: ["name", "enabled"],
+            additionalProperties: false,
+            properties: { name: string, enabled: { type: "boolean" } },
+          },
+        },
+      },
+      async (req) => {
+        await (
+          await sessions.conversation(req.params.id, req.params.conversationId)
+        ).selectExtension(req.body.name, req.body.enabled);
+        return (
+          await sessions.conversation(req.params.id, req.params.conversationId)
+        ).inspect();
+      },
+    );
     app.get<{ Params: { id: string; conversationId?: string } }>(
       `${base}/inspect`,
       { schema: { params } },
