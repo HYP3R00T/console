@@ -26,7 +26,22 @@ try {
     throw new Error("PORT must be an integer between 0 and 65535");
   }
 
-  await app.listen({ host: process.env.HOST ?? "127.0.0.1", port });
+  const address = await app.listen({
+    host: process.env.HOST ?? "127.0.0.1",
+    port,
+  });
+  app.log.info(
+    {
+      connectionUrl: address
+        .replace("0.0.0.0", "127.0.0.1")
+        .replace("[::]", "[::1]"),
+      apiVersion: 1,
+      authentication: process.env.CONSOLE_ACCESS_TOKEN
+        ? "access token required"
+        : "loopback only; token not required",
+    },
+    "Connect this machine from Console > Machines. Nothing is discovered automatically.",
+  );
 } catch (error) {
   app.log.error(error);
   process.exitCode = 1;
