@@ -114,6 +114,8 @@ export function openWorkspaces(
       "UPDATE workspaces SET state='cloning', error=NULL WHERE id=?",
     ).run(item.id);
     const done = (async () => {
+      let outcome = "ready";
+      let error: string | null = null;
       try {
         await mkdir(dirname(item.path), { recursive: true });
         await clone(item.repository ?? "", staging, controller.signal);
@@ -126,20 +128,25 @@ export function openWorkspaces(
         )
           throw new Error("Target exists");
         await rename(staging, item.path);
-        db.prepare("UPDATE workspaces SET state='ready' WHERE id=?").run(
-          item.id,
-        );
       } catch {
+        outcome = controller.signal.aborted ? "interrupted" : "failed";
+        error = controller.signal.aborted
+          ? "Clone interrupted. Retry when the machine is available."
+          : "Clone failed. Check Git, public repository access, available disk space, and destination permissions.";
+      } finally {
+        try {
+          await rm(staging, { recursive: true, force: true });
+        } catch {
+          outcome = "failed";
+          error =
+            "Clone cleanup failed. Check destination permissions before retrying.";
+        }
+        jobs.delete(item.id);
         db.prepare("UPDATE workspaces SET state=?, error=? WHERE id=?").run(
-          controller.signal.aborted ? "interrupted" : "failed",
-          controller.signal.aborted
-            ? "Clone interrupted. Retry when the machine is available."
-            : "Clone failed. Check Git, public repository access, available disk space, and destination permissions.",
+          outcome,
+          error,
           item.id,
         );
-      } finally {
-        await rm(staging, { recursive: true, force: true });
-        jobs.delete(item.id);
       }
     })();
     jobs.set(item.id, { controller, done });
