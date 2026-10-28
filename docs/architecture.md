@@ -1,6 +1,6 @@
 # Console architecture
 
-Status: intended design for review; no application packages or runtime are implemented.
+Status: Fastify and Next.js scaffolds with a health connection are implemented. Agent execution and session workflows remain planned.
 
 [Requirements](requirements.md) owns product outcomes and scope. This document owns responsibilities,
 state, interfaces, and technical tradeoffs. It must distinguish intended design from verified implementation.
@@ -10,6 +10,10 @@ state, interfaces, and technical tradeoffs. It must distinguish intended design 
 Begin with one backend on the machine containing the project workspace and a browser client.
 The backend owns execution and saved state. The browser is a view and control surface, not the
 owner of the running agent. This separation supports REQ-1 through REQ-5.
+
+The current browser app is served by Next.js. Its health request is forwarded to Fastify
+through a Next.js rewrite. These are two local Node.js processes; `mise run dev` starts
+both directly on the host. The Next.js process does not own agent execution or persistent sessions.
 
 ```mermaid
 flowchart LR
@@ -95,14 +99,19 @@ These are intended constraints requiring implementation and proof, not currently
 - **Node.js foundation (configured):** mise provides Node.js (`lts`), pnpm (`latest`), and Biome (`latest`);
   `pnpm-workspace.yaml` discovers packages under `packages/*`. The private root package exposes shared check commands.
   Biome checks JavaScript, TypeScript, JSON, CSS, and GraphQL through pnpm, prek, and CI; RumDL handles Markdown.
-  Application languages, frameworks, and runtime integration remain unimplemented.
-- **Pi Durable:** previously proposed for durable execution. Its integration, supported model access,
-  cancellation, replay, and restart behavior need a focused feasibility check before adoption.
+  The server uses TypeScript and Fastify in one Node.js process. Its health endpoint, build, type checks,
+  and HTTP tests are implemented; see the [server guide](packages/server.md).
+- **Web foundation (configured):** Next.js App Router, React, TypeScript, Tailwind CSS, and shadcn/ui provide the browser
+  starter. It checks the Fastify health endpoint through a web-origin proxy; see the [web guide](packages/web.md).
+  Product UI, authentication, and shared-session controls are not implemented.
+  shadcn preset `bddBUJXM` supplies the initial theme, Geist font, and Lucide icon choice.
+- **Pi Durable (selected, not integrated):** the intended agent execution library. Supported model access,
+  cancellation, replay, and restart behavior still need a focused feasibility check during integration.
 - **SQLite:** previously proposed for an initial single-host store. If selected, define ownership,
   concurrency, migrations, backups, and interaction with runtime-owned storage.
-- **Monorepo (directories created):** `packages/server/` and `packages/web/` are placeholders without
-  manifests or source code. They reserve space for execution/API and browser code; they are not yet
-  workspace packages or a decision to deploy independent microservices.
+- **Monorepo:** `packages/server/` is a private workspace package containing the HTTP server scaffold.
+  `packages/web/` is a private Next.js workspace package. These boundaries do not require
+  independent microservice deployments.
 - **Remote hosting:** a Kubernetes machine was discussed as a later host. It is not required for
   the first local workflow. A central hub, extra clients, and an automation scheduler are not initial components.
 

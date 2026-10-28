@@ -20,3 +20,15 @@ enter = { run = "bash ./scripts/enter_project.sh" }
 
 [env]
 _.file = ".env"  # for sensitive data
+
+[tasks.dev]
+description = "Run the server and web app together"
+depends = ["dev:server", "dev:web"]
+
+[tasks."dev:server"]
+description = "Run the Fastify development server"
+run = "pnpm dev:server"
+
+[tasks."dev:web"]
+description = "Run the Next.js development app"
+run = "pnpm dev:web"
