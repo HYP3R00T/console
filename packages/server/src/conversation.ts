@@ -11,12 +11,21 @@ import {
 } from "@earendil-works/pi-ai/models";
 import {
   AgentDoc,
+  configure,
   createRegistry,
   Harness,
   LiveDoc,
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { httpError } from "./providers.ts";
+import {
+  defaultSandbox,
+  SandboxDoc,
+  type SandboxPolicy,
+  validateSandbox,
+} from "./sandbox-policy.ts";
+import { runSandbox } from "./sandbox-runner.ts";
+import { sandboxExtension } from "./sandbox-tools.ts";
 
 function text(message: Message) {
   return typeof message.content === "string"
@@ -33,15 +42,22 @@ export type AgentConfiguration = {
   thinkingLevel?: ModelThinkingLevel;
 };
 
-export async function openConversation(models: Models, directory: string) {
+export async function openConversation(
+  models: Models,
+  directory: string,
+  privateDirectory = directory,
+) {
   const storage = await openNodeSqliteStorage(
     join(directory, "conversation.sqlite"),
   );
+  const sandbox = sandboxExtension(privateDirectory);
+  const registry = createRegistry();
+  registry.install(sandbox.extension);
   const harness = await Harness.open(
     storage,
     {
       models,
-      registry: createRegistry(),
+      registry,
       identity: {
         attribution: {
           name: "Console",
@@ -95,6 +111,32 @@ export async function openConversation(models: Models, directory: string) {
   }
   return {
     summary,
+    configureSandbox(input: SandboxPolicy) {
+      return serialize(async () => {
+        await assertIdle();
+        const policy = await validateSandbox(input, privateDirectory);
+        if (policy.enabled) {
+          try {
+            await runSandbox(policy, { operation: "check" }, privateDirectory);
+          } catch {
+            throw httpError(
+              400,
+              "Sandbox could not be applied. Check nono/kernel support and path grants; the previous policy is unchanged.",
+            );
+          }
+        }
+        await root.commit(async (tx) => {
+          Object.assign(await tx.doc(SandboxDoc, root.id), policy);
+          await configure(tx, root.id, {
+            tools: sandbox.tools(policy),
+            cwd: policy.enabled ? policy.workspace : null,
+            instructions:
+              "You are Console's assistant. Use only the available tools and accurately report what you inspected or changed.",
+          });
+        }, context);
+        return policy;
+      });
+    },
     configure(input: AgentConfiguration) {
       return serialize(async () => {
         await assertIdle();
@@ -137,16 +179,23 @@ export async function openConversation(models: Models, directory: string) {
       ).items[0];
       return {
         ...(await summary()),
+        sandbox:
+          (await harness.snapshot(SandboxDoc, root.id, context)) ??
+          defaultSandbox(),
         hasOlder: Boolean(entries.next),
         messages: [...entries.items].reverse().flatMap((entry) =>
           (entry.model ?? [])
             .filter(
               (message) =>
-                message.role === "user" || message.role === "assistant",
+                message.role === "user" ||
+                message.role === "assistant" ||
+                message.role === "toolResult",
             )
             .map((message, index) => ({
               id: `${entry.id}-${index}`,
               role: message.role,
+              toolName:
+                message.role === "toolResult" ? message.toolName : undefined,
               text: text(message),
             })),
         ),

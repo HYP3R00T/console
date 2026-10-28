@@ -28,6 +28,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [sandboxDirty, setSandboxDirty] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<
     Record<string, Submission | undefined>
@@ -37,6 +38,7 @@ export default function Home() {
     selectedRef.current = id;
     setSelected(id);
     setDirty(false);
+    setSandboxDirty(false);
     setError("");
     setDetailOnline(false);
     window.history.replaceState(null, "", `?session=${encodeURIComponent(id)}`);
@@ -223,7 +225,7 @@ export default function Home() {
               session={session}
               online={online && detailOnline}
               working={working}
-              dirty={dirty}
+              dirty={dirty || sandboxDirty}
               configured={Boolean(
                 providers.find(
                   (provider) => provider.id === session.model?.provider,
@@ -249,6 +251,12 @@ export default function Home() {
                 working || !online || !detailOnline || session.status !== "idle"
               }
               onDirtyChange={setDirty}
+              onSandboxDirtyChange={setSandboxDirty}
+              onSandboxSave={(input) =>
+                operate(session.id, async () => {
+                  await api(`/sessions/${session.id}/sandbox`, "PATCH", input);
+                })
+              }
               onSave={(input) =>
                 operate(session.id, async () => {
                   await api(`/sessions/${session.id}/config`, "PATCH", input);

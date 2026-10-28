@@ -5,6 +5,7 @@ import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import type { FastifyInstance } from "fastify";
 import { openCredentials } from "./credentials.ts";
 import { createProviders } from "./providers.ts";
+import { sandboxSupport } from "./sandbox-runner.ts";
 import { registerSessionRoutes } from "./session-routes.ts";
 import { openSessions } from "./sessions.ts";
 
@@ -85,6 +86,7 @@ export async function registerConsole(
   };
   const string = { type: "string", minLength: 1, maxLength: 200 };
   app.get("/providers", () => providers.list());
+  app.get("/sandbox/support", () => sandboxSupport());
   app.post<{ Params: { id: string } }>(
     "/providers/:id/refresh",
     { schema: { params } },

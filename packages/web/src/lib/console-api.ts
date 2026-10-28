@@ -46,11 +46,20 @@ export type AgentConfiguration = {
   thinkingLevel: string;
 };
 export type Conversation = SessionSummary & {
+  sandbox: SandboxPolicy;
   thinkingLevel: string;
   hasOlder: boolean;
-  messages: { id: string; role: string; text: string }[];
+  messages: { id: string; role: string; text: string; toolName?: string }[];
   partial: string;
   outcome?: string;
+};
+
+export type SandboxPolicy = {
+  enabled: boolean;
+  workspace: string;
+  readPaths: string[];
+  writePaths: string[];
+  network: "blocked" | "unrestricted";
 };
 
 export class ApiError extends Error {

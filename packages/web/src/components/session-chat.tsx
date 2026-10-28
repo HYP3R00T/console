@@ -30,7 +30,7 @@ export function SessionChat({
   const busy = session.status !== "idle";
   return (
     <section
-      className="flex min-h-[32rem] min-w-0 flex-col lg:min-h-0"
+      className="flex min-h-128 min-w-0 flex-col lg:min-h-0"
       aria-label="Main conversation"
     >
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
@@ -96,9 +96,13 @@ export function SessionChat({
                 className={`mx-auto max-w-3xl space-y-2 rounded-lg p-4 ${message.role === "user" ? "border bg-muted/30" : ""}`}
               >
                 <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {message.role === "user" ? "You" : "Assistant"}
+                  {message.role === "user"
+                    ? "You"
+                    : message.role === "toolResult"
+                      ? `Tool · ${message.toolName}`
+                      : "Assistant"}
                 </h2>
-                <p className="whitespace-pre-wrap break-words text-sm leading-7">
+                <p className="whitespace-pre-wrap wrap-break-word text-sm leading-7">
                   {message.text}
                 </p>
               </article>
@@ -109,7 +113,7 @@ export function SessionChat({
             <h2 className="text-xs font-medium text-muted-foreground">
               Assistant · generating
             </h2>
-            <p className="whitespace-pre-wrap break-words text-sm leading-7">
+            <p className="whitespace-pre-wrap wrap-break-word text-sm leading-7">
               {session.partial}
             </p>
           </article>
@@ -147,7 +151,9 @@ export function SessionChat({
               ? "Delivery uncertain. Retry preserves the same request ID."
               : dirty
                 ? "Save your session settings before sending."
-                : "Saved on this machine · no workspace tools"}
+                : session.sandbox?.enabled
+                  ? "Saved on this machine · sandboxed tools"
+                  : "Saved on this machine · no workspace tools"}
           </p>
           <Button
             type="submit"

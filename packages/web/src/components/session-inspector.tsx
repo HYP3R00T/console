@@ -3,12 +3,14 @@
 import { SlidersHorizontalIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { SandboxSettings } from "@/components/sandbox-settings";
 import { Button } from "@/components/ui/button";
 import {
   type AgentConfiguration,
   type Conversation,
   fieldClass,
   type Provider,
+  type SandboxPolicy,
 } from "@/lib/console-api";
 
 export function SessionInspector({
@@ -17,12 +19,16 @@ export function SessionInspector({
   disabled,
   onSave,
   onDirtyChange,
+  onSandboxSave,
+  onSandboxDirtyChange,
 }: {
   session: Conversation;
   providers: Provider[];
   disabled: boolean;
   onSave: (input: AgentConfiguration) => Promise<void>;
   onDirtyChange: (dirty: boolean) => void;
+  onSandboxSave: (policy: SandboxPolicy) => Promise<void>;
+  onSandboxDirtyChange: (dirty: boolean) => void;
 }) {
   const savedProvider = session.model?.provider ?? "";
   const savedModel = session.model?.modelId ?? "";
@@ -167,16 +173,12 @@ export function SessionInspector({
           Finish or cancel active work before changing them.
         </p>
       </form>
-      <section className="space-y-2 border-t pt-4">
-        <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Execution
-        </h3>
-        <p className="text-sm">Conversation only</p>
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          No filesystem or command tools are enabled. Closing this page leaves
-          backend work running.
-        </p>
-      </section>
+      <SandboxSettings
+        policy={session.sandbox}
+        disabled={disabled}
+        onSave={onSandboxSave}
+        onDirtyChange={onSandboxDirtyChange}
+      />
     </aside>
   );
 }

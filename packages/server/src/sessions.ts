@@ -43,7 +43,7 @@ export async function openSessions(models: Models, directory: string) {
       const path =
         id === "default" ? directory : join(directory, "sessions", id);
       promise = mkdir(path, { recursive: true, mode: 0o700 }).then(() =>
-        openConversation(models, path),
+        openConversation(models, path, directory),
       );
       opened.set(id, promise);
       void promise.catch(() => opened.delete(id));
