@@ -119,6 +119,8 @@ export function agentExtension(
     ),
     replay: "safe",
     execute: async (args, api, context) => {
+      const resolved = await api.agent(context);
+      const selected = new Set(resolved.tools.map((tool) => tool.name));
       const id = await api.commit(async (tx) => {
         const existing = (
           await tx.scanConversations({ ownerTaskId: api.taskId }, 1)
@@ -130,6 +132,7 @@ export function agentExtension(
           ownership: { kind: "task", taskId: api.taskId },
         });
         await configure(tx, created.id, {
+          extensions: resolved.extensions,
           model: agent.model,
           thinkingLevel: agent.thinkingLevel,
           instructions: agent.instructions,
@@ -139,9 +142,7 @@ export function agentExtension(
                 .tools()
                 .filter(
                   ({ tool }) =>
-                    Array.isArray(agent.tools) &&
-                    agent.tools.includes(tool.name) &&
-                    tool.name !== "subagent",
+                    selected.has(tool.name) && tool.name !== "subagent",
                 )
                 .map(({ tool }) => tool)
             : [],

@@ -124,12 +124,26 @@ export async function openConversation(
   function bind(root: PiConversation) {
     async function offered(policy: SandboxPolicy) {
       const record = await storage.conversation(root.id, context);
-      return [
+      const selected = new Set(
+        (await root.agent(context)).extensions.map(
+          (extension) => extension.name,
+        ),
+      );
+      const permitted = [
         ...sandbox.tools(policy),
         ...(coordination?.tools ?? []).filter(
           (tool) => !record?.owner || tool.name !== "subagent",
         ),
       ];
+      return registry
+        .snapshot()
+        .tools()
+        .filter(
+          ({ extension, tool }) =>
+            selected.has(extension.name) &&
+            permitted.some((candidate) => candidate.name === tool.name),
+        )
+        .map(({ tool }) => tool);
     }
     async function summary() {
       const agent = await harness.snapshot(AgentDoc, root.id, context);
@@ -201,6 +215,9 @@ export async function openConversation(
             .installed()
             .map((item) => ({
               name: item.name,
+              enabled: agent.extensions.some(
+                (selected) => selected.name === item.name,
+              ),
               tools: item.tools?.map((tool) => tool.name) ?? [],
               sections: item.sections?.length ?? 0,
               hooks: item.hooks?.length ?? 0,
@@ -215,6 +232,51 @@ export async function openConversation(
             })),
           scheduling: inspection.scheduling,
         };
+      },
+      selectExtension(name: string, enabled: boolean) {
+        return serialize(async () => {
+          await assertIdle();
+          const extension = registry.snapshot().extension(name);
+          if (!extension)
+            throw httpError(404, "Extension is not installed on this machine.");
+          const agent = await root.agent(context);
+          const selected = new Set(agent.extensions.map((item) => item.name));
+          if (enabled) selected.add(name);
+          else selected.delete(name);
+          const policy =
+            (await harness.snapshot(SandboxDoc, root.id, context)) ??
+            defaultSandbox();
+          const record = await storage.conversation(root.id, context);
+          const permitted = [
+            ...sandbox.tools(policy),
+            ...(coordination?.tools ?? []).filter(
+              (tool) => !record?.owner || tool.name !== "subagent",
+            ),
+          ];
+          const current = new Set(agent.tools.map((tool) => tool.name));
+          await root.configure(
+            {
+              extensions: registry
+                .snapshot()
+                .installed()
+                .filter((item) => selected.has(item.name)),
+              tools: registry
+                .snapshot()
+                .tools()
+                .filter(
+                  ({ extension: owner, tool }) =>
+                    selected.has(owner.name) &&
+                    permitted.some(
+                      (candidate) => candidate.name === tool.name,
+                    ) &&
+                    (current.has(tool.name) ||
+                      (enabled && owner.name === name)),
+                )
+                .map(({ tool }) => tool),
+            },
+            context,
+          );
+        });
       },
       manage(input: { tools: string[]; instructions?: string }) {
         return serialize(async () => {
@@ -585,10 +647,12 @@ export async function openConversation(
         if (existing) return existing;
         const agent = await harness.snapshot(AgentDoc, main.id, context);
         const policy = await harness.snapshot(SandboxDoc, main.id, context);
+        const current = await main.agent(context);
         const created = await harness.createConversation(
           {
             ownership: { kind: "ownerless" },
             agent: {
+              extensions: current.extensions,
               model: agent?.model,
               thinkingLevel: agent?.thinkingLevel,
               instructions: agent?.instructions,

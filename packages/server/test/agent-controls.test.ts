@@ -125,6 +125,63 @@ test("numbered agents, real tool controls, native forks and task-owned subagents
     ).statusCode,
     200,
   );
+  const extensionUrl = `${base}/extensions`;
+  const disabled = await app.inject({
+    method: "PATCH",
+    url: extensionUrl,
+    headers,
+    payload: { name: "console.agent", enabled: false },
+  });
+  assert.equal(disabled.statusCode, 200, disabled.body);
+  assert.equal(
+    disabled
+      .json()
+      .extensions.find(
+        (item: { name: string }) => item.name === "console.agent",
+      ).enabled,
+    false,
+  );
+  assert.ok(
+    !disabled
+      .json()
+      .tools.some(
+        (item: { name: string; enabled: boolean }) =>
+          item.name === "subagent" && item.enabled,
+      ),
+  );
+  assert.equal(
+    (
+      await app.inject({
+        method: "PATCH",
+        url: `${base}/agent`,
+        headers,
+        payload: { tools: ["subagent"] },
+      })
+    ).statusCode,
+    400,
+  );
+  assert.equal(
+    (
+      await app.inject({
+        method: "PATCH",
+        url: extensionUrl,
+        headers,
+        payload: { name: "console.agent", enabled: true },
+      })
+    ).statusCode,
+    200,
+  );
+  assert.equal(
+    (
+      await app.inject({
+        method: "PATCH",
+        url: extensionUrl,
+        headers,
+        payload: { name: "unknown-code", enabled: true },
+      })
+    ).statusCode,
+    404,
+  );
   const config = {
     provider: faux.provider.id,
     model: "faux-model",
