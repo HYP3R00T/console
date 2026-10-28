@@ -68,11 +68,10 @@ Mise supplies nono 0.80.0. Run `mise install nono` after updating; `CONSOLE_NONO
 
 ## Remote connections and conversations
 
-Configure `CONSOLE_ACCESS_TOKEN` on the destination. Expose it through HTTPS or keep loopback
-binding and forward it through SSH. Register its origin and token under Backends in the local
-Console. The hub stores that credential in owner-only `backends.sqlite`, separate from Pi provider
-credentials. Disconnect removes only the local connection record, never remote sessions or files.
-
+Configure `CONSOLE_ACCESS_TOKEN` for remote access. Expose through HTTPS or forward loopback
+through SSH. Register the URL/token explicitly in the web app's Machines page. The web server owns
+its independent private connection registry; disconnect never stops or deletes this backend.
+The backend's older hub routes remain for compatibility and are not used by the browser.
 `GET/POST /sessions/:id/conversations` lists or creates conversations; creation takes `{ requestId, name? }`.
 `PATCH /sessions/:id` renames the session; `PATCH /sessions/:id/conversations/:conversationId` renames
 a conversation. Nested `/config`, `/sandbox`, `/messages`, `/cancel`, and `/resume` apply the existing
@@ -140,3 +139,16 @@ an idle harness. ID allocation history remains; deleted transcripts do not retur
 `purge.test.ts` verifies physical record/database removal, dependency protection, monotonic IDs,
 legacy Main deletion, credential preservation, and untouched project files. Backups/shared state
 are outside this deletion operation.
+
+## Connection handshake and extension selection
+
+`GET /v1/connection-info` uses the same authentication boundary as other machine APIs. It returns
+`product: console`, `apiVersion: 1`, persistent machine ID/name, authentication mode, and capability
+names. It never returns the token or provider credentials. Startup prints the local connection URL
+and whether a token is required. A remote operator supplies the reachable HTTPS/tunnel address
+and configured token. A loopback server with no configured token can be connected without one.
+
+`PATCH /sessions/:id[/conversations/:conversationId]/extensions` accepts `{ name, enabled }` for
+an installed Pi extension. Idle-only changes select the extension itself, including sections/hooks;
+its offered tools remain within sandbox grants. Unknown extensions are rejected and child agents
+inherit actual selections. No browser-supplied extension code is executed.
