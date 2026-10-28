@@ -1,6 +1,6 @@
 # Console requirements
 
-Status: working product baseline for review. Local provider settings, named persistent sessions, and model/thinking controls are implemented. Each session currently has one tool-free conversation. Workspace agent workflows remain planned.
+Status: working product baseline for review. Local provider settings, named persistent sessions, and model/thinking controls are implemented. Each session has one conversation; tools remain disabled until the user enables a sandbox policy. Workspace agent workflows remain planned.
 
 This document records what Console is intended to do and why. [Architecture](architecture.md)
 describes how we intend to provide it, including choices that remain unresolved. Requirements
@@ -31,7 +31,7 @@ the conversation model later. Separate conversations do not automatically isolat
 
 Begin with one user, one local backend, a web client, and manually submitted work in an existing
 workspace. Prove this path before adding remote hosts, additional clients, or automatic triggers.
-The current integration proves isolated, named sessions and tool-free model conversations before workspace execution. Users can create, select, and reopen sessions and save model/thinking settings. Workspace selection, forks, and code-editing tools remain planned.
+The current integration proves isolated, named sessions and configurable model conversations. Users can create, select, and reopen sessions and save model/thinking settings. An optional sandbox policy selects a readable workspace, explicit read/write directories, and blocked/unrestricted network access. Shell execution and forks remain planned.
 
 ## Required target behavior
 

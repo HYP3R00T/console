@@ -11,6 +11,7 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 import { createApp } from "../src/app.ts";
 import { openConversation } from "../src/conversation.ts";
+import { defaultSandbox } from "../src/sandbox-policy.ts";
 
 const headers = { "x-console-request": "1" };
 const options = {
@@ -286,6 +287,17 @@ test("active work blocks configuration changes without blocking another session"
   );
   assert.equal((await app.inject(endpoints[0])).json().status, "idle");
   assert.equal((await app.inject(endpoints[1])).json().status, "running");
+  assert.equal(
+    (
+      await app.inject({
+        method: "PATCH",
+        url: `${endpoints[1]}/sandbox`,
+        headers,
+        payload: defaultSandbox(),
+      })
+    ).statusCode,
+    409,
+  );
   await app.inject({ method: "POST", url: `${endpoints[1]}/cancel`, headers });
 });
 

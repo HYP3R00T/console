@@ -2,7 +2,7 @@
 
 `packages/server` is the private `@console/server` workspace package. It uses TypeScript,
 Node.js LTS, and Fastify. It exposes `GET /health`, returning `{"status":"ok"}`, alongside the local Console API.
-This checks HTTP liveness, not model access. Pi Durable supplies isolated persistent sessions; provider settings, model/thinking configuration, and credential storage are implemented. Workspace tools and Console user authentication are not implemented.
+This checks HTTP liveness, not model access. Pi Durable supplies isolated persistent sessions; provider settings, model/thinking configuration, and credential storage are implemented. Opt-in sandboxed file reads/writes and HTTP GET are available; shell execution and Console user authentication are not implemented.
 
 ## Run and verify
 
@@ -35,6 +35,7 @@ The Pi integration remains in this package: `console.ts` wires routes, `provider
 
 All routes below use `/v1`; mutations require `X-Console-Request: 1`. JSON bodies are validated.
 
+- `GET /sandbox/support`: pinned nono availability/version; each actual tool call must still apply its policy successfully.
 - `GET /providers`: safe configuration status, supported connection methods, and chat models with supported thinking levels and context capacity.
 - `POST /providers/:id/refresh`: ask Pi to refresh a dynamic model catalog.
 - `POST /connections`: start `{ "provider": "openai", "method": "oauth" }` (or `api_key`).
@@ -45,9 +46,18 @@ All routes below use `/v1`; mutations require `X-Console-Request: 1`. JSON bodie
 - `POST /sessions`: create `{ "name": "...", "requestId": "unique-creation-id" }`; retries return the same session.
 - `GET /sessions/:id`: recent history, partial answer, saved configuration, and lifecycle state.
 - `PATCH /sessions/:id/config`: save `{ "provider": "...", "model": "...", "thinkingLevel": "high" }`. The level must be supported by that model. Unfinished work returns 409.
+- `PATCH /sessions/:id/sandbox`: save `{ "enabled": true, "workspace": "/project", "readPaths": [], "writePaths": [], "network": "blocked" }`. Paths must exist and be absolute; unfinished work returns 409. Enabled policies require successful native startup before committing.
 - `POST /sessions/:id/messages`: submit `{ "text": "...", "requestId": "unique-input-id" }` using saved settings; returns an admission identity with HTTP 202. Duplicate IDs identify the original input within that session.
 - `POST /sessions/:id/cancel` and `POST /sessions/:id/resume`: explicit lifecycle controls.
 
 The former unscoped `/conversation` and `/messages` development routes have been replaced. Existing conversation data is registered in place as the `default` session; no transcript or credential files are moved.
 
 `CONSOLE_DATA_DIR` selects persistent storage. Tests always use temporary directories and Pi's scripted test provider; they never use personal credentials or paid inference. Live subscription login and inference require the user to complete provider authorization and are not verified by those tests.
+
+## Sandboxed tools
+
+Mise supplies nono 0.80.0. Run `mise install nono` after updating; `CONSOLE_NONO_BIN` may point to the trusted executable when starting without mise. The archived `nono-ts` npm package is not used. Configuration lives in Pi's `console.sandbox` document. See [architecture](../architecture.md#configurable-tool-sandbox) for ownership and exact boundaries.
+
+`read_file` is replay-safe. `write_file` is offered only with writable directories; `fetch_url` only with unrestricted network. Neither automatically replays after interruption. A fresh nono worker enforces every call; credentials remain in Fastify. No shell, policy-editing tool, proxy credential injection, or domain allowlist is provided in this slice.
+
+`pnpm test` includes native Linux enforcement tests and expects the pinned nono binary, with no skipped enforcement checks or unsandboxed fallback. Tests use temporary workspaces, a scripted model, and ephemeral loopback sockets; they never start or stop the user's development servers.

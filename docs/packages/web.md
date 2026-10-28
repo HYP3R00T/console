@@ -30,6 +30,7 @@ configuration for a production build, so rebuild after changing it before `next 
 - `src/components/session-sidebar.tsx`: named session creation and navigation.
 - `src/components/session-chat.tsx`: transcript, composer, and cancel/resume controls.
 - `src/components/session-inspector.tsx`: persisted provider, model, and supported thinking-level controls.
+- `src/components/sandbox-settings.tsx`: explicit opt-in workspace, read/write directories, and network policy.
 - `src/app/settings/providers/page.tsx`: provider configuration and model-catalog refresh.
 - `src/components/provider-connection.tsx`: generic Pi prompts, OAuth links, device codes, and cancellation.
 - `src/lib/console-api.ts`: browser API calls and view types; no provider SDKs or persisted secrets.
@@ -49,6 +50,12 @@ Preset `bddBUJXM` selects Lyra styling, zinc colors, Geist, and Lucide icons. Ge
 self-hosted by Next.js after its build-time download. Tailwind runs through
 `postcss.config.mjs`; Biome's CSS parser supports Tailwind directives.
 
+Biome checks legacy Tailwind utility names in JSX and class helpers such as `cn()`
+and `cva()`, using `src/app/globals.css` for the theme. Run `pnpm check` to report
+them and `pnpm check:fix` to apply safe replacements, including `break-words` to
+`wrap-break-word`. The same rule runs through the existing prek hook and CI.
+This catches legacy utility names; it does not reproduce every Tailwind IntelliSense suggestion.
+
 Run shadcn commands from `packages/web`. Use `pnpm dlx shadcn@latest add <component>`
 to add a component. The applied theme can be restored with
 `pnpm dlx shadcn@latest apply --preset bddBUJXM`. Review generated changes and run
@@ -62,6 +69,12 @@ Automatic Next.js agent-rule generation is disabled; repository instructions rem
 
 Run `mise run dev`, open `http://127.0.0.1:3001`, and follow **Provider settings**. Select OpenAI and **Sign in with ChatGPT** for the subscription flow; API key is a separate explicit choice. Other provider methods come from the installed Pi version. Authorization opens the provider's page; any requested code, selection, or credential is relayed to Pi through Fastify. Console itself has no account sign-in yet.
 
-Return to the dashboard and create or select a named session. Choose a provider, model, and supported thinking level in the inspector, then save settings before sending a message. Unfinished work must complete or be cancelled before settings can change. Session selection is retained in the URL; unsent drafts and uncertain submissions stay separate per session while the page is open. Partial text and state are polled once per second. Network failure is shown separately from saved run status. An uncertain submission retains its request ID for retry while the page is open; reloading retrieves existing work without resubmitting. After backend restart, use Resume for interrupted work or Cancel to abandon it. No workspace files or commands are available to the model.
+Return to the dashboard and create or select a named session. Choose a provider, model, and supported thinking level in the inspector, then save settings before sending a message. Unfinished work must complete or be cancelled before settings can change. Session selection is retained in the URL; unsent drafts and uncertain submissions stay separate per session while the page is open. Partial text and state are polled once per second. Network failure is shown separately from saved run status. An uncertain submission retains its request ID for retry while the page is open; reloading retrieves existing work without resubmitting. After backend restart, use Resume for interrupted work or Cancel to abandon it. Tools are disabled by default. Expand **Sandbox** in the inspector to opt into workspace access; shell commands remain unavailable.
 
 Provider status means configuration exists, not that credentials or subscription entitlement have been tested. Environment-only providers require machine setup; Refresh models retrieves supported dynamic catalogs. The initial UI does not edit custom provider definitions or machine environment variables.
+
+## Configure a sandbox
+
+Open **Sandbox** in the session inspector. Select an existing absolute workspace and enable sandboxed tools. The workspace is readable by default; leave writable directories empty for read-only use and keep network blocked unless needed. Additional directory grants use one absolute path per line. Save explicitly while the session is idle. Unsaved sandbox changes block Send, just like unsaved model settings.
+
+Unrestricted network permits HTTP GET, including local services. Provider credentials are never forwarded to the worker. Startup prerequisites remain readable, and Console's private storage and runtime protection cannot be removed through the editor. Saving checks native activation; an unavailable nono/kernel leaves the previous policy unchanged. Tool output is shown in the transcript.
