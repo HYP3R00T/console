@@ -1,11 +1,11 @@
 {
-	"name": "console",
-	"build": {
-		"context": ".",
-		"dockerfile": "Dockerfile"
-	},
-	"postCreateCommand": "bash scripts/setup.sh",
-	"remoteEnv": {
-		"MISE_GITHUB_TOKEN": "${localEnv:MISE_GITHUB_TOKEN}"
-	}
+  "name": "console",
+  "build": {
+    "context": ".",
+    "dockerfile": "Dockerfile"
+  },
+  "postCreateCommand": "bash scripts/setup.sh",
+  "remoteEnv": {
+    "MISE_GITHUB_TOKEN": "${localEnv:MISE_GITHUB_TOKEN}"
+  }
 }

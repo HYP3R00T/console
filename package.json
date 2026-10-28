@@ -1,0 +1,9 @@
+{
+  "name": "console",
+  "private": true,
+  "scripts": {
+    "changeset": "changeset",
+    "check": "biome check .",
+    "check:fix": "biome check --write ."
+  }
+}
