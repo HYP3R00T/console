@@ -16,12 +16,27 @@ From the repository root, run `mise install`, then `pnpm install --frozen-lockfi
 - `pnpm --filter @console/web build`: create the web production build.
 - `pnpm --filter @console/web start`: serve that build on loopback port 3001.
 
-The browser calls `/api/health` and `/api/v1/*` on the web origin. A Next.js rewrite forwards that request
-to Fastify's corresponding routes. `CONSOLE_API_URL` configures the target server origin,
-defaulting to `http://127.0.0.1:3000`; restart Next.js after changing it. If the server's
-`HOST` or `PORT` is changed, set this origin to match. No browser-exposed API URL or CORS
-configuration is needed for the current health check. The rewrite target is build-time
-configuration for a production build, so rebuild after changing it before `next start`.
+The web app starts without a selected execution machine. Its own `/api/machines` route stores
+explicit connections; `/api/machines/:id/api/*` proxies only that saved machine's API. A local
+Fastify server is not required to load onboarding or manage the registry. `CONSOLE_API_URL` and
+the implicit `/api/v1/*` proxy are retired; old implicit requests return 410.
+
+Open Connect a machine from Home (or Add machine in the network), enter the server origin (for example `http://127.0.0.1:3000`) and its token
+if configured, then Connect. Labels are optional; the authenticated handshake supplies a default
+machine name and verifies Console API v1. Remote connections require a token and HTTPS or a
+loopback SSH tunnel. The server startup log prints its connection URL and authentication mode.
+Disconnect clears the token and closes managed SSH while retaining recent connection metadata.
+Reconnect immediately attempts the saved connection and selects the machine on success. If an
+access token is required, an inline prompt retries that same connection with the supplied token.
+Forgetting removes only that recent metadata.
+Check local server probes loopback port 3000 only on demand; it does not connect automatically.
+SSH uses the web host’s existing keys, agent, and trusted hosts; the remote backend must already run.
+
+Connections and tokens are persisted by the web server in owner-only
+`$XDG_DATA_HOME/console-web/connections.sqlite` (default `~/.local/share/console-web/connections.sqlite`).
+Provider credentials and conversation databases stay on their execution machine. The web server
+never returns connection tokens to the browser. Saved selections are per-tab; an invalid or
+removed selection leads back to onboarding, without falling back to another machine.
 
 `/health` confirms HTTP liveness only. The dashboard polls session endpoints and marks disconnected history as potentially stale; successful configuration does not prove model access or user authentication.
 
@@ -47,7 +62,9 @@ configuration for a production build, so rebuild after changing it before `next 
 - `src/components/ui/`: shadcn components, starting with the preset's Button.
 - `src/components/theme-provider.tsx`: system light/dark mode through `next-themes`.
 - `components.json`: shadcn component paths and style configuration.
-- `next.config.ts`: health and versioned API rewrites.
+- `src/lib/machine-store.ts`: independent connection registry, compatibility handshake, and bounded authenticated proxy.
+- `src/app/api/machines/[[...path]]/route.ts`: same-origin connection/proxy routes.
+- `next.config.ts`: Next.js configuration; no default backend rewrite.
 
 Keep server-owned execution, workspace access, and permissions in Fastify. Next.js can
 provide routing, layouts, and future login UI, but that does not replace backend authorization.
@@ -112,7 +129,7 @@ Unrestricted network permits HTTP GET, including local services. Provider creden
 `ConsoleShell` wraps every page with the same header, backend selector, and navigation. Backend
 selection is stored per browser tab in sessionStorage and remounts page state when switching, keeping requests scoped to
 the selected connection. Unsent drafts belong to the mounted page and are not preserved across
-backend switches. The local Next.js API route supplies server-only authentication; the browser
+backend switches. The web-owned connection route injects the selected machine's saved token; the browser
 never forwards remote tokens itself after registration.
 
 Machines adds, checks, switches, or disconnects connection records. Editable settings persist on
@@ -148,8 +165,8 @@ entry, not a copied text prompt. Type `/` for keyboard-selectable UI commands: c
 tools, extend, new, new-session, stop, and resume. These commands do not invoke inference themselves.
 
 State edits retain their base revision; background polling never overwrites a draft. A stale save
-requires Reload before editing again. Tool and extension switches are limited to installed tools
-permitted by the conversation's saved sandbox policy. Existing conversations remain unchanged
+requires Reload before editing again. Tool switches are limited to installed tools permitted by saved sandbox grants. Extension switches
+select real Pi extensions and their sections/hooks; they cannot broaden sandbox authority. Existing conversations remain unchanged
 until the user selects tools or reapplies their sandbox. No paid/live inference is used in UI checks.
 
 Each column now owns its collapse/expand toggle; there is no extra status bar. Collapsed rails
@@ -163,3 +180,28 @@ Trash offers Delete forever followed by a named confirmation. UI verification mu
 permanent deletion of personal data; erasure tests use temporary fixtures. Main/delegated entries
 explain that their owning session must be deleted. Tool setup remains explicit: state/delegation
 can be enabled without granting files; the workspace editor is expanded when its policy is off.
+
+## UI responsibilities
+
+The header navigation and Settings window live in `console-shell.tsx` and `settings-window.tsx`.
+`backend-connections.tsx` manages explicit connections/recent entries. `machine-store.ts` owns
+private registry persistence, protocol validation, preferences, and proxying; `ssh-tunnel.ts`
+owns only the OpenSSH process and forwarded endpoint. Connection tokens never enter UI responses.
+`model-preferences.tsx` curates chat/inspector choices across machines without changing backend
+model support. Machine and project gears show contextual inspectors. Provider credentials remain
+machine-scoped. `confirm-delete.tsx` supplies fixed-width confirmation controls for trash/purge.
+
+Machine connection management lives in the main `/machines` page, independently of Settings.
+Home’s Connect a machine and the network’s Add machine both open that page. The header holds
+icon-only Home, Chat, and Settings controls with accessible labels/tooltips; machine switching stays in the network/connection list, and session
+creation stays within the workspace. There is no permanent application rail.
+
+Connection management uses shadcn Cards to separate connected machines, the connection form,
+and recent machines. Row actions share a right-aligned group. The form uses a labeled connection
+method selector and takes the machine name from the server; there is no separate optional name
+field. Chat navigation appears only after selecting a connected machine.
+
+Home machine cards open their workspace when clicked. A separate small red trash icon disconnects
+without opening the card. The icon is a sibling of the full-card link, not nested inside it. Disconnect uses the same web
+registry operation as the Machines page, preserves machine data, and refreshes connection state.
+Action failures remain visible independently of the summary poll.

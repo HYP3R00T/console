@@ -139,7 +139,7 @@ decision and its reasoning when agreed. Keep feature tasks and verification resu
 
 The [integration decision](decisions/0001-local-pi-integration.md) records provider boundaries. The [session decision](decisions/0002-session-owned-harnesses.md) records isolation, configuration, and preservation of existing data.
 
-- Next.js serves a top action bar, a collapsible left panel switching between sessions and configuration, and a dedicated conversation/composer, plus `/settings/providers`. `/api/v1/*` forwards to Fastify `/v1/*`. The local Fastify process also acts as a hub. `backends.sqlite` stores named origins and bearer tokens with owner-only permissions. `/backends/:id/api/*` forwards only allowlisted Console resources, injects credentials server-side, rejects redirects, and bounds response size and request time. `/machines` reports the selected execution backend; `/backends` lists hub connections without tokens. Storage location is startup configuration, exposed read-only; it is not hot-swapped or automatically migrated. Machine names and default project directories are editable in the UI and persisted in the catalog.
+- Next.js owns the browser application and the independent machine registry/proxy. `/api/machines` manages explicit connections; `/api/machines/:id/api/*` forwards allowlisted requests with server-held credentials. Nothing enrolls or selects a local backend automatically. The prior backend hub API remains for compatibility, but the web client does not use it. Machine identity/settings remain on each Fastify backend; see the connection section below.
 - `src/console.ts` registers validated routes, closes resources, and rejects browser mutations without the Console request header. No CORS or Console user authentication is configured. This is for private loopback use only.
 - `src/providers.ts` adapts Pi's built-in catalog, login prompts, notifications, cancellation, logout, and explicit model-catalog refresh. Environment-only providers show setup guidance. Provider discovery does not prove access to a model.
 - `src/credentials.ts` supplies Pi's credential-store interface. Credentials and installation identity live in `credentials.sqlite`; Pi owns login and token refresh. An exclusive SQLite lock prevents two backend processes from rotating the same credentials.
@@ -169,15 +169,26 @@ Network currently supports blocked or explicitly unrestricted access. Unrestrict
 
 ## Backend and workspace configuration
 
-The browser selects a connection registered with the local hub. Next.js `/api/v1/*` routes inject
-the local backend token server-side; remote requests then pass through the hub proxy, following
-the server-side token pattern in [Durable Pi](https://github.com/disler/durable-pi). Neither the
-provider token store nor saved backend tokens are returned to the browser. Backend connections
-require HTTPS or a loopback HTTP origin, including an SSH tunnel; the application does not manage
-SSH tunnels. A destination with `CONSOLE_ACCESS_TOKEN` authenticates every versioned API request.
-Without that setting, both socket address and Host must be loopback. These are trusted operator
-connections with backend-wide authority, not separate team accounts or per-user permissions.
+The Next.js web server owns `$XDG_DATA_HOME/console-web/connections.sqlite` (default
+`~/.local/share/console-web/connections.sqlite`) independently of any running execution backend.
+The registry starts empty. The user enters an origin, optional label, and access token when needed.
+An authenticated `GET /v1/connection-info` checks product, API version, and persistent machine
+identity before registration. The browser receives safe connection metadata, never saved tokens.
 
+No automatic scanning, synthetic local record, or fallback selection occurs. The explicit
+Check local server button probes only loopback port 3000 and fills the connection form; it never enrolls a machine.
+Saved explicit connections survive web-server restarts; only a valid saved selection is reopened.
+Disconnect deactivates that registry entry, clears its token, closes its managed SSH tunnel, and
+stops browser polling. Recent metadata remains until explicitly forgotten; it does not stop
+backend execution or erase projects, provider credentials, or history. A stale tab cannot continue
+proxying through a disconnected connection. The web UI and registry remain available with no backend.
+
+The web proxy requires HTTPS or a loopback HTTP origin (including an operator-managed SSH tunnel),
+rejects redirects and non-Console resources, and bounds requests/responses. Remote connections need
+an access token; a loopback backend without configured token authentication accepts an empty field.
+These are trusted operator connections, not team accounts. The old implicit `/api/v1/*` web proxy
+returns 410. The backend's legacy `/backends` routes are unused by the browser and are not imported
+into the new registry. No existing backend data is migrated or deleted.
 `catalog.sqlite` stores projects as workspace identities with canonical directory paths. A project
 may register an existing directory or explicitly create one under an existing parent. Registration
 does not enable agent tools. New sessions may bind to a workspace; legacy unbound sessions remain
@@ -233,8 +244,9 @@ creation and editable afterward. Trash does not recycle these identities.
 
 The inspector's Session, State, Tasks, Tools, and Extend panels read actual runtime data. Tools
 come from Pi's installed registry with schemas, descriptions, and replay policies; selection cannot
-exceed the saved sandbox grants. Extension checkboxes select that extension's permitted tools.
-They do not install code or disable prompt sections/hooks. Instructions are saved separately.
+exceed the saved sandbox grants. Extension checkboxes select actual Pi extensions, including their prompt sections and hooks.
+Their tools still require saved sandbox grants. They do not install arbitrary code. Child agents
+and new conversations inherit the actual extension selection. Instructions are saved separately.
 Tasks lists live Pi model/tool tasks, not a catalog of example jobs.
 
 `console.agent` supplies `read_state`, `update_state`, and explicit `subagent` delegation. New
@@ -278,3 +290,45 @@ collapse button and a collapsed rail with a distinct expansion icon, retaining m
 The composer uses shadcn Popover for searchable connected models and supported thinking levels;
 selections update the selected conversation immediately. The Tools panel explains empty selection
 and provides explicit coordination/tool-permission setup actions.
+
+## Settings and transport ownership
+
+The header owns Home, Chat, and Settings. Machine selection and session creation are contextual
+workspace actions, not global header controls. Connect a machine opens `/machines` in the main
+display, with connection/disconnection and recent history outside Settings. Settings has separate
+Model choices, Machine, and Providers sections. Credentials and machine
+defaults belong to the selected execution machine; model/thinking menu preferences belong to the
+web server. Model preferences filter menus only, never change running or saved agents. Empty
+preferences offer only the current model until the user selects more models in Settings.
+
+The network and inspector have permanently mounted, identically sized toggle slots. Collapsing
+hides their contents without destroying drafts. Machine/project gears select contextual controls
+in the inspector; choosing an agent returns to its controls. Delete actions reserve space for a red
+trash icon followed by confirmation/cancel icons. Trash remains recoverable; permanent deletion
+and forgetting recent connection metadata are explicitly labeled.
+
+Managed SSH runs on the web server host using system OpenSSH, existing configuration/keys/agent,
+strict known-host verification, and loopback-only forwarding. It does not install or launch remote
+Console servers, collect SSH passwords, or weaken backend bearer authentication. Direct remote
+HTTP remains prohibited; HTTPS still requires a token. Disconnect clears tokens and closes owned
+tunnels. Reconnect is explicit, revalidates API identity, and asks for any required token again.
+Only localhost port 3000 can be checked through the explicit local probe; there is no LAN discovery.
+
+### Official Pi Durable example review
+
+Reviewed official upstream revision `a87b742ff4ce262c07b7830a25c73c1442dab41b`:
+[Harness](https://github.com/earendil-works/pi/blob/a87b742ff4ce262c07b7830a25c73c1442dab41b/packages/durable/test/examples/05-harness.ts),
+[recovery](https://github.com/earendil-works/pi/blob/a87b742ff4ce262c07b7830a25c73c1442dab41b/packages/durable/test/examples/12-recovery.ts),
+[owned subagents](https://github.com/earendil-works/pi/blob/a87b742ff4ce262c07b7830a25c73c1442dab41b/packages/durable/test/examples/21-subagent-foreground.ts),
+[per-conversation sandbox](https://github.com/earendil-works/pi/blob/a87b742ff4ce262c07b7830a25c73c1442dab41b/packages/durable/test/examples/28-sandbox-per-conversation.ts),
+and extension reload/restart and durable views examples.
+
+Pi owns persisted agent choices, conversations, task ownership, submissions, and recovery. Extension
+code must be registered again when reopening storage; durable records store names, not executable
+code. Console follows that registry/Harness boundary and uses owned child conversations and stable
+request IDs for delegation. Existing tests verify restart, explicit resume, cancellation, forks,
+subagents, and real sandboxed tool invocation without paid inference. These examples do not supply
+machine discovery, SSH transport, browser settings, or a production sandbox policy: Console owns
+those layers. Console keeps pinned Pi 1.4.0; newer upstream examples are design references, not
+proof that newer APIs are available. Hot extension replacement, custom durable jobs, and a Chord
+reactive-view migration remain unimplemented. Real remote SSH and macOS isolation are unverified.

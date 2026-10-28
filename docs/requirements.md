@@ -1,6 +1,6 @@
 # Console requirements
 
-Status: working product baseline for review. Local provider settings, named persistent sessions, and model/thinking controls are implemented. Each session starts with a main conversation; tools remain disabled until the user enables a sandbox policy. The machine dashboard exposes the local backend and its database paths; sandboxed listing, directory creation, and file writes can create project structure. Registered backend connections, projects, and multiple conversations per session are implemented.
+Status: working product baseline for review. Local provider settings, named persistent sessions, and model/thinking controls are implemented. Each session starts with a main conversation; filesystem, shell, and network tools require an explicit sandbox policy; coordination tools can operate without filesystem access. The machine dashboard exposes the local backend and its database paths; sandboxed listing, directory creation, and file writes can create project structure. Registered backend connections, projects, and multiple conversations per session are implemented.
 
 This document records what Console is intended to do and why. [Architecture](architecture.md)
 describes how we intend to provide it, including choices that remain unresolved. Requirements
@@ -34,6 +34,13 @@ workspace. Prove this path before adding remote hosts, additional clients, or au
 The current integration proves isolated, named sessions and configurable model conversations. Users can create, select, and reopen sessions and save model/thinking settings. An optional sandbox policy selects a readable workspace, explicit read/write directories, and blocked/unrestricted network access. Sandboxed shell execution is available only with explicit command permission; native history forks and task-owned subagents are implemented.
 
 Machine settings persist a readable name, default project directory, and model defaults. Projects can register directories or clone public GitHub repositories. Sessions receive automatic numbers; additional agents use Pi conversation IDs and can be renamed. Native forks and delegated child agents appear beneath their parent. Shared machine state, active-task inspection, tool selection, and installed extension controls are available. Sessions and conversations have recoverable deletion; project files and databases are retained. Home shows an overview; Conversations provides machine navigation and a resizable session panel.
+
+Connection onboarding is explicit: the web app can start with no machine, validates a server's
+identity/API before saving a connection, and supports disconnect/reconnect without stopping work
+or erasing backend data. A running local backend is never auto-enrolled. An explicit loopback check can fill its address.
+Disconnected machines retain recent address/name metadata for reconnection; tokens are cleared.
+Managed SSH connections use existing trusted keys and forward to an already-running remote server. Extension controls select
+actual installed Pi extensions, including prompt sections/hooks, within existing sandbox authority.
 
 ## Required target behavior
 
