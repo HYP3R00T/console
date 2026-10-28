@@ -24,12 +24,9 @@ function ResizablePanel({ ...props }: ResizablePrimitive.PanelProps) {
 }
 
 function ResizableHandle({
-  withHandle,
   className,
   ...props
-}: ResizablePrimitive.SeparatorProps & {
-  withHandle?: boolean;
-}) {
+}: ResizablePrimitive.SeparatorProps) {
   return (
     <ResizablePrimitive.Separator
       data-slot="resizable-handle"
@@ -38,11 +35,7 @@ function ResizableHandle({
         className,
       )}
       {...props}
-    >
-      {withHandle && (
-        <div className="z-10 flex h-6 w-1 shrink-0 rounded-none bg-border" />
-      )}
-    </ResizablePrimitive.Separator>
+    />
   );
 }
 

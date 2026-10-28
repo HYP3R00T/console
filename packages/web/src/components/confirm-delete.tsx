@@ -6,10 +6,12 @@ export function ConfirmDelete({
   label,
   disabled,
   onConfirm,
+  compact = false,
 }: {
   label: string;
   disabled?: boolean;
   onConfirm: () => void;
+  compact?: boolean;
 }) {
   const [confirming, setConfirming] = useState(false);
   const action = useRef<HTMLButtonElement>(null);
@@ -21,7 +23,7 @@ export function ConfirmDelete({
   return (
     <fieldset
       aria-label={label}
-      className="m-0 inline-flex w-12 min-w-0 shrink-0 justify-end border-0 p-0"
+      className={`m-0 inline-flex min-w-0 shrink-0 justify-end border-0 p-0 ${compact && !confirming ? "w-6" : "w-12"}`}
       onKeyDown={(event) => {
         if (event.key === "Escape") setConfirming(false);
       }}
@@ -29,9 +31,9 @@ export function ConfirmDelete({
       {confirming ? (
         <>
           <Button
-            size="icon"
+            size="icon-xs"
             variant="ghost"
-            className="size-6 text-destructive"
+            className="text-destructive"
             disabled={disabled}
             ref={action}
             aria-label={`Confirm ${label}`}
@@ -44,9 +46,8 @@ export function ConfirmDelete({
             <CheckIcon className="size-3" />
           </Button>
           <Button
-            size="icon"
+            size="icon-xs"
             variant="ghost"
-            className="size-6"
             disabled={disabled}
             aria-label={`Cancel ${label}`}
             onClick={() => setConfirming(false)}
@@ -56,9 +57,9 @@ export function ConfirmDelete({
         </>
       ) : (
         <Button
-          size="icon"
+          size="icon-xs"
           variant="ghost"
-          className="size-6 text-destructive"
+          className="text-destructive"
           disabled={disabled}
           ref={action}
           title={label}

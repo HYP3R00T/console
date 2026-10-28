@@ -1,17 +1,22 @@
 "use client";
 
 import {
+  BracesIcon,
+  ListTodoIcon,
+  MessageSquareIcon,
+  MonitorIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
-  PanelRightCloseIcon,
-  PanelRightOpenIcon,
   PlusIcon,
+  PuzzleIcon,
   TerminalSquareIcon,
+  WrenchIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePanelRef } from "react-resizable-panels";
 import { AgentPanels, type InspectorPanel } from "@/components/agent-panels";
 import { ComposerModelPicker } from "@/components/composer-model-picker";
+import { useBackend } from "@/components/connection-context";
 import { MachineSettings } from "@/components/machine-settings";
 import { NetworkSidebar } from "@/components/network-sidebar";
 import { NewSessionDialog } from "@/components/new-session-dialog";
@@ -36,9 +41,45 @@ import {
   type Workspace,
 } from "@/lib/console-api";
 
+const inspectorTabs = [
+  { id: "session", label: "Session", icon: MessageSquareIcon },
+  { id: "state", label: "State", icon: BracesIcon },
+  { id: "tasks", label: "Tasks", icon: ListTodoIcon },
+  { id: "tools", label: "Tools", icon: WrenchIcon },
+  { id: "extend", label: "Extend", icon: PuzzleIcon },
+] as const;
+
+function usePanelOpen(key: string) {
+  const [open, setOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const saved = sessionStorage.getItem(key);
+      if (saved === "true" || saved === "false") return saved === "true";
+    } catch {
+      /* Storage can be unavailable in private browser configurations. */
+    }
+    return !window.matchMedia("(max-width: 767px)").matches;
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(key, String(open));
+    } catch {
+      /* Keep controls usable without storage. */
+    }
+  }, [key, open]);
+  return [open, setOpen] as const;
+}
+
 type Submission = { text: string; requestId: string };
 
 export default function Home() {
+  const { connections, id: machineId, select: selectMachine } = useBackend();
+  const [navigationOpen, setNavigationOpen] = usePanelOpen(
+    "console.network-open",
+  );
+  const [inspectorOpen, setInspectorOpen] = usePanelOpen(
+    "console.inspector-open",
+  );
   const [contextPanel, setContextPanel] = useState(() =>
     typeof window !== "undefined"
       ? (new URL(window.location.href).searchParams.get("inspect") ?? "")
@@ -65,7 +106,7 @@ export default function Home() {
       window.removeEventListener("console:inspect-machine", machine);
       window.removeEventListener("console:inspect-project", project);
     };
-  }, []);
+  }, [setInspectorOpen]);
   const [trashRevision, setTrashRevision] = useState(0);
   useEffect(() => {
     const changed = () => setTrashRevision((n) => n + 1);
@@ -73,18 +114,32 @@ export default function Home() {
     return () => window.removeEventListener("console:tree-changed", changed);
   }, []);
   const [compact, setCompact] = useState(false);
-  const [navigationOpen, setNavigationOpen] = useState(true);
   const [panel, setPanel] = useState<InspectorPanel>("session");
-  const [inspectorOpen, setInspectorOpen] = useState(true);
   const navigationRef = usePanelRef();
   const inspectorRef = usePanelRef();
+  const expandedNavigation = useRef(22);
+  const expandedInspector = useRef(28);
+  function toggleNavigation() {
+    if (navigationOpen)
+      expandedNavigation.current =
+        navigationRef.current?.getSize().asPercentage ?? 22;
+    setNavigationOpen(!navigationOpen);
+  }
+  function toggleInspector() {
+    if (inspectorOpen)
+      expandedInspector.current =
+        inspectorRef.current?.getSize().asPercentage ?? 28;
+    setInspectorOpen(!inspectorOpen);
+  }
   useEffect(() => {
-    if (navigationOpen) navigationRef.current?.expand();
-    else navigationRef.current?.collapse();
+    navigationRef.current?.resize(
+      navigationOpen ? `${expandedNavigation.current}%` : "40px",
+    );
   }, [navigationOpen, navigationRef]);
   useEffect(() => {
-    if (inspectorOpen) inspectorRef.current?.expand();
-    else inspectorRef.current?.collapse();
+    inspectorRef.current?.resize(
+      inspectorOpen ? `${expandedInspector.current}%` : "40px",
+    );
   }, [inspectorOpen, inspectorRef]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
@@ -183,10 +238,6 @@ export default function Home() {
     const media = window.matchMedia("(max-width: 767px)");
     const update = () => {
       setCompact(media.matches);
-      if (media.matches) {
-        setNavigationOpen(false);
-        setInspectorOpen(false);
-      }
     };
     update();
     media.addEventListener("change", update);
@@ -403,17 +454,15 @@ export default function Home() {
           <ResizablePanel
             id="navigation"
             panelRef={navigationRef}
-            collapsible
-            collapsedSize="36px"
-            onResize={(size) => setNavigationOpen(size.inPixels > 40)}
+            collapsible={false}
             defaultSize={compact ? "40%" : "22%"}
-            minSize={compact ? "25%" : "220px"}
-            maxSize={compact ? "65%" : "50%"}
+            minSize={navigationOpen ? (compact ? "25%" : "220px") : "40px"}
+            maxSize={navigationOpen ? (compact ? "65%" : "50%") : "40px"}
           >
             <aside
               id="workspace-navigation"
               aria-label="Workspace navigation"
-              className="flex h-full min-h-0 flex-col bg-sidebar"
+              className={`flex h-full min-h-0 bg-background ${compact && !navigationOpen ? "flex-row" : "flex-col"}`}
             >
               <div className="flex h-10 shrink-0 items-center border-b px-1">
                 <Button
@@ -424,7 +473,7 @@ export default function Home() {
                     navigationOpen ? "Collapse network" : "Expand network"
                   }
                   aria-expanded={navigationOpen}
-                  onClick={() => setNavigationOpen(!navigationOpen)}
+                  onClick={toggleNavigation}
                 >
                   {navigationOpen ? (
                     <PanelLeftCloseIcon />
@@ -449,6 +498,44 @@ export default function Home() {
                   </Button>
                 )}
               </div>
+              {!navigationOpen && (
+                <nav
+                  aria-label="Collapsed machines"
+                  className={`flex gap-1 overflow-auto p-1 ${compact ? "flex-row" : "flex-col"}`}
+                >
+                  {connections.map((connection) => (
+                    <Button
+                      key={connection.id}
+                      size="icon"
+                      variant="ghost"
+                      className={`relative size-7 shrink-0 ${machineId === connection.id ? "bg-accent" : ""}`}
+                      aria-label={`Open machine ${connection.name}`}
+                      title={`${connection.name} · ${connection.status}`}
+                      onClick={() => {
+                        if (machineId !== connection.id)
+                          selectMachine(connection.id);
+                        setNavigationOpen(true);
+                      }}
+                    >
+                      <MonitorIcon className="size-4" />
+                      <span
+                        aria-hidden="true"
+                        className={`absolute right-1 bottom-1 size-1.5 rounded-full ${connection.status === "online" ? "bg-green-500" : "bg-muted-foreground"}`}
+                      />
+                    </Button>
+                  ))}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-7 shrink-0"
+                    aria-label="Add machine"
+                    title="Add machine"
+                    onClick={() => window.location.assign("/machines")}
+                  >
+                    <PlusIcon />
+                  </Button>
+                </nav>
+              )}
               <div
                 className={
                   navigationOpen ? "flex h-full min-h-0 flex-col" : "hidden"
@@ -492,24 +579,20 @@ export default function Home() {
             </aside>
           </ResizablePanel>
           <ResizableHandle
-            withHandle
             aria-label="Resize machine and session navigation"
             disabled={!navigationOpen}
-            className={navigationOpen ? undefined : "hidden"}
           />
           <ResizablePanel
             id="inspector"
             panelRef={inspectorRef}
-            collapsible
-            collapsedSize="36px"
-            onResize={(size) => setInspectorOpen(size.inPixels > 40)}
+            collapsible={false}
             defaultSize="28%"
-            minSize={compact ? "25%" : "260px"}
-            maxSize="55%"
+            minSize={inspectorOpen ? (compact ? "25%" : "260px") : "40px"}
+            maxSize={inspectorOpen ? "55%" : "40px"}
           >
             <aside
               aria-label="Agent inspector"
-              className="flex h-full min-h-0 flex-col border-r bg-sidebar"
+              className={`flex h-full min-h-0 bg-background ${compact && !inspectorOpen ? "flex-row" : "flex-col"}`}
             >
               <div className="flex h-10 shrink-0 items-center border-b px-1">
                 <Button
@@ -520,12 +603,12 @@ export default function Home() {
                     inspectorOpen ? "Collapse inspector" : "Expand inspector"
                   }
                   aria-expanded={inspectorOpen}
-                  onClick={() => setInspectorOpen(!inspectorOpen)}
+                  onClick={toggleInspector}
                 >
                   {inspectorOpen ? (
-                    <PanelRightCloseIcon />
+                    <PanelLeftCloseIcon />
                   ) : (
-                    <PanelRightOpenIcon />
+                    <PanelLeftOpenIcon />
                   )}
                 </Button>
                 {inspectorOpen && (
@@ -538,29 +621,54 @@ export default function Home() {
                   </span>
                 )}
               </div>
+              {!inspectorOpen && (
+                <nav
+                  aria-label="Collapsed agent panels"
+                  className={`flex gap-1 overflow-auto p-1 ${compact ? "flex-row" : "flex-col"}`}
+                >
+                  {inspectorTabs.map(({ id, label, icon: Icon }) => (
+                    <Button
+                      key={id}
+                      size="icon"
+                      variant="ghost"
+                      className={`size-7 shrink-0 ${!contextPanel && panel === id ? "bg-accent" : ""}`}
+                      aria-label={`Open ${label} panel`}
+                      title={label}
+                      aria-current={
+                        !contextPanel && panel === id ? "page" : undefined
+                      }
+                      onClick={() => {
+                        setContextPanel("");
+                        setPanel(id);
+                        setInspectorOpen(true);
+                      }}
+                    >
+                      <Icon className="size-4" />
+                    </Button>
+                  ))}
+                </nav>
+              )}
               <div
                 className={
                   inspectorOpen ? "flex h-full min-h-0 flex-col" : "hidden"
                 }
               >
-                <nav
-                  aria-label="Agent panels"
-                  className="flex shrink-0 border-b"
-                >
-                  {(
-                    ["session", "state", "tasks", "tools", "extend"] as const
-                  ).map((item) => (
+                <nav aria-label="Agent panels" className="flex shrink-0">
+                  {inspectorTabs.map(({ id, label, icon: Icon }) => (
                     <button
                       type="button"
-                      key={item}
-                      aria-current={panel === item ? "page" : undefined}
-                      className={`flex-1 border-b-2 px-1 py-4 text-xs capitalize ${panel === item ? "border-foreground text-foreground" : "border-transparent text-muted-foreground"}`}
+                      key={id}
+                      aria-current={
+                        !contextPanel && panel === id ? "page" : undefined
+                      }
+                      className={`flex min-w-0 flex-1 flex-col items-center gap-1 border-b px-1 py-3 text-xs ${!contextPanel && panel === id ? "border-foreground text-foreground" : "border-border text-muted-foreground"}`}
                       onClick={() => {
                         setContextPanel("");
-                        setPanel(item);
+                        setPanel(id);
                       }}
                     >
-                      {item}
+                      <Icon className="size-4" aria-hidden="true" />
+                      {label}
                     </button>
                   ))}
                 </nav>
@@ -645,32 +753,11 @@ export default function Home() {
             </aside>
           </ResizablePanel>
           <ResizableHandle
-            withHandle
             aria-label="Resize agent inspector"
             disabled={!inspectorOpen}
-            className={inspectorOpen ? undefined : "hidden"}
           />
           <ResizablePanel id="conversation" minSize="30%">
             <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-              {session && (
-                <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2 text-xs text-muted-foreground">
-                  <span>
-                    {conversations.find(
-                      (item) => item.id === session.conversationId,
-                    )?.name ?? "Main"}{" "}
-                    · #{session.conversationId}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={working || !online}
-                    onClick={() => void newAgent()}
-                  >
-                    New agent
-                  </Button>
-                </div>
-              )}
-
               {session ? (
                 <SessionChat
                   modelPicker={

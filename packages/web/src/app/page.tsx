@@ -123,7 +123,7 @@ export default function Home() {
                 href={`/chat?backend=${encodeURIComponent(machine.id)}`}
                 onClick={() => select(machine.id)}
                 aria-label={`Open ${machine.name}`}
-                className="absolute inset-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                className="absolute inset-0 focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-ring"
               />
               <CardContent className="pointer-events-none pr-12">
                 <h3 className="text-sm font-medium">{machine.name}</h3>
