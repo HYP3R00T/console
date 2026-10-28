@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { createApp } from "../src/app.ts";
 
 test("GET /health reports that the HTTP server is available", async (t) => {
-  const app = createApp();
-  t.after(() => app.close());
+  const directory = await mkdtemp(join(tmpdir(), "console-http-"));
+  const app = createApp({}, { dataDirectory: directory });
+  t.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true });
+  });
 
   const response = await app.inject({ method: "GET", url: "/health" });
 
@@ -13,8 +20,12 @@ test("GET /health reports that the HTTP server is available", async (t) => {
 });
 
 test("unimplemented routes return 404", async (t) => {
-  const app = createApp();
-  t.after(() => app.close());
+  const directory = await mkdtemp(join(tmpdir(), "console-http-"));
+  const app = createApp({}, { dataDirectory: directory });
+  t.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true });
+  });
 
   const response = await app.inject({ method: "GET", url: "/sessions" });
 

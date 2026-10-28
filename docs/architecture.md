@@ -1,6 +1,6 @@
 # Console architecture
 
-Status: Fastify and Next.js scaffolds with a health connection are implemented. Agent execution and session workflows remain planned.
+Status: local provider configuration and multiple Pi Durable sessions are implemented. Workspace tools, conversation forks, and remote access remain planned.
 
 [Requirements](requirements.md) owns product outcomes and scope. This document owns responsibilities,
 state, interfaces, and technical tradeoffs. It must distinguish intended design from verified implementation.
@@ -103,12 +103,10 @@ These are intended constraints requiring implementation and proof, not currently
   and HTTP tests are implemented; see the [server guide](packages/server.md).
 - **Web foundation (configured):** Next.js App Router, React, TypeScript, Tailwind CSS, and shadcn/ui provide the browser
   starter. It checks the Fastify health endpoint through a web-origin proxy; see the [web guide](packages/web.md).
-  Product UI, authentication, and shared-session controls are not implemented.
+  The conversation dashboard and provider settings are implemented; Console user authentication and shared-session controls are not.
   shadcn preset `bddBUJXM` supplies the initial theme, Geist font, and Lucide icon choice.
-- **Pi Durable (selected, not integrated):** the intended agent execution library. Supported model access,
-  cancellation, replay, and restart behavior still need a focused feasibility check during integration.
-- **SQLite:** previously proposed for an initial single-host store. If selected, define ownership,
-  concurrency, migrations, backups, and interaction with runtime-owned storage.
+- **Pi Durable (integrated):** pinned to 1.4.0 for isolated, tool-free session conversations. Provider authentication and model access use Pi AI. See the integration section below for tested and outstanding behavior.
+- **SQLite (integrated):** separate databases hold Console credentials, the session catalog, and per-session Pi-owned conversation state. The first version has no backup or retention workflow; ownership and restart behavior are described below.
 - **Monorepo:** `packages/server/` is a private workspace package containing the HTTP server scaffold.
   `packages/web/` is a private Next.js workspace package. These boundaries do not require
   independent microservice deployments.
@@ -136,3 +134,22 @@ Verify the chosen model access and runtime behavior before expanding the product
 Update this document when a change affects ownership, interfaces, storage, lifecycle, or deployment.
 Record what is implemented separately from intended design, and replace candidates with the actual
 decision and its reasoning when agreed. Keep feature tasks and verification results in their issues/PRs.
+
+## First Pi integration
+
+The [integration decision](decisions/0001-local-pi-integration.md) records provider boundaries. The [session decision](decisions/0002-session-owned-harnesses.md) records isolation, configuration, and preservation of existing data.
+
+- Next.js serves a session sidebar, conversation/composer, and configuration inspector, plus `/settings/providers`. `/api/v1/*` forwards to Fastify `/v1/*`. No separate hub is needed for the current single-machine scope.
+- `src/console.ts` registers validated routes, closes resources, and rejects browser mutations without the Console request header. No CORS or Console user authentication is configured. This is for private loopback use only.
+- `src/providers.ts` adapts Pi's built-in catalog, login prompts, notifications, cancellation, logout, and explicit model-catalog refresh. Environment-only providers show setup guidance. Provider discovery does not prove access to a model.
+- `src/credentials.ts` supplies Pi's credential-store interface. Credentials and installation identity live in `credentials.sqlite`; Pi owns login and token refresh. An exclusive SQLite lock prevents two backend processes from rotating the same credentials.
+- `src/sessions.ts` owns a SQLite catalog and one cached harness per session. New sessions store Pi state under `sessions/<uuid>/conversation.sqlite`; an existing root `conversation.sqlite` is registered as the `default` session without moving it. A session that cannot open is listed as unavailable while other sessions remain usable.
+- `src/conversation.ts` owns each harness and root conversation. No tools or extensions are installed. Configuration, submission, cancellation, and resume are serialized within each session. One run is accepted per session; different sessions have independent execution and transcripts.
+- `src/session-routes.ts` exposes session creation, snapshots, saved configuration, and lifecycle commands. Creation request IDs deduplicate retries; message request IDs are scoped to their session.
+- Provider responses include supported thinking levels from Pi's `getSupportedThinkingLevels()` and model context capacity. Saving settings validates the selected model/level against the installed catalog and persists them in Pi's `pi.agent` document. Settings changes during unfinished work return 409. Messages use saved settings instead of carrying a second configuration.
+- Browser polling retrieves up to 100 recent transcript entries, committed partial text, and lifecycle state. The browser never owns the run. Session list polling runs every two seconds; selected transcript polling runs every second. A URL query remembers selection on reload, and in-memory drafts and uncertain submission IDs remain separate per session while the page is open. Repeated submissions with the same request ID return the original admission, including after restart. A request ID identifies its original input and must not be reused for different content.
+- Closing the browser leaves execution running. Backend restart opens saved work without scheduling it; Resume explicitly enables scheduling. Cancel aborts the conversation and persists that outcome. This is a conversational recovery proof, not proof of safe replay for external side effects.
+
+Storage defaults to `$XDG_DATA_HOME/console` or `~/.local/share/console`. `CONSOLE_DATA_DIR` overrides it. The directory is owner-only and saved credentials are plaintext SQLite with owner-only permissions, not an encrypted vault. Keep it outside source control and run one backend per data directory. No automatic retention, export, or backup mechanism exists yet. Login attempts are ephemeral, expire after ten minutes, and can be reattached after a page reload while the backend remains alive.
+
+Pi packages are pinned to 1.4.0. A pnpm patch adds missing JSON import attributes to Pi AI's published declarations, preserving strict NodeNext checking. A package extension supplies the MCP SDK referenced by Google's published declarations. Reviewed Google/protobuf lifecycle scripts are explicitly disabled; neither is required for these installed SDKs to run. Revisit these workarounds on upgrades.

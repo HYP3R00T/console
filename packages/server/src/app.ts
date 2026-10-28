@@ -1,6 +1,10 @@
 import Fastify, { type FastifyServerOptions } from "fastify";
+import { type ConsoleOptions, registerConsole } from "./console.ts";
 
-export function createApp(options: FastifyServerOptions = {}) {
+export function createApp(
+  options: FastifyServerOptions = {},
+  consoleOptions: ConsoleOptions = {},
+) {
   const app = Fastify(options);
 
   app.get(
@@ -21,6 +25,8 @@ export function createApp(options: FastifyServerOptions = {}) {
     },
     async () => ({ status: "ok" }),
   );
+
+  app.register(registerConsole, { prefix: "/v1", ...consoleOptions });
 
   return app;
 }
