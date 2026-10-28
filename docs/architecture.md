@@ -92,18 +92,22 @@ These are intended constraints requiring implementation and proof, not currently
 
 ## Technology and layout candidates
 
-- **TypeScript:** discussed as a direction for backend and frontend; confirm the runtime and framework
-  before scaffolding. No application language dependencies are currently installed by this repository.
+- **Node.js foundation (configured):** mise provides Node.js (`lts`), pnpm (`latest`), and Biome (`latest`);
+  `pnpm-workspace.yaml` discovers packages under `packages/*`. The private root package exposes shared check commands.
+  Biome checks JavaScript, TypeScript, JSON, CSS, and GraphQL through pnpm, prek, and CI; RumDL handles Markdown.
+  Application languages, frameworks, and runtime integration remain unimplemented.
 - **Pi Durable:** previously proposed for durable execution. Its integration, supported model access,
   cancellation, replay, and restart behavior need a focused feasibility check before adoption.
 - **SQLite:** previously proposed for an initial single-host store. If selected, define ownership,
   concurrency, migrations, backups, and interaction with runtime-owned storage.
-- **Monorepo:** backend and web are logical units. `packages/backend/` and `packages/web/` are a
-  possible layout, not existing directories or a decision to deploy independent microservices.
+- **Monorepo (directories created):** `packages/server/` and `packages/web/` are placeholders without
+  manifests or source code. They reserve space for execution/API and browser code; they are not yet
+  workspace packages or a decision to deploy independent microservices.
 - **Remote hosting:** a Kubernetes machine was discussed as a later host. It is not required for
   the first local workflow. A central hub, extra clients, and an automation scheduler are not initial components.
 
-No candidate above should be treated as an approved implementation choice solely because it appears here.
+Entries marked configured or created describe the repository foundation. Remaining candidates should
+not be treated as approved implementation choices solely because they appear here.
 The video's Google Cloud, FastAPI, ADK, PostgreSQL, and model choices belong to its example, not Console.
 
 ## Developing Console versus Console's runtime
