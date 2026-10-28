@@ -12,8 +12,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePanelRef } from "react-resizable-panels";
 import { AgentPanels, type InspectorPanel } from "@/components/agent-panels";
 import { ComposerModelPicker } from "@/components/composer-model-picker";
+import { MachineSettings } from "@/components/machine-settings";
 import { NetworkSidebar } from "@/components/network-sidebar";
 import { NewSessionDialog } from "@/components/new-session-dialog";
+import { ProjectInspector } from "@/components/project-inspector";
 import { SessionChat } from "@/components/session-chat";
 import { SessionInspector } from "@/components/session-inspector";
 import { Trash } from "@/components/trash";
@@ -37,6 +39,33 @@ import {
 type Submission = { text: string; requestId: string };
 
 export default function Home() {
+  const [contextPanel, setContextPanel] = useState(() =>
+    typeof window !== "undefined"
+      ? (new URL(window.location.href).searchParams.get("inspect") ?? "")
+      : "",
+  );
+  const [inspectedProject, setInspectedProject] = useState(() =>
+    typeof window !== "undefined"
+      ? (new URL(window.location.href).searchParams.get("workspace") ?? "")
+      : "",
+  );
+  useEffect(() => {
+    const machine = () => {
+      setContextPanel("machine");
+      setInspectorOpen(true);
+    };
+    const project = (event: Event) => {
+      setInspectedProject((event as CustomEvent<string>).detail);
+      setContextPanel("project");
+      setInspectorOpen(true);
+    };
+    window.addEventListener("console:inspect-machine", machine);
+    window.addEventListener("console:inspect-project", project);
+    return () => {
+      window.removeEventListener("console:inspect-machine", machine);
+      window.removeEventListener("console:inspect-project", project);
+    };
+  }, []);
   const [trashRevision, setTrashRevision] = useState(0);
   useEffect(() => {
     const changed = () => setTrashRevision((n) => n + 1);
@@ -386,17 +415,40 @@ export default function Home() {
               aria-label="Workspace navigation"
               className="flex h-full min-h-0 flex-col bg-sidebar"
             >
-              {!navigationOpen && (
+              <div className="flex h-10 shrink-0 items-center border-b px-1">
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="Expand network"
-                  title="Expand network"
-                  onClick={() => setNavigationOpen(true)}
+                  className="size-7 shrink-0"
+                  aria-label={
+                    navigationOpen ? "Collapse network" : "Expand network"
+                  }
+                  aria-expanded={navigationOpen}
+                  onClick={() => setNavigationOpen(!navigationOpen)}
                 >
-                  <PanelLeftOpenIcon />
+                  {navigationOpen ? (
+                    <PanelLeftCloseIcon />
+                  ) : (
+                    <PanelLeftOpenIcon />
+                  )}
                 </Button>
-              )}
+                {navigationOpen && (
+                  <span className="ml-2 text-xs tracking-widest text-muted-foreground">
+                    NETWORK
+                  </span>
+                )}
+                {navigationOpen && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="ml-auto size-7"
+                    aria-label="Add machine"
+                    onClick={() => window.location.assign("/machines")}
+                  >
+                    <PlusIcon />
+                  </Button>
+                )}
+              </div>
               <div
                 className={
                   navigationOpen ? "flex h-full min-h-0 flex-col" : "hidden"
@@ -404,21 +456,10 @@ export default function Home() {
               >
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   <NetworkSidebar
-                    toggle={
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-6"
-                        aria-label="Collapse network"
-                        title="Collapse network"
-                        onClick={() => setNavigationOpen(false)}
-                      >
-                        <PanelLeftCloseIcon />
-                      </Button>
-                    }
                     selected={selected}
                     conversationId={session?.conversationId}
                     onSelect={(id, cid) => {
+                      setContextPanel("");
                       if (id !== selected) select(id);
                       if (cid) chooseConversation(cid);
                     }}
@@ -470,17 +511,33 @@ export default function Home() {
               aria-label="Agent inspector"
               className="flex h-full min-h-0 flex-col border-r bg-sidebar"
             >
-              {!inspectorOpen && (
+              <div className="flex h-10 shrink-0 items-center border-b px-1">
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="Expand inspector"
-                  title="Expand inspector"
-                  onClick={() => setInspectorOpen(true)}
+                  className="size-7 shrink-0"
+                  aria-label={
+                    inspectorOpen ? "Collapse inspector" : "Expand inspector"
+                  }
+                  aria-expanded={inspectorOpen}
+                  onClick={() => setInspectorOpen(!inspectorOpen)}
                 >
-                  <PanelRightOpenIcon />
+                  {inspectorOpen ? (
+                    <PanelRightCloseIcon />
+                  ) : (
+                    <PanelRightOpenIcon />
+                  )}
                 </Button>
-              )}
+                {inspectorOpen && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {contextPanel
+                      ? contextPanel === "machine"
+                        ? "Machine settings"
+                        : "Project settings"
+                      : "Agent controls"}
+                  </span>
+                )}
+              </div>
               <div
                 className={
                   inspectorOpen ? "flex h-full min-h-0 flex-col" : "hidden"
@@ -490,16 +547,6 @@ export default function Home() {
                   aria-label="Agent panels"
                   className="flex shrink-0 border-b"
                 >
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 self-center"
-                    aria-label="Collapse inspector"
-                    title="Collapse inspector"
-                    onClick={() => setInspectorOpen(false)}
-                  >
-                    <PanelRightCloseIcon />
-                  </Button>
                   {(
                     ["session", "state", "tasks", "tools", "extend"] as const
                   ).map((item) => (
@@ -508,14 +555,28 @@ export default function Home() {
                       key={item}
                       aria-current={panel === item ? "page" : undefined}
                       className={`flex-1 border-b-2 px-1 py-4 text-xs capitalize ${panel === item ? "border-foreground text-foreground" : "border-transparent text-muted-foreground"}`}
-                      onClick={() => setPanel(item)}
+                      onClick={() => {
+                        setContextPanel("");
+                        setPanel(item);
+                      }}
                     >
                       {item}
                     </button>
                   ))}
                 </nav>
                 <div className="min-h-0 flex-1 overflow-y-auto">
-                  {session ? (
+                  {contextPanel ? (
+                    contextPanel === "project" ? (
+                      <ProjectInspector
+                        key={inspectedProject}
+                        id={inspectedProject}
+                      />
+                    ) : (
+                      <div className="p-3">
+                        <MachineSettings />
+                      </div>
+                    )
+                  ) : session ? (
                     <>
                       <div hidden={panel !== "session"}>
                         <SessionInspector

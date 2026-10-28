@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/console-api";
 
@@ -16,7 +17,6 @@ export function Trash({
 }) {
   const [items, setItems] = useState<Item[]>([]);
   const [error, setError] = useState("");
-  const [confirming, setConfirming] = useState<string>();
   const [working, setWorking] = useState(false);
   const base =
     kind === "projects"
@@ -70,31 +70,16 @@ export function Trash({
             {kind === "conversations" &&
             (item.id === "1" || item.kind === "subagent") ? (
               <span className="text-xs">Erase through its session</span>
-            ) : confirming !== item.id ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={working}
-                onClick={() => setConfirming(item.id)}
-              >
-                Delete forever
-              </Button>
             ) : (
-              <div className="space-y-2 border border-destructive p-2">
-                <p>
-                  This permanently erases {item.name}. It cannot be restored.
-                  Continue?
-                </p>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  disabled={working}
-                  onClick={async () => {
+              <ConfirmDelete
+                label={`Permanently delete ${item.name}; cannot be undone`}
+                disabled={working}
+                onConfirm={() => {
+                  void (async () => {
                     setWorking(true);
                     setError("");
                     try {
                       await api(`${base}/${item.id}/permanent`, "DELETE");
-                      setConfirming(undefined);
                       setItems(await api(`${base}/trash`));
                       onRestore?.();
                     } catch (cause) {
@@ -102,19 +87,9 @@ export function Trash({
                     } finally {
                       setWorking(false);
                     }
-                  }}
-                >
-                  Permanently delete
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={working}
-                  onClick={() => setConfirming(undefined)}
-                >
-                  Cancel
-                </Button>
-              </div>
+                  })();
+                }}
+              />
             )}
           </div>
         </div>

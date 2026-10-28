@@ -73,6 +73,20 @@ export function AgentPanels({
       setWorking(false);
     }
   }
+  async function toggleExtension(name: string, enabled: boolean) {
+    setWorking(true);
+    setError("");
+    try {
+      setInspection(
+        await api(`${path}/extensions`, "PATCH", { name, enabled }),
+      );
+      onChanged();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setWorking(false);
+    }
+  }
   const enabled =
     inspection?.tools.filter((item) => item.enabled).map((item) => item.name) ??
     [];
@@ -196,12 +210,6 @@ export function AgentPanels({
             <>
               <h2 className="font-semibold">Installed extensions</h2>
               {inspection.extensions.map((extension) => {
-                const names = inspection.tools
-                  .filter(
-                    (tool) =>
-                      tool.extension === extension.name && tool.permitted,
-                  )
-                  .map((tool) => tool.name);
                 return (
                   <div
                     key={extension.name}
@@ -210,17 +218,13 @@ export function AgentPanels({
                     <label className="flex gap-2">
                       <input
                         type="checkbox"
-                        aria-label={`Enable ${extension.name} tools`}
-                        checked={
-                          names.length > 0 &&
-                          names.every((name) => enabled.includes(name))
-                        }
-                        disabled={!idle || working || !names.length}
+                        aria-label={`Enable ${extension.name} extension`}
+                        checked={extension.enabled}
+                        disabled={!idle || working}
                         onChange={(event) =>
-                          void save(
-                            event.target.checked
-                              ? [...new Set([...enabled, ...names])]
-                              : enabled.filter((name) => !names.includes(name)),
+                          void toggleExtension(
+                            extension.name,
+                            event.target.checked,
                           )
                         }
                       />
@@ -231,9 +235,9 @@ export function AgentPanels({
                       prompt sections · {extension.hooks} hooks
                     </p>
                     <p className="text-muted-foreground">
-                      Toggle tools within current grants. Extensions are
-                      installed by the server; this does not load arbitrary
-                      code.
+                      Select this extension’s tools, prompt sections and hooks.
+                      Tools still require the saved sandbox grants. Only
+                      server-installed extensions can be enabled.
                     </p>
                   </div>
                 );

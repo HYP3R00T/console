@@ -1,8 +1,11 @@
 "use client";
 
+import { LoaderCircleIcon, TrashIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useBackend } from "@/components/console-shell";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   api,
   type Machine,
@@ -11,7 +14,22 @@ import {
 } from "@/lib/console-api";
 
 export default function Home() {
-  const { connections } = useBackend();
+  const { connections, id, select } = useBackend();
+  const [disconnecting, setDisconnecting] = useState("");
+  const [actionError, setActionError] = useState("");
+  async function disconnect(machineId: string) {
+    setDisconnecting(machineId);
+    setActionError("");
+    try {
+      await api(`/backends/${machineId}`, "DELETE");
+      if (id === machineId) select("");
+      window.dispatchEvent(new Event("console:backends-changed"));
+    } catch (cause) {
+      setActionError((cause as Error).message);
+    } finally {
+      setDisconnecting("");
+    }
+  }
   const [summary, setSummary] = useState<{
     machine: Machine;
     projects: Workspace[];
@@ -89,18 +107,47 @@ export default function Home() {
             Add or configure machine
           </Link>
         </header>
+        {actionError && (
+          <p role="alert" className="text-sm text-destructive">
+            {actionError}
+          </p>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           {connections.map((machine) => (
-            <Link
-              href="/machines"
+            <Card
               key={machine.id}
-              className="border p-4 hover:bg-accent"
+              size="sm"
+              className="relative hover:bg-accent"
             >
-              <p className="text-sm font-medium">{machine.name}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {machine.local ? "Local" : "Remote"} · {machine.status}
-              </p>
-            </Link>
+              <Link
+                href={`/chat?backend=${encodeURIComponent(machine.id)}`}
+                onClick={() => select(machine.id)}
+                aria-label={`Open ${machine.name}`}
+                className="absolute inset-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+              />
+              <CardContent className="pointer-events-none pr-12">
+                <h3 className="text-sm font-medium">{machine.name}</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {machine.local ? "Local" : "Remote"} · {machine.status}
+                </p>
+              </CardContent>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="absolute top-1/2 right-3 z-10 size-6 -translate-y-1/2 text-destructive"
+                disabled={!!disconnecting}
+                aria-label={`Disconnect ${machine.name}`}
+                aria-busy={disconnecting === machine.id}
+                title="Disconnect without stopping work or deleting machine data"
+                onClick={() => void disconnect(machine.id)}
+              >
+                {disconnecting === machine.id ? (
+                  <LoaderCircleIcon className="size-3.5 animate-spin" />
+                ) : (
+                  <TrashIcon className="size-3.5" />
+                )}
+              </Button>
+            </Card>
           ))}
         </div>
       </section>
