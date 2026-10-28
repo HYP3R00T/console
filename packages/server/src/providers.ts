@@ -56,8 +56,8 @@ export function createProviders(models: Models, deviceId: string) {
           "Could not refresh this provider's model catalog.",
         );
     },
-    async list() {
-      return Promise.all(
+    async list(connectedOnly = false) {
+      const items = await Promise.all(
         models.getProviders().map(async (provider) => {
           let source: string | undefined;
           try {
@@ -95,6 +95,7 @@ export function createProviders(models: Models, deviceId: string) {
           };
         }),
       );
+      return connectedOnly ? items.filter((item) => item.configured) : items;
     },
     start(provider: string, method: AuthType) {
       if (flow?.view.status === "pending")

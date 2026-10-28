@@ -1,11 +1,26 @@
 "use client";
 
-import { ArrowUpIcon, SquareIcon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  FolderIcon,
+  MessageSquareIcon,
+  MonitorIcon,
+  TerminalSquareIcon,
+} from "lucide-react";
+import Link from "next/link";
+import type { ReactNode } from "react";
+import { ChatComposer } from "@/components/chat-composer";
+import { MessageReasoning } from "@/components/message-reasoning";
 import { Button } from "@/components/ui/button";
-import { type Conversation, fieldClass } from "@/lib/console-api";
+import type { Conversation } from "@/lib/console-api";
 
 export function SessionChat({
   session,
+  machineName,
+  projectName,
+  agentName,
+  onFork,
+  onCommand,
   online,
   working,
   dirty,
@@ -15,8 +30,15 @@ export function SessionChat({
   onText,
   onSend,
   onControl,
+  onConfigure,
+  modelPicker,
 }: {
   session: Conversation;
+  machineName?: string;
+  projectName?: string;
+  agentName?: string;
+  onFork: (entryId: string) => void;
+  onCommand: (command: string) => void;
   online: boolean;
   working: boolean;
   dirty: boolean;
@@ -25,26 +47,56 @@ export function SessionChat({
   uncertain: boolean;
   onText: (text: string) => void;
   onSend: () => void;
+  onConfigure: () => void;
+  modelPicker: ReactNode;
   onControl: (action: "cancel" | "resume") => void;
 }) {
   const busy = session.status !== "idle";
   return (
     <section
-      className="flex min-h-128 min-w-0 flex-col lg:min-h-0"
-      aria-label="Main conversation"
+      className="flex min-h-0 min-w-0 flex-1 flex-col"
+      aria-label="Conversation"
     >
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
-        <div className="min-w-0">
-          <p className="truncate font-medium">{session.name}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Main conversation
-            {session.model
-              ? ` · ${session.model.modelId} · ${session.thinkingLevel}`
-              : " · Choose a model to begin"}
-          </p>
+      <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+          <MonitorIcon className="size-3.5 shrink-0" aria-hidden="true" />
+          <Link href="/machines" className="hidden hover:underline sm:inline">
+            {machineName || "This machine"}
+          </Link>
+          {(session.sandbox?.workspace || projectName) && (
+            <>
+              <ChevronRightIcon
+                className="size-3 shrink-0"
+                aria-hidden="true"
+              />
+              <FolderIcon className="size-3.5 shrink-0" aria-hidden="true" />
+              <Link
+                href="/workspaces"
+                className="max-w-32 truncate hover:underline"
+                title={session.sandbox.workspace}
+              >
+                {projectName ||
+                  session.sandbox.workspace.split("/").filter(Boolean).at(-1) ||
+                  "/"}
+              </Link>
+            </>
+          )}
+          <ChevronRightIcon className="size-3 shrink-0" aria-hidden="true" />
+          <MessageSquareIcon className="size-3.5 shrink-0" aria-hidden="true" />
+          <button
+            type="button"
+            className="truncate text-left text-sm font-medium text-foreground hover:underline"
+            onClick={onConfigure}
+            title={session.name}
+          >
+            {agentName ?? session.name} · #{session.conversationId}
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span role="status" className="rounded-md bg-muted px-2 py-1 text-xs">
+        <div className="flex shrink-0 items-center gap-2">
+          <span
+            role="status"
+            className="rounded-none border bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground"
+          >
             {online ? session.status : "Offline · history may be stale"}
           </span>
           {session.status === "interrupted" && (
@@ -57,30 +109,30 @@ export function SessionChat({
               Resume
             </Button>
           )}
-          {busy && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!online || working}
-              onClick={() => onControl("cancel")}
-            >
-              <SquareIcon data-icon="inline-start" aria-hidden="true" />
-              Cancel
-            </Button>
-          )}
         </div>
       </header>
       <section
-        className="flex-1 space-y-6 px-6 py-8 lg:overflow-y-auto"
+        className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-8 sm:px-6"
         aria-label="Conversation history"
       >
         {!session.messages.length && (
-          <div className="mx-auto max-w-lg py-12">
-            <p className="text-xl font-medium">Start with a clear question.</p>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              Choose a model and thinking level in session settings, then send
-              your first message. History stays with this session.
+          <div className="mx-auto flex min-h-64 max-w-lg flex-col items-center justify-center gap-4 py-12 text-center">
+            <div className="rounded-none border bg-muted/30 p-4">
+              <TerminalSquareIcon className="size-7" aria-hidden="true" />
+            </div>
+            <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+              Your session is ready
             </p>
+            <h3 className="text-2xl font-semibold tracking-tight">
+              A conversation with continuity.
+            </h3>
+            <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+              Messages and execution stay on this machine, beyond this window.
+              Choose a model, then start with a clear task.
+            </p>
+            <Button variant="outline" size="sm" onClick={onConfigure}>
+              Configure this session
+            </Button>
           </div>
         )}
         {session.hasOlder && (
@@ -90,10 +142,10 @@ export function SessionChat({
         )}
         {session.messages.map(
           (message) =>
-            message.text && (
+            Boolean(message.text || message.reasoning?.length) && (
               <article
                 key={message.id}
-                className={`mx-auto max-w-3xl space-y-2 rounded-lg p-4 ${message.role === "user" ? "border bg-muted/30" : ""}`}
+                className={`mx-auto max-w-3xl space-y-3 ${message.role === "user" ? "flex flex-col items-end py-2" : "py-4"}`}
               >
                 <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {message.role === "user"
@@ -102,20 +154,42 @@ export function SessionChat({
                       ? `Tool · ${message.toolName}`
                       : "Assistant"}
                 </h2>
-                <p className="whitespace-pre-wrap wrap-break-word text-sm leading-7">
-                  {message.text}
-                </p>
+                <MessageReasoning parts={message.reasoning} />
+                {message.text && (
+                  <p
+                    className={`whitespace-pre-wrap wrap-break-word text-sm leading-7 ${message.role === "user" ? "max-w-[90%] rounded-none bg-muted/60 px-4 py-3" : ""}`}
+                  >
+                    {message.text}
+                  </p>
+                )}
+                {message.entryId && message.role === "assistant" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs text-muted-foreground"
+                    disabled={!online || working || busy}
+                    onClick={() => onFork(message.entryId ?? "")}
+                  >
+                    Fork from here
+                  </Button>
+                )}
               </article>
             ),
         )}
-        {session.partial && (
-          <article className="mx-auto max-w-3xl space-y-2 p-4">
+        {(session.partial || !!session.partialReasoning?.length) && (
+          <article
+            key={session.partialId}
+            className="mx-auto max-w-3xl space-y-2 p-4"
+          >
             <h2 className="text-xs font-medium text-muted-foreground">
               Assistant · generating
             </h2>
-            <p className="whitespace-pre-wrap wrap-break-word text-sm leading-7">
-              {session.partial}
-            </p>
+            <MessageReasoning parts={session.partialReasoning} />
+            {session.partial && (
+              <p className="whitespace-pre-wrap wrap-break-word text-sm leading-7">
+                {session.partial}
+              </p>
+            )}
           </article>
         )}
         {session.outcome &&
@@ -125,54 +199,35 @@ export function SessionChat({
             </p>
           )}
       </section>
-      <form
-        className="space-y-3 border-t bg-background p-4 sm:p-6"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSend();
-        }}
-      >
-        <label className="sr-only" htmlFor="message">
-          Message
-        </label>
-        <textarea
-          id="message"
-          className={`${fieldClass} resize-y`}
-          rows={3}
-          maxLength={32000}
-          placeholder="Message this session…"
-          value={text}
-          disabled={working || uncertain}
-          onChange={(event) => onText(event.target.value)}
-        />
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-xs text-muted-foreground">
-            {uncertain
-              ? "Delivery uncertain. Retry preserves the same request ID."
-              : dirty
-                ? "Save your session settings before sending."
+      <ChatComposer
+        text={text}
+        disabled={working || uncertain}
+        busy={busy}
+        sending={
+          working ||
+          !online ||
+          (!uncertain &&
+            (busy || dirty || !configured || !session.model || !text.trim()))
+        }
+        canCancel={online && !working}
+        uncertain={uncertain}
+        modelPicker={modelPicker}
+        hint={
+          uncertain
+            ? "Delivery uncertain. Retry uses the same request."
+            : dirty
+              ? "Save session configuration before sending."
+              : !configured || !session.model
+                ? "Choose a connected model in Configuration."
                 : session.sandbox?.enabled
-                  ? "Saved on this machine · sandboxed tools"
-                  : "Saved on this machine · no workspace tools"}
-          </p>
-          <Button
-            type="submit"
-            disabled={
-              working ||
-              !online ||
-              (!uncertain &&
-                (busy ||
-                  dirty ||
-                  !configured ||
-                  !session.model ||
-                  !text.trim()))
-            }
-          >
-            <ArrowUpIcon data-icon="inline-start" aria-hidden="true" />
-            {uncertain ? "Retry" : "Send"}
-          </Button>
-        </div>
-      </form>
+                  ? "Sandboxed tools · work continues when you close this window"
+                  : "No workspace tools · work continues when you close this window"
+        }
+        onCommand={onCommand}
+        onText={onText}
+        onSend={onSend}
+        onCancel={() => onControl("cancel")}
+      />
     </section>
   );
 }

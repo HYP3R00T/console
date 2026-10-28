@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ProviderConnection } from "@/components/provider-connection";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,8 @@ import { api, fieldClass, type Login, type Provider } from "@/lib/console-api";
 
 export default function ProviderSettings() {
   const [providers, setProviders] = useState<Provider[]>([]);
-  const [providerId, setProviderId] = useState("openai");
+  const [providerId, setProviderId] = useState("");
+  const [search, setSearch] = useState("");
   const [login, setLogin] = useState<Login | null>(null);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
@@ -83,11 +83,11 @@ export default function ProviderSettings() {
   }
   return (
     <main className="mx-auto max-w-3xl space-y-8 px-6 py-12">
-      <Link href="/" className="text-sm text-muted-foreground underline">
-        ← Conversation
-      </Link>
       <header className="space-y-2">
-        <h1 className="text-3xl font-semibold">Providers</h1>
+        <p className="text-xs uppercase tracking-widest text-muted-foreground">
+          Machine settings
+        </p>
+        <h1 className="text-3xl font-semibold">Provider connections</h1>
         <p className="text-sm text-muted-foreground">
           Connections belong to this backend machine. Pi handles each provider's
           authentication flow.
@@ -98,23 +98,68 @@ export default function ProviderSettings() {
           {error}
         </p>
       )}
-      <label className="block space-y-2">
-        <span className="text-sm font-medium">Provider</span>
-        <select
+
+      <section className="space-y-3" aria-label="Connected providers">
+        <h2 className="font-medium">Connected on this machine</h2>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {providers
+            .filter((item) => item.configured)
+            .map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                aria-pressed={item.id === providerId}
+                onClick={() => setProviderId(item.id)}
+                className={`border p-4 text-left hover:bg-accent ${providerId === item.id ? "border-foreground" : "border-border"}`}
+              >
+                <span className="block text-sm font-medium">{item.name}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {item.source} · {item.models.length} models
+                </span>
+              </button>
+            ))}
+        </div>
+        {!providers.some((item) => item.configured) && (
+          <p className="text-sm text-muted-foreground">
+            No providers connected yet.
+          </p>
+        )}
+      </section>
+      <section className="space-y-3" aria-label="Add a provider connection">
+        <h2 className="font-medium">Add a connection</h2>
+        <input
           className={fieldClass}
-          value={providerId}
-          onChange={(event) => setProviderId(event.target.value)}
-        >
-          {providers.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-              {item.configured ? " · Configured" : ""}
-            </option>
-          ))}
-        </select>
-      </label>
+          aria-label="Search providers"
+          placeholder="Search providers to connect…"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        {search.trim() && (
+          <div className="grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
+            {providers
+              .filter(
+                (item) =>
+                  !item.configured &&
+                  item.name.toLowerCase().includes(search.trim().toLowerCase()),
+              )
+              .map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  onClick={() => {
+                    setProviderId(item.id);
+                    setSearch("");
+                  }}
+                  className="border p-3 text-left text-sm hover:bg-accent"
+                >
+                  {item.name}
+                </button>
+              ))}
+          </div>
+        )}
+      </section>
       {provider && (
-        <section className="space-y-4 rounded-lg border p-5">
+        <section className="space-y-4 rounded-none border p-5">
           <h2 className="font-medium">{provider.name}</h2>
           <p className="text-sm text-muted-foreground">
             {provider.configured

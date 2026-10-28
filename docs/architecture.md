@@ -1,6 +1,6 @@
 # Console architecture
 
-Status: local provider configuration and multiple Pi Durable sessions are implemented. Opt-in sandboxed file/HTTP tools are implemented; shell execution, conversation forks, and remote access remain planned.
+Status: local provider configuration and multiple Pi Durable sessions are implemented. Opt-in sandboxed file/HTTP tools are implemented; registered backend connections and independent Pi conversations are implemented. Opt-in sandboxed commands, public repository cloning, persistent machine settings, and recoverable deletion are implemented. Native forks, task-owned subagents, and runtime inspection are implemented.
 
 [Requirements](requirements.md) owns product outcomes and scope. This document owns responsibilities,
 state, interfaces, and technical tradeoffs. It must distinguish intended design from verified implementation.
@@ -61,7 +61,7 @@ backend runs locally; relevant task content and tool results may be sent to that
 - A backend identifies an execution machine and its capabilities.
 - A workspace associates that backend with an approved project directory.
 - A session has a stable identity, readable name, workspace, and conversations.
-- A conversation retains messages and tool interactions; branching is a later extension.
+- A conversation retains messages and tool interactions; native forks record history ancestry and delegated children retain task ownership.
 - A run records an assignment, lifecycle, applicable limits, result, and verification references.
 - Later approval records bind a decision to an exact action or artifact, not a reusable blanket permission.
 
@@ -139,7 +139,7 @@ decision and its reasoning when agreed. Keep feature tasks and verification resu
 
 The [integration decision](decisions/0001-local-pi-integration.md) records provider boundaries. The [session decision](decisions/0002-session-owned-harnesses.md) records isolation, configuration, and preservation of existing data.
 
-- Next.js serves a session sidebar, conversation/composer, and configuration inspector, plus `/settings/providers`. `/api/v1/*` forwards to Fastify `/v1/*`. No separate hub is needed for the current single-machine scope.
+- Next.js serves a top action bar, a collapsible left panel switching between sessions and configuration, and a dedicated conversation/composer, plus `/settings/providers`. `/api/v1/*` forwards to Fastify `/v1/*`. The local Fastify process also acts as a hub. `backends.sqlite` stores named origins and bearer tokens with owner-only permissions. `/backends/:id/api/*` forwards only allowlisted Console resources, injects credentials server-side, rejects redirects, and bounds response size and request time. `/machines` reports the selected execution backend; `/backends` lists hub connections without tokens. Storage location is startup configuration, exposed read-only; it is not hot-swapped or automatically migrated. Machine names and default project directories are editable in the UI and persisted in the catalog.
 - `src/console.ts` registers validated routes, closes resources, and rejects browser mutations without the Console request header. No CORS or Console user authentication is configured. This is for private loopback use only.
 - `src/providers.ts` adapts Pi's built-in catalog, login prompts, notifications, cancellation, logout, and explicit model-catalog refresh. Environment-only providers show setup guidance. Provider discovery does not prove access to a model.
 - `src/credentials.ts` supplies Pi's credential-store interface. Credentials and installation identity live in `credentials.sqlite`; Pi owns login and token refresh. An exclusive SQLite lock prevents two backend processes from rotating the same credentials.
@@ -148,7 +148,7 @@ The [integration decision](decisions/0001-local-pi-integration.md) records provi
 - `src/session-routes.ts` exposes session creation, snapshots, saved configuration, and lifecycle commands. Creation request IDs deduplicate retries; message request IDs are scoped to their session.
 - Provider responses include supported thinking levels from Pi's `getSupportedThinkingLevels()` and model context capacity. Saving settings validates the selected model/level against the installed catalog and persists them in Pi's `pi.agent` document. Settings changes during unfinished work return 409. Messages use saved settings instead of carrying a second configuration.
 - Browser polling retrieves up to 100 recent transcript entries, committed partial text, and lifecycle state. The browser never owns the run. Session list polling runs every two seconds; selected transcript polling runs every second. A URL query remembers selection on reload, and in-memory drafts and uncertain submission IDs remain separate per session while the page is open. Repeated submissions with the same request ID return the original admission, including after restart. A request ID identifies its original input and must not be reused for different content.
-- Closing the browser leaves execution running. Backend restart opens saved work without scheduling it; Resume explicitly enables scheduling. Cancel aborts the conversation and persists that outcome. Read tools may replay; file writes and HTTP GET do not replay automatically after interruption. Other external-effect workflows remain unimplemented.
+- Closing the browser leaves execution running. Backend restart opens saved work without scheduling it; Resume explicitly enables scheduling. Cancel aborts the conversation and persists that outcome. Read/list tools may replay; file writes and HTTP GET do not replay automatically after interruption. Other external-effect workflows remain unimplemented.
 
 Storage defaults to `$XDG_DATA_HOME/console` or `~/.local/share/console`. `CONSOLE_DATA_DIR` overrides it. The directory is owner-only and saved credentials are plaintext SQLite with owner-only permissions, not an encrypted vault. Keep it outside source control and run one backend per data directory. No automatic retention, export, or backup mechanism exists yet. Login attempts are ephemeral, expire after ten minutes, and can be reattached after a page reload while the backend remains alive.
 
@@ -159,10 +159,122 @@ Pi packages are pinned to 1.4.0. A pnpm patch adds missing JSON import attribute
 [Decision 0003](decisions/0003-configurable-nono-workers.md) records the process boundary and the CLI choice. Pi retains execution state and model access in Fastify. Tool execution crosses into a fresh `nono wrap` worker for each call.
 
 - `sandbox-policy.ts` defines the saved `console.sandbox` Pi document and validates directory grants. Defaults disable tools, allow no writes, and block network. Enabling requires an existing absolute workspace, which becomes readable. Additional readable and writable directories are explicit; writable grants include reads.
-- `sandbox-tools.ts` registers `read_file`, optional `write_file`, and optional `fetch_url`. It reads the saved policy and revalidates grants for every invocation. The model cannot change policy through these tools. No shell or arbitrary JavaScript execution is exposed.
+- `sandbox-tools.ts` registers `read_file`/`list_directory`, optional `write_file`/`create_directory`, and optional `fetch_url`. It reads the saved policy and revalidates grants for every invocation. The model cannot change policy through these tools. `run_command` is offered only when the saved policy explicitly enables commands.
 - `sandbox-runner.ts` creates a nono capability manifest inside Console's protected data directory. It supplies a minimal environment, no provider secrets, and fixed read-only prerequisites for Node, the worker/package metadata, system libraries, OpenSSL configuration, and required device files. It executes nono 0.80.0 directly without a shell or inherited profiles.
-- `sandbox-worker.ts` runs only after nono installs restrictions and execs Node, so Node's worker threads inherit them. Each call has a ten-second deadline and bounded input/output; text files and HTTP bodies are limited to 64 KiB. Unknown operations/arguments cannot be selected by the model.
+- `sandbox-worker.ts` runs only after nono installs restrictions and execs Node, so Node's worker threads inherit them. File/HTTP calls have a ten-second deadline and bounded input/output; command limits are described below; text files and HTTP bodies are limited to 64 KiB. Unknown operations/arguments cannot be selected by the model.
 - Policies cannot grant Console's private storage or its environment file. Writable grants also exclude the running Console source and Node/nono executable paths. This prevents a tool from rewriting its policy, backend, or launcher. Readable/writable roots are additive; overlapping broad parents are rejected rather than pretending to carve private children out on Linux.
 - Policy updates require an idle session, validate paths, and run a restricted startup check before saving an enabled policy. They commit policy and offered tools together. Disabling remains possible even if an old workspace no longer exists. Existing policies are never replaced after a failed activation, and tools never retry outside nono.
 
 Network currently supports blocked or explicitly unrestricted access. Unrestricted includes local services and exposes HTTP GET; domain allowlists and other nono features are not exposed yet. Console account authentication remains deferred, so this is a private single-user application, not a multi-user boundary. Unsupported/missing nono or kernel enforcement fails closed. Native tests exercise filesystem denial, symlink escapes, TCP/UDP denial with positive controls, persisted policies, and real Pi tool invocation on Linux. macOS behavior has not been verified here.
+
+## Backend and workspace configuration
+
+The browser selects a connection registered with the local hub. Next.js `/api/v1/*` routes inject
+the local backend token server-side; remote requests then pass through the hub proxy, following
+the server-side token pattern in [Durable Pi](https://github.com/disler/durable-pi). Neither the
+provider token store nor saved backend tokens are returned to the browser. Backend connections
+require HTTPS or a loopback HTTP origin, including an SSH tunnel; the application does not manage
+SSH tunnels. A destination with `CONSOLE_ACCESS_TOKEN` authenticates every versioned API request.
+Without that setting, both socket address and Host must be loopback. These are trusted operator
+connections with backend-wide authority, not separate team accounts or per-user permissions.
+
+`catalog.sqlite` stores projects as workspace identities with canonical directory paths. A project
+may register an existing directory or explicitly create one under an existing parent. Registration
+does not enable agent tools. New sessions may bind to a workspace; legacy unbound sessions remain
+valid. Session and project names are editable without moving directories or databases.
+
+Every session still owns one Pi Harness and SQLite database. Its conversations now use Pi's own
+`createConversation()` API, with name/request identity stored atomically in `console.conversation`.
+New conversations inherit the main conversation's model and sandbox policy, then retain independent
+settings, transcript, inputs, and cancellation. Requests use `/sessions/:id/conversations/:conversationId`.
+The legacy session endpoints address Main when active, otherwise the first active conversation. Workspace filesystem edits
+are shared; separate conversations do not create filesystem isolation. Pi scheduling is session-wide:
+Resume starts the session scheduler. New input cannot implicitly resume other interrupted work.
+
+## Machine and project lifecycle
+
+`machine-settings.ts` persists the name, default clone directory (`~/Projects` initially), fixed
+model default, and last selected configuration in `catalog.sqlite`. Pi is a backend dependency;
+there is no separate Pi CLI installation step. Git availability is reported for repository cloning.
+New sessions prefer the project's last model configuration, then a fixed machine default, then
+the machine's last configuration. Existing connected configurations seed the remembered default
+when upgrading. Unavailable saved models require an explicit selection, not a silent substitute.
+
+Public HTTPS GitHub URLs can be cloned under the machine's project directory, with an optional
+absolute override. `workspaces.ts` tracks cloning, ready, failed, and interrupted states. Clone
+uses Git without user credential helpers, hooks, templates, or file/ext transports; it writes to
+a temporary sibling and publishes the directory after success. Failed clones can be retried.
+Registration/cloning never runs repository setup scripts or grants agent tools.
+
+New-session access presets are None, Read, Edit, and Setup. Setup explicitly grants project
+writes, shell commands, and unrestricted network; existing policies stay unchanged. Commands
+run Bash without startup profiles inside a fresh nono worker. Their working directory stays
+within the project; saved filesystem/network grants apply to child processes. A disposable home
+contains caches, temporary files, and runtime locks, without access to the operator's home or
+provider credentials. Commands time out after 110 seconds, with a 125-second parent bound;
+stdout/stderr are capped at 32 KiB each. Cancellation kills the worker process group. Commands
+are never replayed automatically. Hard CPU/memory quotas and private-repository credential setup
+are not implemented; additional toolchains may need explicit readable directories.
+
+Deleting an idle session or conversation marks it as Trash. Deleting a project hides its sessions;
+restore the project before restoring individual sessions. Moving to Trash removes neither project files nor conversation databases. The last active conversation cannot be deleted separately; delete its session instead.
+
+Home (`/`) shows actual machine counts and selected-machine summaries. `/chat` provides machine
+selection, project/session navigation, conversation controls, and shadcn Resizable panels. All routes
+share the application header. Machine selection remains scoped to the browser tab.
+
+## Network and agent inspection
+
+The conversation surface has independently collapsible/resizable network and inspector panels.
+The network loads registered machines through their existing authenticated hub routes, grouping
+projects, sessions, root conversations, forks, and task-owned children. Pi's immutable conversation
+IDs supply agent numbers; session numbers use catalog row identities. Naming is optional on
+creation and editable afterward. Trash does not recycle these identities.
+
+The inspector's Session, State, Tasks, Tools, and Extend panels read actual runtime data. Tools
+come from Pi's installed registry with schemas, descriptions, and replay policies; selection cannot
+exceed the saved sandbox grants. Extension checkboxes select that extension's permitted tools.
+They do not install code or disable prompt sections/hooks. Instructions are saved separately.
+Tasks lists live Pi model/tool tasks, not a catalog of example jobs.
+
+`console.agent` supplies `read_state`, `update_state`, and explicit `subagent` delegation. New
+sessions select these coordination tools without enabling filesystem/network/shell access. Existing
+conversations keep their saved selection until explicitly changed. Machine-wide JSON lives in
+`agent-state.sqlite`; compare-and-swap revisions reject stale full-object saves. Tool updates use
+session/task receipts committed in the same SQLite transaction so replay cannot apply them twice.
+State is shared across projects on the machine and must not contain credentials.
+
+The subagent tool creates a Pi conversation owned by its durable tool task in one commit, reuses
+it on replay, and submits with a stable request ID. It inherits the parent's model, instructions,
+and sandbox policy; recursive delegation is excluded. Parent cancellation reaches owned work.
+Forks use Pi's native `fork(entryId)` API, preserve history ancestry and current sandbox policy,
+and remain independent of their parent's cancellation. Both share project files. Neither operation
+creates a Git worktree. Conversation inspection exposes parent identity from Pi records.
+
+Slash commands open inspector panels, create numbered agents/sessions, or invoke existing
+cancel/resume endpoints. They execute locally as UI actions rather than being sent as prompts.
+Custom hook installation/editing, example durable-job workflows, and arbitrary plugin loading
+are not implemented. See [ADR 0006](decisions/0006-network-and-agent-controls.md).
+
+## Permanent deletion and direct chat controls
+
+Trash exposes a second, explicit confirmation for permanent deletion. A trashed session's harness
+must be idle and closed before removing its Pi database and catalog record. Legacy Main's database
+is removed individually; machine credentials, shared state, connection registry, and source files
+are retained. Session labels use a persistent counter so deletion never reuses a number.
+
+Pi 1.4 has no public per-conversation deletion API. `purge-conversation.ts` is a maintenance adapter
+for that pinned storage schema, called only after closing the idle harness. It removes a trashed
+leaf's entries, submissions, tasks, document revisions, documents, and conversation record in one
+transaction, retaining minted-ID history. It refuses a different pinned Pi version pending review.
+Fork descendants must be erased first. Main and task-owned children are erased through their session,
+preventing dangling runtime ownership. This is logical application deletion, not a guarantee that
+backups or every physical storage copy are erased. Project registration can be purged after its
+sessions are permanently deleted; project source directories remain untouched.
+
+The network row reserves action space to prevent hover layout shifts. Rename edits its label;
+Enter/blur saves and Escape cancels. The former status/toggle bar is removed. Each column owns a
+collapse button and a collapsed rail with a distinct expansion icon, retaining mounted drafts.
+The composer uses shadcn Popover for searchable connected models and supported thinking levels;
+selections update the selected conversation immediately. The Tools panel explains empty selection
+and provides explicit coordination/tool-permission setup actions.

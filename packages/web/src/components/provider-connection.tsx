@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChoiceSelect } from "@/components/choice-select";
 import { Button } from "@/components/ui/button";
 import { api, fieldClass, type Login, safeLink } from "@/lib/console-api";
 
@@ -18,7 +19,7 @@ export function ProviderConnection({
   const prompt = login.prompt;
   return (
     <section
-      className="space-y-4 rounded-lg border p-5"
+      className="space-y-4 rounded-none border p-5"
       aria-label="Provider connection"
     >
       <h2 className="font-medium">Connect {login.provider}</h2>
@@ -86,18 +87,15 @@ export function ProviderConnection({
           <label className="block space-y-2" htmlFor={prompt.id}>
             <span className="text-sm">{prompt.message}</span>
             {prompt.type === "select" ? (
-              <select
-                id={prompt.id}
-                className={fieldClass}
-                value={value || prompt.options?.[0]?.id}
-                onChange={(event) => setValue(event.target.value)}
-              >
-                {prompt.options?.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <ChoiceSelect
+                label={prompt.message}
+                value={value || prompt.options?.[0]?.id || ""}
+                items={(prompt.options ?? []).map((option) => ({
+                  value: option.id,
+                  label: option.label,
+                }))}
+                onChange={setValue}
+              />
             ) : (
               <input
                 id={prompt.id}

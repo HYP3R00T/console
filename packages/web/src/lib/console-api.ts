@@ -36,6 +36,9 @@ export type SessionSummary = {
   id: string;
   name: string;
   createdAt: string;
+  workspace?: string;
+  workspaceId?: string | null;
+  enabledTools?: string[];
   status: "idle" | "running" | "interrupted" | "blocked" | "unavailable";
   model?: { provider: string; modelId: string };
   thinkingLevel?: string;
@@ -49,13 +52,26 @@ export type Conversation = SessionSummary & {
   sandbox: SandboxPolicy;
   thinkingLevel: string;
   hasOlder: boolean;
-  messages: { id: string; role: string; text: string; toolName?: string }[];
+  messages: {
+    id: string;
+    role: string;
+    text: string;
+    toolName?: string;
+    entryId?: string;
+    reasoning?: ReasoningPart[];
+  }[];
   partial: string;
+  conversationId?: string;
+  partialReasoning?: ReasoningPart[];
+  partialId?: string;
   outcome?: string;
 };
 
+export type ReasoningPart = { id: string; text: string; streaming: boolean };
+
 export type SandboxPolicy = {
   enabled: boolean;
+  commands?: boolean;
   workspace: string;
   readPaths: string[];
   writePaths: string[];
@@ -75,8 +91,18 @@ export async function api<T>(
   method = "GET",
   body?: unknown,
   signal?: AbortSignal,
+  machineId?: string,
 ): Promise<T> {
-  const response = await fetch(`/api/v1${path}`, {
+  const backend =
+    machineId ??
+    (typeof window === "undefined"
+      ? "local"
+      : sessionStorage.getItem("console.backend") || "local");
+  const prefix =
+    path.startsWith("/backends") || backend === "local"
+      ? "/api/v1"
+      : `/api/v1/backends/${encodeURIComponent(backend)}/api`;
+  const response = await fetch(`${prefix}${path}`, {
     method,
     signal,
     cache: "no-store",
@@ -97,7 +123,7 @@ export async function api<T>(
 }
 
 export const fieldClass =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50";
+  "w-full rounded-none border border-input bg-background px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50";
 
 export function safeLink(value: string | undefined) {
   if (!value) return undefined;
@@ -108,3 +134,74 @@ export function safeLink(value: string | undefined) {
     return undefined;
   }
 }
+
+export type Machine = {
+  id: string;
+  name: string;
+  local: boolean;
+  platform: string;
+  architecture: string;
+  status: string;
+  sessions: number;
+  activeSessions: number;
+  unavailableSessions: number;
+  storage: {
+    directory: string;
+    source: string;
+    credentials: string;
+    catalog: string;
+    sessions: string;
+    restartRequired: boolean;
+  };
+  capabilities: {
+    remoteMachines: boolean;
+    shell: boolean;
+    sandboxedFiles: boolean;
+  };
+};
+
+export type BackendConnection = {
+  id: string;
+  name: string;
+  url?: string;
+  local: boolean;
+  status: string;
+};
+export type Workspace = {
+  id: string;
+  name: string;
+  path: string;
+  repository?: string | null;
+  error?: string | null;
+  state?: string;
+  deleted?: number;
+};
+export type ConversationSummary = {
+  parentId?: string;
+  kind?: "root" | "fork" | "subagent";
+  id: string;
+  name: string;
+  status: string;
+  model?: { provider: string; modelId: string };
+};
+
+export type AgentInspection = {
+  tools: {
+    name: string;
+    description: string;
+    parameters: unknown;
+    replay: string;
+    extension: string;
+    enabled: boolean;
+    permitted: boolean;
+  }[];
+  extensions: {
+    name: string;
+    tools: string[];
+    sections: number;
+    hooks: number;
+  }[];
+  instructions: string;
+  tasks: { id: string; name: string; state: string }[];
+  scheduling: string;
+};

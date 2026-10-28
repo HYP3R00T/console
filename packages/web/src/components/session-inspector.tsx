@@ -3,14 +3,14 @@
 import { SlidersHorizontalIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ChoiceSelect } from "@/components/choice-select";
 import { SandboxSettings } from "@/components/sandbox-settings";
 import { Button } from "@/components/ui/button";
-import {
-  type AgentConfiguration,
-  type Conversation,
-  fieldClass,
-  type Provider,
-  type SandboxPolicy,
+import type {
+  AgentConfiguration,
+  Conversation,
+  Provider,
+  SandboxPolicy,
 } from "@/lib/console-api";
 
 export function SessionInspector({
@@ -55,17 +55,23 @@ export function SessionInspector({
     onDirtyChange(dirty);
   }, [dirty, onDirtyChange]);
   return (
-    <aside
-      className="space-y-6 border-t p-5 lg:overflow-y-auto lg:border-t-0 lg:border-l"
-      aria-label="Session inspector"
-    >
+    <aside className="space-y-6 p-5" aria-label="Session inspector">
       <header className="flex items-center gap-2">
         <SlidersHorizontalIcon
           className="size-4 text-muted-foreground"
           aria-hidden="true"
         />
-        <h2 className="font-semibold">Session settings</h2>
+        <h2 className="font-semibold">Session configuration</h2>
       </header>
+      {!providers.some((item) => item.configured) && (
+        <p className="text-sm text-muted-foreground">
+          No providers connected.{" "}
+          <Link href="/settings/providers" className="underline">
+            Manage connections
+          </Link>{" "}
+          on this machine first.
+        </p>
+      )}
       <form
         className="space-y-4"
         onSubmit={(event) => {
@@ -73,42 +79,41 @@ export function SessionInspector({
           void onSave(draft);
         }}
       >
-        <label className="block space-y-2 text-sm">
+        <div className="block space-y-2 text-sm">
           Provider
-          <select
-            className={fieldClass}
+          <ChoiceSelect
+            label="Provider"
             value={draft.provider}
             disabled={disabled}
-            onChange={(event) =>
-              setDraft({
-                provider: event.target.value,
-                model: "",
-                thinkingLevel: "off",
-              })
+            placeholder="Choose a connected provider"
+            items={providers
+              .filter((item) => item.configured)
+              .map((item) => ({ value: item.id, label: item.name }))}
+            onChange={(value) =>
+              setDraft({ provider: value, model: "", thinkingLevel: "off" })
             }
-          >
-            <option value="">Choose a provider</option>
-            {providers.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-                {item.configured ? "" : " · Not connected"}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block space-y-2 text-sm">
+          />
+        </div>
+        <div className="block space-y-2 text-sm">
           Model
-          <select
-            className={fieldClass}
+          <ChoiceSelect
+            label="Model"
             value={draft.model}
-            disabled={disabled || !provider}
-            onChange={(event) => {
-              const next = provider?.models.find(
-                (item) => item.id === event.target.value,
-              );
+            disabled={disabled || !provider?.configured}
+            placeholder="Choose a model"
+            items={
+              provider?.configured
+                ? provider.models.map((item) => ({
+                    value: item.id,
+                    label: item.name,
+                  }))
+                : []
+            }
+            onChange={(value) => {
+              const next = provider?.models.find((item) => item.id === value);
               setDraft({
                 ...draft,
-                model: event.target.value,
+                model: value,
                 thinkingLevel: next?.thinkingLevels.includes(
                   draft.thinkingLevel,
                 )
@@ -116,35 +121,20 @@ export function SessionInspector({
                   : (next?.thinkingLevels[0] ?? "off"),
               });
             }}
-          >
-            <option value="">Choose a model</option>
-            {draft.model && !model && (
-              <option value={draft.model}>{draft.model} · Unavailable</option>
-            )}
-            {provider?.models.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block space-y-2 text-sm">
+          />
+        </div>
+        <div className="block space-y-2 text-sm">
           Thinking level
-          <select
-            className={fieldClass}
+          <ChoiceSelect
+            label="Thinking level"
             value={draft.thinkingLevel}
             disabled={disabled || !model || model.thinkingLevels.length < 2}
-            onChange={(event) =>
-              setDraft({ ...draft, thinkingLevel: event.target.value })
-            }
-          >
-            {(model?.thinkingLevels ?? [draft.thinkingLevel]).map((level) => (
-              <option key={level} value={level}>
-                {level}
-              </option>
-            ))}
-          </select>
-        </label>
+            items={(model?.thinkingLevels ?? [draft.thinkingLevel]).map(
+              (level) => ({ value: level, label: level }),
+            )}
+            onChange={(value) => setDraft({ ...draft, thinkingLevel: value })}
+          />
+        </div>
         {model && (
           <p className="text-xs text-muted-foreground">
             Model context capacity: {model.contextWindow.toLocaleString()}{" "}
@@ -162,7 +152,7 @@ export function SessionInspector({
         <Button
           className="w-full"
           type="submit"
-          disabled={disabled || !model || !dirty}
+          disabled={disabled || !provider?.configured || !model || !dirty}
         >
           Save settings
         </Button>
@@ -173,8 +163,17 @@ export function SessionInspector({
           Finish or cancel active work before changing them.
         </p>
       </form>
+      <section className="space-y-2 border-t pt-4">
+        <h3 className="text-sm font-medium">Enabled tools</h3>
+        <p className="wrap-break-word text-xs leading-relaxed text-muted-foreground">
+          {session.enabledTools?.length
+            ? session.enabledTools.join(", ")
+            : "None. Configure a workspace and explicit permissions under Sandbox to enable file tools."}
+        </p>
+      </section>
       <SandboxSettings
         policy={session.sandbox}
+        fixedWorkspace={Boolean(session.workspaceId)}
         disabled={disabled}
         onSave={onSandboxSave}
         onDirtyChange={onSandboxDirtyChange}

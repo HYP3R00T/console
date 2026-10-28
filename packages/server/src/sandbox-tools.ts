@@ -16,31 +16,41 @@ export function sandboxExtension(privateDirectory: string) {
   function tool(
     name: string,
     description: string,
-    operation: "read" | "write" | "fetch",
+    operation: "read" | "write" | "fetch" | "list" | "mkdir" | "command",
   ) {
     const parameters =
-      operation === "fetch"
+      operation === "command"
         ? Type.Object(
-            { url: Type.String({ maxLength: 2000 }) },
+            {
+              command: Type.String({ minLength: 1, maxLength: 8000 }),
+              cwd: Type.Optional(Type.String({ maxLength: 2000 })),
+            },
             { additionalProperties: false },
           )
-        : operation === "write"
+        : operation === "fetch"
           ? Type.Object(
-              {
-                path: Type.String({ maxLength: 2000 }),
-                content: Type.String({ maxLength: 65536 }),
-              },
+              { url: Type.String({ maxLength: 2000 }) },
               { additionalProperties: false },
             )
-          : Type.Object(
-              { path: Type.String({ maxLength: 2000 }) },
-              { additionalProperties: false },
-            );
+          : operation === "write"
+            ? Type.Object(
+                {
+                  path: Type.String({ maxLength: 2000 }),
+                  content: Type.String({ maxLength: 65536 }),
+                },
+                { additionalProperties: false },
+              )
+            : Type.Object(
+                { path: Type.String({ maxLength: 2000 }) },
+                { additionalProperties: false },
+              );
     return defineTool({
       name,
       description,
       parameters,
-      ...(operation === "read" ? { replay: "safe" as const } : {}),
+      ...(operation === "read" || operation === "list"
+        ? { replay: "safe" as const }
+        : {}),
       async execute(args, api, context) {
         const saved =
           (await api.snapshot(SandboxDoc, api.conversationId, context)) ??
@@ -48,7 +58,9 @@ export function sandboxExtension(privateDirectory: string) {
         const policy = await validateSandbox(saved, privateDirectory);
         const request = { ...args, operation } as SandboxRequest;
         if (
-          (operation === "write" && !policy.writePaths.length) ||
+          (operation === "command" && !policy.commands) ||
+          (["write", "mkdir"].includes(operation) &&
+            !policy.writePaths.length) ||
           (operation === "fetch" && policy.network !== "unrestricted")
         )
           throw new Error(
@@ -64,6 +76,11 @@ export function sandboxExtension(privateDirectory: string) {
       },
     });
   }
+  const command = tool(
+    "run_command",
+    "Run a shell command inside the saved nono sandbox, with workspace-relative cwd, bounded output, and a 110-second limit. No provider credentials or personal home are available. Use writable grants for builds/installs and unrestricted network only when explicitly enabled. Never replays automatically after interruption.",
+    "command",
+  );
   const read = tool(
     "read_file",
     "Read up to 64 KiB of UTF-8 text through the session's OS sandbox. Paths are relative to the workspace unless absolute.",
@@ -74,6 +91,16 @@ export function sandboxExtension(privateDirectory: string) {
     "Write up to 64 KiB of UTF-8 text. Only explicitly writable directories are permitted. Creates or overwrites a file; never replays automatically after interruption.",
     "write",
   );
+  const list = tool(
+    "list_directory",
+    "List up to 1000 entries in a readable workspace directory, without following symlinks. Paths are relative to the workspace unless absolute.",
+    "list",
+  );
+  const mkdir = tool(
+    "create_directory",
+    "Create a directory and missing parents within explicitly writable directories. Never replays automatically after interruption.",
+    "mkdir",
+  );
   const fetch = tool(
     "fetch_url",
     "GET an HTTP(S) URL through the session's sandbox, returning up to 64 KiB. No backend credentials are supplied.",
@@ -82,7 +109,7 @@ export function sandboxExtension(privateDirectory: string) {
   return {
     extension: defineExtension({
       name: "console.sandbox",
-      tools: [read, write, fetch],
+      tools: [read, list, write, mkdir, fetch, command],
       sections: [
         section("sandbox", async (input, context) => {
           const policy =
@@ -101,7 +128,9 @@ export function sandboxExtension(privateDirectory: string) {
       policy.enabled
         ? [
             read,
-            ...(policy.writePaths.length ? [write] : []),
+            list,
+            ...(policy.commands ? [command] : []),
+            ...(policy.writePaths.length ? [write, mkdir] : []),
             ...(policy.network === "unrestricted" ? [fetch] : []),
           ]
         : [],

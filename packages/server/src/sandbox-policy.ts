@@ -7,6 +7,7 @@ import { httpError } from "./providers.ts";
 
 export type SandboxPolicy = {
   enabled: boolean;
+  commands?: boolean;
   workspace: string;
   readPaths: string[];
   writePaths: string[];
@@ -14,6 +15,7 @@ export type SandboxPolicy = {
 };
 export const defaultSandbox = (): SandboxPolicy => ({
   enabled: false,
+  commands: false,
   workspace: "",
   readPaths: [],
   writePaths: [],
