@@ -10,10 +10,6 @@ const nextConfig: NextConfig = {
         source: "/api/health",
         destination: `${serverUrl.replace(/\/$/, "")}/health`,
       },
-      {
-        source: "/api/v1/:path*",
-        destination: `${serverUrl.replace(/\/$/, "")}/v1/:path*`,
-      },
     ];
   },
 };

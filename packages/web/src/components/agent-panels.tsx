@@ -1,0 +1,365 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { type AgentInspection, api } from "@/lib/console-api";
+
+export type InspectorPanel = "session" | "state" | "tasks" | "tools" | "extend";
+export function AgentPanels({
+  path,
+  panel,
+  idle,
+  onChanged,
+  onConfigure,
+}: {
+  path: string;
+  panel: InspectorPanel;
+  idle: boolean;
+  onChanged: () => void;
+  onConfigure: () => void;
+}) {
+  const [inspection, setInspection] = useState<AgentInspection>();
+  const [error, setError] = useState("");
+  const [working, setWorking] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [instructions, setInstructions] = useState<string>();
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      try {
+        const value = await api<AgentInspection>(
+          `${path}/inspect`,
+          "GET",
+          undefined,
+          controller.signal,
+        );
+        if (!controller.signal.aborted) {
+          setInspection(value);
+          setLoadError("");
+        }
+      } catch (cause) {
+        if (!controller.signal.aborted) setLoadError((cause as Error).message);
+      }
+      if (!controller.signal.aborted) timer = setTimeout(poll, 1500);
+    }
+    void poll();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [path]);
+  async function save(tools: string[], nextInstructions?: string) {
+    setWorking(true);
+    setError("");
+    try {
+      await api(`${path}/agent`, "PATCH", {
+        tools,
+        ...(nextInstructions === undefined
+          ? {}
+          : { instructions: nextInstructions }),
+      });
+      setInspection(await api(`${path}/inspect`));
+      setInstructions(undefined);
+      onChanged();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setWorking(false);
+    }
+  }
+  const enabled =
+    inspection?.tools.filter((item) => item.enabled).map((item) => item.name) ??
+    [];
+  return (
+    <section
+      className="space-y-4 p-4 text-sm"
+      aria-label={`${panel} inspector`}
+    >
+      {(error || loadError) && (
+        <p role="alert" className="text-xs text-destructive">
+          {error || loadError}
+        </p>
+      )}
+      {panel === "state" ? (
+        <SharedState />
+      ) : !inspection ? (
+        <p className="text-muted-foreground">Loading runtime…</p>
+      ) : (
+        <>
+          {panel === "tools" && (
+            <>
+              {!enabled.length && (
+                <div className="space-y-2 border p-3">
+                  <p className="text-xs">
+                    This conversation has no tools selected. State and
+                    delegation need no filesystem grant; file and command tools
+                    need a workspace policy.
+                  </p>
+                  <Button
+                    size="sm"
+                    disabled={!idle || working}
+                    onClick={() =>
+                      void save(
+                        inspection.tools
+                          .filter(
+                            (tool) =>
+                              tool.extension === "console.agent" &&
+                              tool.permitted,
+                          )
+                          .map((tool) => tool.name),
+                      )
+                    }
+                  >
+                    Enable state & delegation
+                  </Button>
+                </div>
+              )}
+              <Button size="sm" variant="outline" onClick={onConfigure}>
+                Configure workspace & file tools
+              </Button>
+              <h2 className="font-semibold">
+                Tools · {enabled.length}/{inspection.tools.length}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Definitions come from installed Pi extensions. Sandbox grants
+                control availability. Changes require idle work.
+              </p>
+              {inspection.tools.map((tool) => (
+                <Collapsible key={tool.name} className="border">
+                  <div className="flex items-center gap-2 p-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`Enable ${tool.name}`}
+                      checked={tool.enabled}
+                      disabled={!idle || working || !tool.permitted}
+                      onChange={(event) =>
+                        void save(
+                          event.target.checked
+                            ? [...enabled, tool.name]
+                            : enabled.filter((name) => name !== tool.name),
+                        )
+                      }
+                    />
+                    <CollapsibleTrigger className="flex flex-1 justify-between gap-2 text-left text-xs">
+                      <span className="font-mono">{tool.name}</span>
+                      <span className="text-muted-foreground">
+                        {tool.replay === "safe"
+                          ? "replay safe"
+                          : "interrupt on crash"}
+                      </span>
+                    </CollapsibleTrigger>
+                  </div>
+                  <CollapsibleContent className="space-y-2 border-t p-3 text-xs">
+                    <p>{tool.description}</p>
+                    <p className="text-muted-foreground">
+                      {tool.extension}
+                      {!tool.permitted && " · requires sandbox permission"}
+                    </p>
+                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap">
+                      {JSON.stringify(tool.parameters, null, 2)}
+                    </pre>
+                  </CollapsibleContent>
+                </Collapsible>
+              ))}
+            </>
+          )}
+          {panel === "tasks" && (
+            <>
+              <h2 className="font-semibold">Runtime tasks</h2>
+              <p className="text-xs text-muted-foreground">
+                Scheduler: {inspection.scheduling}. These are Pi's active
+                model/tool tasks.
+              </p>
+              {!inspection.tasks.length && (
+                <p className="text-muted-foreground">No active tasks.</p>
+              )}
+              {inspection.tasks.map((task) => (
+                <div
+                  key={task.id}
+                  className="flex justify-between gap-2 border p-3 text-xs"
+                >
+                  <span className="font-mono">
+                    #{task.id} {task.name}
+                  </span>
+                  <span>{task.state}</span>
+                </div>
+              ))}
+            </>
+          )}
+          {panel === "extend" && (
+            <>
+              <h2 className="font-semibold">Installed extensions</h2>
+              {inspection.extensions.map((extension) => {
+                const names = inspection.tools
+                  .filter(
+                    (tool) =>
+                      tool.extension === extension.name && tool.permitted,
+                  )
+                  .map((tool) => tool.name);
+                return (
+                  <div
+                    key={extension.name}
+                    className="space-y-2 border p-3 text-xs"
+                  >
+                    <label className="flex gap-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`Enable ${extension.name} tools`}
+                        checked={
+                          names.length > 0 &&
+                          names.every((name) => enabled.includes(name))
+                        }
+                        disabled={!idle || working || !names.length}
+                        onChange={(event) =>
+                          void save(
+                            event.target.checked
+                              ? [...new Set([...enabled, ...names])]
+                              : enabled.filter((name) => !names.includes(name)),
+                          )
+                        }
+                      />
+                      <span className="font-mono">{extension.name}</span>
+                    </label>
+                    <p>
+                      {extension.tools.length} tools · {extension.sections}{" "}
+                      prompt sections · {extension.hooks} hooks
+                    </p>
+                    <p className="text-muted-foreground">
+                      Toggle tools within current grants. Extensions are
+                      installed by the server; this does not load arbitrary
+                      code.
+                    </p>
+                  </div>
+                );
+              })}
+              <form
+                className="space-y-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void save(enabled, instructions ?? inspection.instructions);
+                }}
+              >
+                <label className="block space-y-2">
+                  Agent instructions
+                  <textarea
+                    className="min-h-48 w-full border bg-background p-2 text-xs"
+                    maxLength={16000}
+                    value={instructions ?? inspection.instructions}
+                    onChange={(event) => setInstructions(event.target.value)}
+                    disabled={!idle || working}
+                  />
+                </label>
+                <Button
+                  disabled={!idle || working || instructions === undefined}
+                >
+                  Save instructions
+                </Button>
+              </form>
+            </>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+function SharedState() {
+  const [snapshot, setSnapshot] = useState<{
+    revision: number;
+    value: Record<string, unknown>;
+  }>();
+  const [draft, setDraft] = useState<string>();
+  const [revision, setRevision] = useState(0);
+  const [error, setError] = useState("");
+  const [working, setWorking] = useState(false);
+  const reload = useCallback(async () => {
+    const value = await api<{
+      revision: number;
+      value: Record<string, unknown>;
+    }>("/state");
+    setSnapshot(value);
+    setDraft(undefined);
+    setRevision(value.revision);
+  }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      try {
+        const value = await api<{
+          revision: number;
+          value: Record<string, unknown>;
+        }>("/state", "GET", undefined, controller.signal);
+        if (!controller.signal.aborted) setSnapshot(value);
+      } catch (cause) {
+        if (!controller.signal.aborted) setError((cause as Error).message);
+      }
+      if (!controller.signal.aborted) timer = setTimeout(poll, 1500);
+    }
+    void poll();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, []);
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setWorking(true);
+        setError("");
+        try {
+          const value = JSON.parse(draft ?? "{}");
+          await api("/state", "PUT", { value, revision });
+          await reload();
+        } catch (cause) {
+          setError((cause as Error).message);
+        } finally {
+          setWorking(false);
+        }
+      }}
+    >
+      <h2 className="font-semibold">Machine shared state</h2>
+      <p className="text-xs text-muted-foreground">
+        Shared by all projects and agents on this machine. Revision{" "}
+        {snapshot?.revision ?? "…"}. Store facts, never credentials. Reload
+        before editing stale state.
+      </p>
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+      <textarea
+        aria-label="Shared state JSON"
+        className="min-h-64 w-full border bg-background p-3 font-mono text-xs"
+        disabled={!snapshot || working}
+        maxLength={65536}
+        value={draft ?? JSON.stringify(snapshot?.value ?? {}, null, 2)}
+        onChange={(event) => {
+          if (draft === undefined) setRevision(snapshot?.revision ?? 0);
+          setDraft(event.target.value);
+        }}
+      />
+      <div className="flex gap-2">
+        <Button disabled={working || draft === undefined}>Save JSON</Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={working}
+          onClick={() =>
+            void reload().catch((cause) => setError(cause.message))
+          }
+        >
+          Reload
+        </Button>
+      </div>
+    </form>
+  );
+}

@@ -1,13 +1,23 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { nonoExecutable, type SandboxPolicy } from "./sandbox-policy.ts";
 
 export type SandboxRequest = {
-  operation: "check" | "read" | "write" | "fetch" | "probe-network";
+  operation:
+    | "check"
+    | "read"
+    | "write"
+    | "fetch"
+    | "list"
+    | "mkdir"
+    | "probe-network"
+    | "command";
+  command?: string;
+  cwd?: string;
   path?: string;
   content?: string;
   url?: string;
@@ -64,6 +74,8 @@ export async function runSandbox(
     throw new Error("Sandbox tools are disabled");
   if (!(await sandboxSupport()).available)
     throw new Error("nono 0.80.0 is required; no unconfined fallback");
+  if (request.operation === "command" && !policy.commands)
+    throw new Error("Shell commands are disabled by policy");
   const binary = await nonoExecutable();
   const scratch = await mkdtemp(join(privateDirectory, ".tool-"));
   try {
@@ -92,6 +104,51 @@ export async function runSandbox(
       : ["/usr/lib", "/lib"]) {
       if (existsSync(path)) await grant(path, "read", "directory");
     }
+    const home = join(scratch, "home");
+    await mkdir(home, { mode: 0o700 });
+    if (policy.commands) {
+      await grant(home, "readwrite", "directory");
+      for (const path of [
+        "/usr/bin",
+        "/bin",
+        "/usr/local/bin",
+        "/etc/ssl/certs",
+        "/usr/share/ca-certificates",
+      ])
+        if (existsSync(path)) await grant(path, "read", "directory");
+      for (const path of [
+        "/etc/resolv.conf",
+        "/etc/hosts",
+        "/etc/nsswitch.conf",
+        "/etc/ssl/cert.pem",
+      ])
+        if (existsSync(path)) await grant(path, "read", "file");
+      for (const program of [
+        "node",
+        "pnpm",
+        "npm",
+        "python3",
+        "uv",
+        "bash",
+        "git",
+        "make",
+      ]) {
+        for (const bin of (process.env.PATH ?? "").split(delimiter)) {
+          const candidate = join(bin, program);
+          if (!existsSync(candidate)) continue;
+          const actual = await realpath(candidate);
+          const parent = dirname(actual);
+          const root =
+            parent.endsWith("/bin") &&
+            !parent.startsWith("/usr/") &&
+            parent !== "/bin"
+              ? dirname(parent)
+              : parent;
+          await grant(root, "read", "directory");
+          break;
+        }
+      }
+    }
     const manifest = join(scratch, "manifest.json");
     await writeFile(
       manifest,
@@ -107,8 +164,9 @@ export async function runSandbox(
       }),
       { mode: 0o600 },
     );
+    signal?.throwIfAborted();
     return await new Promise<string>((accept, reject) => {
-      const child = execFile(
+      const child = spawn(
         binary,
         [
           "wrap",
@@ -123,33 +181,80 @@ export async function runSandbox(
         {
           cwd: policy.workspace,
           env: cleanEnvironment(scratch),
-          timeout: 10_000,
-          maxBuffer: 512 * 1024,
-          signal,
+          detached: request.operation === "command",
+          stdio: "pipe",
         },
-        (error, stdout) => {
-          let result: { output?: string; error?: string };
-          try {
-            result = JSON.parse(stdout);
-          } catch {
-            reject(
-              new Error(
-                "Sandbox failed to start or finish; no unconfined fallback",
-              ),
-            );
-            return;
-          }
-          if (error || result.error)
+      );
+      const chunks: Buffer[] = [];
+      let size = 0;
+      let finished = false;
+      const stop = () => {
+        try {
+          if (request.operation === "command" && child.pid)
+            process.kill(-child.pid, "SIGKILL");
+          else child.kill("SIGKILL");
+        } catch {
+          /* Already exited. */
+        }
+      };
+      const timer = setTimeout(
+        () => {
+          stop();
+          finish("Sandbox operation timed out");
+        },
+        request.operation === "command" ? 125_000 : 10_000,
+      );
+      function finish(failure?: string, code?: number | null) {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", abort);
+        if (request.operation === "command") stop();
+        if (failure) {
+          reject(new Error(failure));
+          return;
+        }
+        try {
+          const result = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+            output?: string;
+            error?: string;
+          };
+          if (code !== 0 || result.error)
             reject(
               new Error(
                 `Sandbox operation denied or failed: ${result.error ?? "worker_failed"}`,
               ),
             );
           else accept(result.output ?? "");
-        },
-      );
-      child.stdin?.on("error", () => {});
-      child.stdin?.end(JSON.stringify(request));
+        } catch {
+          reject(
+            new Error(
+              "Sandbox failed to start or finish; no unconfined fallback",
+            ),
+          );
+        }
+      }
+      const abort = () => {
+        stop();
+        finish("Sandbox operation cancelled");
+      };
+      signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted) abort();
+      child.stdout.on("data", (chunk: Buffer) => {
+        size += chunk.length;
+        if (size > 512 * 1024) {
+          stop();
+          finish("Sandbox output limit exceeded");
+        } else chunks.push(chunk);
+      });
+      child.stderr.resume();
+      child.once("error", () => {
+        stop();
+        finish("Sandbox failed to start; no unconfined fallback");
+      });
+      child.once("close", (code) => finish(undefined, code));
+      child.stdin.on("error", () => {});
+      child.stdin.end(JSON.stringify({ ...request, home }));
     });
   } finally {
     await rm(scratch, { recursive: true, force: true });

@@ -353,3 +353,199 @@ test("saved sandbox policy drives real Pi tools and survives backend restart", a
     200,
   );
 });
+
+test("Pi can inspect a workspace and create a nested project through sandboxed tools", async (t) => {
+  const { data, workspace, policy } = await fixture(t);
+  await assert.rejects(
+    runSandbox(policy, { operation: "mkdir", path: "denied/child" }, data),
+  );
+  const faux = fauxProvider();
+  const models = createModels();
+  models.setProvider(faux.provider);
+  const app = createApp({}, { dataDirectory: data, models: () => models });
+  t.after(() => app.close());
+  const headers = { "x-console-request": "1" };
+  const id = (
+    await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      headers,
+      payload: { name: "Scaffold", requestId: "scaffold" },
+    })
+  ).json().id;
+  const endpoint = `/v1/sessions/${id}`;
+  await app.inject({
+    method: "PATCH",
+    url: `${endpoint}/config`,
+    headers,
+    payload: { provider: faux.provider.id, model: faux.getModel().id },
+  });
+  assert.equal(
+    (
+      await app.inject({
+        method: "PATCH",
+        url: `${endpoint}/sandbox`,
+        headers,
+        payload: { ...policy, writePaths: [workspace] },
+      })
+    ).statusCode,
+    200,
+  );
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall("list_directory", { path: "." }), {
+      stopReason: "toolUse",
+    }),
+    (context) => {
+      const result = context.messages.at(-1);
+      assert.ok(result?.role === "toolResult" && !result.isError);
+      assert.match(JSON.stringify(result), /input.txt/);
+      return fauxAssistantMessage(
+        fauxToolCall("create_directory", { path: "project/src" }),
+        { stopReason: "toolUse" },
+      );
+    },
+    (context) => {
+      const result = context.messages.at(-1);
+      assert.ok(result?.role === "toolResult" && !result.isError);
+      return fauxAssistantMessage(
+        fauxToolCall("write_file", {
+          path: "project/src/index.ts",
+          content: "export const ready = true;\n",
+        }),
+        { stopReason: "toolUse" },
+      );
+    },
+    fauxAssistantMessage("Created the project structure."),
+  ]);
+  assert.equal(
+    (
+      await app.inject({
+        method: "POST",
+        url: `${endpoint}/messages`,
+        headers,
+        payload: {
+          text: "Inspect and create a small project",
+          requestId: "build",
+        },
+      })
+    ).statusCode,
+    202,
+  );
+  const done = await until(
+    async () => (await app.inject(endpoint)).json(),
+    (value) => value.messages.at(-1)?.text === "Created the project structure.",
+  );
+  assert.deepEqual(
+    done.messages
+      .filter((message: { role: string }) => message.role === "toolResult")
+      .map((message: { toolName: string }) => message.toolName),
+    ["list_directory", "create_directory", "write_file"],
+  );
+  assert.equal(
+    await readFile(join(workspace, "project/src/index.ts"), "utf8"),
+    "export const ready = true;\n",
+  );
+  assert.equal(done.workspace, workspace);
+  assert.ok(
+    done.enabledTools.some((name: string) => name.includes("list_directory")),
+  );
+  await assert.rejects(
+    runSandbox(
+      { ...policy, writePaths: [workspace] },
+      { operation: "mkdir", path: "../private/forbidden" },
+      data,
+    ),
+  );
+});
+
+test("opt-in shell commands enforce workspace writes, private paths, and network policy", async (t) => {
+  const { policy, data, workspace } = await fixture(t);
+  await assert.rejects(
+    runSandbox(policy, { operation: "command", command: "true" }, data),
+    /disabled/,
+  );
+  const allowed = { ...policy, commands: true, writePaths: [workspace] };
+  await writeFile(
+    join(workspace, "package.json"),
+    JSON.stringify({
+      name: "sandbox-setup-fixture",
+      private: true,
+      version: "0.0.0",
+    }),
+  );
+  const result = JSON.parse(
+    await runSandbox(
+      allowed,
+      {
+        operation: "command",
+        command:
+          "mkdir -p generated && printf hello > generated/file.txt && node --version && pnpm --version && pnpm install --offline --ignore-scripts",
+      },
+      data,
+    ),
+  );
+  assert.equal(result.exitCode, 0, JSON.stringify(result));
+  assert.equal(
+    await readFile(join(workspace, "generated/file.txt"), "utf8"),
+    "hello",
+  );
+  const denied = JSON.parse(
+    await runSandbox(
+      allowed,
+      { operation: "command", command: `cat '${join(data, "secret.txt")}'` },
+      data,
+    ),
+  );
+  assert.notEqual(denied.exitCode, 0);
+  assert.doesNotMatch(denied.stdout, /private/);
+  const readonly = JSON.parse(
+    await runSandbox(
+      { ...policy, commands: true },
+      { operation: "command", command: "printf denied > denied.txt" },
+      data,
+    ),
+  );
+  assert.notEqual(readonly.exitCode, 0);
+  assert.doesNotMatch(
+    await runSandbox(allowed, { operation: "command", command: "env" }, data),
+    /OPENAI_API_KEY|CONSOLE_ACCESS_TOKEN/,
+  );
+});
+
+test("shell children inherit network blocking and cancellation stops delayed writes", async (t) => {
+  const { policy, data, workspace } = await fixture(t);
+  const server = createHttpServer((_req, response) => response.end("allowed"));
+  await new Promise<void>((accept) => server.listen(0, "127.0.0.1", accept));
+  t.after(() => new Promise<void>((accept) => server.close(() => accept())));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const command = `node -e 'fetch("http://127.0.0.1:${address.port}").then(r=>r.text()).then(console.log).catch(()=>process.exit(2))'`;
+  const allowed = { ...policy, commands: true, writePaths: [workspace] };
+  const blocked = JSON.parse(
+    await runSandbox(allowed, { operation: "command", command }, data),
+  );
+  assert.equal(blocked.exitCode, 2);
+  const connected = JSON.parse(
+    await runSandbox(
+      { ...allowed, network: "unrestricted" },
+      { operation: "command", command },
+      data,
+    ),
+  );
+  assert.equal(connected.exitCode, 0, JSON.stringify(connected));
+  assert.match(connected.stdout, /allowed/);
+  const controller = new AbortController();
+  const pending = runSandbox(
+    allowed,
+    { operation: "command", command: "sleep 1; printf late > late.txt" },
+    data,
+    controller.signal,
+  );
+  const timer = setTimeout(() => controller.abort(), 200);
+  await assert.rejects(pending, /cancelled/);
+  clearTimeout(timer);
+  await new Promise((accept) => setTimeout(accept, 1200));
+  await assert.rejects(readFile(join(workspace, "late.txt")), {
+    code: "ENOENT",
+  });
+});
