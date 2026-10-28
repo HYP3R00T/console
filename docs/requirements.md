@@ -1,6 +1,6 @@
 # Console requirements
 
-Status: working product baseline for review. Server/web scaffolds and their health connection are implemented; agent workflows remain planned.
+Status: working product baseline for review. Local provider settings, named persistent sessions, and model/thinking controls are implemented. Each session currently has one tool-free conversation. Workspace agent workflows remain planned.
 
 This document records what Console is intended to do and why. [Architecture](architecture.md)
 describes how we intend to provide it, including choices that remain unresolved. Requirements
@@ -31,7 +31,7 @@ the conversation model later. Separate conversations do not automatically isolat
 
 Begin with one user, one local backend, a web client, and manually submitted work in an existing
 workspace. Prove this path before adding remote hosts, additional clients, or automatic triggers.
-The first proof task, allowed tools, and execution limits still need selection.
+The current integration proves isolated, named sessions and tool-free model conversations before workspace execution. Users can create, select, and reopen sessions and save model/thinking settings. Workspace selection, forks, and code-editing tools remain planned.
 
 ## Required target behavior
 
@@ -99,7 +99,7 @@ settle consequential choices, and identify executable checks as implementation m
 ## Decisions still needed
 
 - First user workflow and proof task, including read-only versus code-editing tools.
-- Model access, persistence design, and API contracts; Pi Durable is selected but not integrated, and Next.js is selected for the client.
+- Expand the initial Pi Durable/SQLite conversation into workspace-bound sessions. Next.js is the client. Provider settings expose the installed Pi catalog and its supported authentication methods; subscription access is the intended OpenAI path, with no automatic change to API-key billing.
 - Supported lifecycle states, recovery/replay boundaries, cancellation, retention, and concurrency limits.
 - Access control, resource/cost limits, and the first deployment environment.
 

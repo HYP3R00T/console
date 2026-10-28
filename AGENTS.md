@@ -21,6 +21,8 @@
 
 ## Verification
 
+The user runs `mise run dev` in their own terminal. Use those development servers; do not start, stop, or restart them unless explicitly requested. Tell the user when a restart is required. Continue running relevant checks and tests.
+
 Install shared tools with `mise install`, then run `pnpm install --frozen-lockfile`. Mise manages Node.js (`lts`), pnpm (`latest`), and Biome (`latest`) for all packages. Use pnpm for workspace dependencies and scripts. Biome handles JavaScript, TypeScript, JSON, CSS, and GraphQL checks: `pnpm check` reports issues; `pnpm check:fix` applies safe fixes. Markdown remains with RumDL.
 
 Run from the repository root:

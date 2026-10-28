@@ -1,2 +1,16 @@
 packages:
   - packages/*
+
+# Pi's provider SDKs: Google has a no-op preinstall; protobufjs only prints version advice.
+allowBuilds:
+  "@google/genai": false
+  protobufjs: false
+
+# Google's published declarations import this SDK without declaring it.
+packageExtensions:
+  "@google/genai@2.21.0":
+    dependencies:
+      "@modelcontextprotocol/sdk": "^1.25.2"
+
+patchedDependencies:
+  '@earendil-works/pi-ai@1.4.0': patches/@earendil-works__pi-ai@1.4.0.patch
