@@ -128,7 +128,7 @@ export async function api<T>(
 }
 
 export const fieldClass =
-  "w-full rounded-none border border-input bg-background px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50";
+  "w-full rounded-none border border-input bg-background px-3 py-2 text-sm focus-visible:outline-1 focus-visible:outline-ring disabled:opacity-50";
 
 export function safeLink(value: string | undefined) {
   if (!value) return undefined;

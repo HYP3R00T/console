@@ -205,3 +205,24 @@ Home machine cards open their workspace when clicked. A separate small red trash
 without opening the card. The icon is a sibling of the full-card link, not nested inside it. Disconnect uses the same web
 registry operation as the Machines page, preserves machine data, and refreshes connection state.
 Action failures remain visible independently of the summary poll.
+
+Panel resize stops at the expanded minimum width; dragging never collapses a panel. Only the
+header toggle collapses it into a fixed 40px rail. Both toggles use the same directional icons,
+with persistent dividers and icon shortcuts for machines and agent panels. Shortcuts expand the
+relevant panel. Native scrolling remains enabled while scrollbar chrome and resize pills are hidden.
+
+Network actions overlay the row’s trailing edge on hover/focus, so hidden controls do not consume
+label space or shift rows. Conversation IDs sit at that edge until actions take precedence. Tree
+controls use matching icon sizes, and panel separators provide the sole one-pixel vertical divider.
+
+Network and inspector open/closed choices are stored independently in browser `sessionStorage`.
+They survive route navigation, conversation/machine changes, and reloads in that tab. A fresh
+layout defaults to closed on small screens; viewport changes do not override an explicit choice.
+Panel icon/configuration actions may explicitly reopen the relevant panel. The duplicate chat
+heading/New agent bar is removed; breadcrumbs identify the conversation and network/slash controls
+remain available for agent creation.
+
+Tree action overlays match the row control height instead of stretching to the padded row height.
+Create, rename, delete and confirmation actions use the shadcn `icon-xs` 24px square variant.
+Session containers have a stacked-conversation icon; individual conversations keep the single
+message icon, alongside machine and project icons.

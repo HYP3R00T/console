@@ -81,7 +81,7 @@ export function ChatComposer({
         </div>
       )}
       <form
-        className="mx-auto max-w-3xl rounded-none border bg-muted/20 p-3 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring/30 sm:p-4"
+        className="mx-auto max-w-3xl rounded-none border bg-muted/20 p-3 shadow-sm transition-shadow focus-within:ring-1 focus-within:ring-ring/30 sm:p-4"
         onSubmit={(event) => {
           event.preventDefault();
           if (showCommands) execute(commands[active]?.[0] ?? "");

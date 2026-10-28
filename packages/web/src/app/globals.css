@@ -127,3 +127,13 @@
     @apply font-sans;
   }
 }
+
+/* Keep native wheel, touch and keyboard scrolling without visual scrollbar chrome. */
+@layer base {
+  * {
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}

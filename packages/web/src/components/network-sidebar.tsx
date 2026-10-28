@@ -4,6 +4,7 @@ import {
   ChevronRightIcon,
   FolderIcon,
   MessageSquareIcon,
+  MessagesSquareIcon,
   MonitorIcon,
   PencilIcon,
   PlusIcon,
@@ -32,6 +33,14 @@ import {
   type SessionSummary,
   type Workspace,
 } from "@/lib/console-api";
+
+function ActionOverlay({ children }: { children: ReactNode }) {
+  return (
+    <span className="pointer-events-none absolute top-1/2 right-0 z-10 flex h-6 -translate-y-1/2 items-center bg-background opacity-0 group-hover:pointer-events-auto group-hover:bg-accent group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:bg-accent group-focus-within:opacity-100">
+      {children}
+    </span>
+  );
+}
 
 function Branch({
   label,
@@ -68,10 +77,10 @@ function Branch({
             {label}
           </CollapsibleTrigger>
         )}
-        {actions}
+        {actions && !editing && <ActionOverlay>{actions}</ActionOverlay>}
       </div>
       <CollapsibleContent>
-        <div className="ml-3 border-l pl-2">{children}</div>
+        <div className="ml-2 border-l pl-1">{children}</div>
       </CollapsibleContent>
     </Collapsible>
   );
@@ -112,11 +121,10 @@ function RowActions({
     }
   }
   return (
-    <span className="flex shrink-0 items-center opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
+    <span className="flex shrink-0 items-center">
       {create && (
         <Button
-          size="icon"
-          className="size-6"
+          size="icon-xs"
           variant="ghost"
           aria-label={`New conversation in ${name}`}
           onClick={create}
@@ -125,8 +133,7 @@ function RowActions({
         </Button>
       )}
       <Button
-        size="icon"
-        className="size-6"
+        size="icon-xs"
         variant="ghost"
         aria-label={`Rename ${name}`}
         onClick={onRename}
@@ -134,6 +141,7 @@ function RowActions({
         <PencilIcon className="size-3" />
       </Button>
       <ConfirmDelete
+        compact
         label={`Move ${name} to Trash`}
         disabled={working}
         onConfirm={() => void mutate("DELETE")}
@@ -379,7 +387,7 @@ function MachineBranch({
             <MessageSquareIcon className="size-3 shrink-0" />
             {nameLabel(item.name, `/sessions/${sid}/conversations/${item.id}`)}
             {!item.name.endsWith(`#${item.id}`) && (
-              <span className="text-[10px] text-muted-foreground">
+              <span className="ml-auto shrink-0 pr-1 text-[10px] text-muted-foreground">
                 #{item.id}
               </span>
             )}
@@ -429,7 +437,9 @@ function MachineBranch({
                     {label}
                   </button>
                 )}
-                {actions}
+                {edit?.path !== `/sessions/${sid}/conversations/${item.id}` && (
+                  <ActionOverlay>{actions}</ActionOverlay>
+                )}
               </div>
             )}
           </div>
@@ -448,8 +458,10 @@ function MachineBranch({
       label={
         <>
           <MonitorIcon className="size-3.5 shrink-0" />
-          <span className="truncate font-medium">{machine.name}</span>
-          <span className="ml-auto text-[10px] text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate font-medium">
+            {machine.name}
+          </span>
+          <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
             {machine.local ? "local" : "remote"} ·{" "}
             {error
               ? "offline"
@@ -461,7 +473,7 @@ function MachineBranch({
       }
       actions={
         <Link
-          className="p-1"
+          className="flex size-6 items-center justify-center"
           href={`/chat?backend=${encodeURIComponent(machine.id)}&inspect=machine`}
           onClick={(event) => {
             if (active) {
@@ -471,7 +483,7 @@ function MachineBranch({
           }}
           aria-label={`Configure ${machine.name}`}
         >
-          <SettingsIcon className="size-3.5" />
+          <SettingsIcon className="size-3" />
         </Link>
       }
     >
@@ -509,7 +521,7 @@ function MachineBranch({
             <>
               {
                 <Button
-                  size="icon"
+                  size="icon-xs"
                   variant="ghost"
                   aria-label={`New session in ${project.name}`}
                   onClick={() =>
@@ -525,7 +537,7 @@ function MachineBranch({
               }
               {project.id && (
                 <Link
-                  className="p-1"
+                  className="flex size-6 items-center justify-center"
                   aria-label={`Configure project ${project.name}`}
                   href={`/chat?backend=${encodeURIComponent(machine.id)}&inspect=project&workspace=${encodeURIComponent(project.id)}`}
                   onClick={(event) => {
@@ -563,7 +575,15 @@ function MachineBranch({
                 key={item.id}
                 initial={active && item.id === selected}
                 editing={edit?.path === `/sessions/${item.id}`}
-                label={nameLabel(item.name, `/sessions/${item.id}`)}
+                label={
+                  <>
+                    <MessagesSquareIcon
+                      className="size-3 shrink-0"
+                      aria-hidden="true"
+                    />
+                    {nameLabel(item.name, `/sessions/${item.id}`)}
+                  </>
+                }
                 actions={
                   <RowActions
                     name={item.name}
