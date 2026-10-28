@@ -8,7 +8,6 @@ import {
   PencilIcon,
   PlusIcon,
   SettingsIcon,
-  TrashIcon,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -18,6 +17,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { useBackend } from "@/components/console-shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -133,16 +133,11 @@ function RowActions({
       >
         <PencilIcon className="size-3" />
       </Button>
-      <Button
-        size="icon"
-        className="size-6"
-        variant="ghost"
+      <ConfirmDelete
+        label={`Move ${name} to Trash`}
         disabled={working}
-        aria-label={`Move ${name} to Trash`}
-        onClick={() => void mutate("DELETE")}
-      >
-        <TrashIcon className="size-3" />
-      </Button>
+        onConfirm={() => void mutate("DELETE")}
+      />
       {error && (
         <span
           role="alert"
@@ -163,9 +158,7 @@ export function NetworkSidebar({
   conversationId,
   onSelect,
   onNew,
-  toggle,
 }: {
-  toggle?: ReactNode;
   selected: string;
   conversationId?: string;
   onSelect: (sessionId: string, conversationId?: string) => void;
@@ -174,15 +167,6 @@ export function NetworkSidebar({
   const { connections, id } = useBackend();
   return (
     <nav aria-label="Machine network" className="relative p-2">
-      <div className="flex items-center justify-between px-1 py-3">
-        {toggle}
-        <h2 className="flex-1 text-xs font-medium tracking-widest text-muted-foreground">
-          NETWORK
-        </h2>
-        <Link href="/machines" aria-label="Add machine">
-          <PlusIcon className="size-4" />
-        </Link>
-      </div>
       {connections.map((machine) => (
         <MachineBranch
           key={machine.id}
@@ -478,8 +462,13 @@ function MachineBranch({
       actions={
         <Link
           className="p-1"
-          href={`/machines?backend=${encodeURIComponent(machine.id)}`}
-          onClick={() => selectMachine(machine.id)}
+          href={`/chat?backend=${encodeURIComponent(machine.id)}&inspect=machine`}
+          onClick={(event) => {
+            if (active) {
+              event.preventDefault();
+              window.dispatchEvent(new Event("console:inspect-machine"));
+            } else selectMachine(machine.id);
+          }}
           aria-label={`Configure ${machine.name}`}
         >
           <SettingsIcon className="size-3.5" />
@@ -534,6 +523,25 @@ function MachineBranch({
                   <PlusIcon className="size-3" />
                 </Button>
               }
+              {project.id && (
+                <Link
+                  className="p-1"
+                  aria-label={`Configure project ${project.name}`}
+                  href={`/chat?backend=${encodeURIComponent(machine.id)}&inspect=project&workspace=${encodeURIComponent(project.id)}`}
+                  onClick={(event) => {
+                    if (active) {
+                      event.preventDefault();
+                      window.dispatchEvent(
+                        new CustomEvent("console:inspect-project", {
+                          detail: project.id,
+                        }),
+                      );
+                    } else selectMachine(machine.id);
+                  }}
+                >
+                  <SettingsIcon className="size-3" />
+                </Link>
+              )}
               {project.id && (
                 <RowActions
                   name={project.name}

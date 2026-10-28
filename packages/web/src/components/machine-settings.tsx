@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ChoiceSelect } from "@/components/choice-select";
-import { useBackend } from "@/components/console-shell";
+import { useBackend } from "@/components/connection-context";
 import { Button } from "@/components/ui/button";
 import {
   type AgentConfiguration,
@@ -201,9 +200,20 @@ export function MachineSettings() {
           <p className="text-xs leading-relaxed text-muted-foreground sm:col-span-2">
             New sessions prefer the last model used in their project, then the
             machine default. New conversations inherit Main's saved settings.{" "}
-            <Link href="/settings/providers" className="underline">
+            <button
+              type="button"
+              className="underline"
+              onClick={() => {
+                window.dispatchEvent(new Event("console:open-settings"));
+                window.dispatchEvent(
+                  new CustomEvent("console:settings-section", {
+                    detail: "providers",
+                  }),
+                );
+              }}
+            >
               Manage providers for this machine
-            </Link>
+            </button>
             .
           </p>
           <Button type="submit" disabled={working || (!followLast && !model)}>

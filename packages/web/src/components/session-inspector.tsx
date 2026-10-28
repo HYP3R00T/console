@@ -1,9 +1,9 @@
 "use client";
 
 import { SlidersHorizontalIcon } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ChoiceSelect } from "@/components/choice-select";
+import { useModelPreferences } from "@/components/model-preferences";
 import { SandboxSettings } from "@/components/sandbox-settings";
 import { Button } from "@/components/ui/button";
 import type {
@@ -15,7 +15,7 @@ import type {
 
 export function SessionInspector({
   session,
-  providers,
+  providers: catalog,
   disabled,
   onSave,
   onDirtyChange,
@@ -30,6 +30,25 @@ export function SessionInspector({
   onSandboxSave: (policy: SandboxPolicy) => Promise<void>;
   onSandboxDirtyChange: (dirty: boolean) => void;
 }) {
+  const preferences = useModelPreferences();
+  const providers = catalog.map((provider) => ({
+    ...provider,
+    models: provider.models
+      .filter(
+        (model) =>
+          preferences.models.includes(`${provider.id}/${model.id}`) ||
+          (session.model?.provider === provider.id &&
+            session.model.modelId === model.id),
+      )
+      .map((model) => ({
+        ...model,
+        thinkingLevels: model.thinkingLevels.filter(
+          (level) =>
+            preferences.thinkingLevels.includes(level) ||
+            level === session.thinkingLevel,
+        ),
+      })),
+  }));
   const savedProvider = session.model?.provider ?? "";
   const savedModel = session.model?.modelId ?? "";
   const savedThinking = session.thinkingLevel;
@@ -66,12 +85,35 @@ export function SessionInspector({
       {!providers.some((item) => item.configured) && (
         <p className="text-sm text-muted-foreground">
           No providers connected.{" "}
-          <Link href="/settings/providers" className="underline">
+          <button
+            type="button"
+            className="underline"
+            onClick={() => {
+              window.dispatchEvent(new Event("console:open-settings"));
+              window.dispatchEvent(
+                new CustomEvent("console:settings-section", {
+                  detail: "providers",
+                }),
+              );
+            }}
+          >
             Manage connections
-          </Link>{" "}
+          </button>{" "}
           on this machine first.
         </p>
       )}
+      <button
+        type="button"
+        className="text-xs underline"
+        onClick={() => {
+          window.dispatchEvent(new Event("console:open-settings"));
+          window.dispatchEvent(
+            new CustomEvent("console:settings-section", { detail: "models" }),
+          );
+        }}
+      >
+        Manage model choices
+      </button>
       <form
         className="space-y-4"
         onSubmit={(event) => {
@@ -143,9 +185,20 @@ export function SessionInspector({
         )}
         {provider && !provider.configured && (
           <p className="text-xs text-muted-foreground">
-            <Link className="underline" href="/settings/providers">
+            <button
+              type="button"
+              className="underline"
+              onClick={() => {
+                window.dispatchEvent(new Event("console:open-settings"));
+                window.dispatchEvent(
+                  new CustomEvent("console:settings-section", {
+                    detail: "providers",
+                  }),
+                );
+              }}
+            >
               Connect this provider
-            </Link>{" "}
+            </button>{" "}
             before sending messages.
           </p>
         )}

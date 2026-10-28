@@ -3,13 +3,15 @@
 import { DatabaseIcon, MonitorIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { BackendConnections } from "@/components/backend-connections";
-import { MachineSettings } from "@/components/machine-settings";
+import { useBackend } from "@/components/connection-context";
 import { api, type Machine } from "@/lib/console-api";
 
 export default function Machines() {
+  const { id } = useBackend();
   const [machines, setMachines] = useState<Machine[]>([]);
   const [error, setError] = useState("");
   useEffect(() => {
+    if (!id) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
@@ -35,12 +37,12 @@ export default function Machines() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, []);
+  }, [id]);
   return (
-    <main className="mx-auto max-w-4xl space-y-8 px-5 py-8 sm:px-8">
+    <main className="mx-auto w-full max-w-4xl space-y-8 px-5 py-8 sm:px-8">
       <header className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">
-          Machine settings
+          Connections
         </p>
         <h1 className="text-3xl font-semibold">Machines</h1>
         <p className="text-sm text-muted-foreground">
@@ -49,7 +51,6 @@ export default function Machines() {
       </header>
 
       <BackendConnections />
-      <MachineSettings />
       {error && (
         <p
           role="alert"
@@ -58,7 +59,7 @@ export default function Machines() {
           {error}
         </p>
       )}
-      {!machines.length && !error && (
+      {id && !machines.length && !error && (
         <p className="text-sm text-muted-foreground">
           Loading machine information…
         </p>
@@ -71,7 +72,7 @@ export default function Machines() {
               <div>
                 <h2 className="font-semibold">{machine.name}</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Local · {machine.platform} / {machine.architecture}
+                  {machine.platform} / {machine.architecture}
                 </p>
               </div>
             </div>
@@ -123,7 +124,7 @@ export default function Machines() {
 
           <p className="border-t pt-4 text-xs text-muted-foreground">
             This is the selected execution machine. Saved connections belong to
-            the local hub. Sandboxed file tools require explicit session grants;
+            this web app. Sandboxed file tools require explicit session grants;
             shell commands require a separate opt-in.
           </p>
         </section>

@@ -1,8 +1,8 @@
 "use client";
 import { ChevronDownIcon } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 import { ChoiceSelect } from "@/components/choice-select";
+import { useModelPreferences } from "@/components/model-preferences";
 import {
   Popover,
   PopoverContent,
@@ -28,6 +28,18 @@ export function ComposerModelPicker({
   onSave: (config: AgentConfiguration) => Promise<void>;
   onConfigure: () => void;
 }) {
+  const preferences = useModelPreferences();
+  const choices = providers
+    .map((provider) => ({
+      ...provider,
+      models: provider.models.filter(
+        (model) =>
+          preferences.models.includes(`${provider.id}/${model.id}`) ||
+          (session.model?.provider === provider.id &&
+            session.model.modelId === model.id),
+      ),
+    }))
+    .filter((provider) => provider.models.length);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
@@ -75,9 +87,21 @@ export function ComposerModelPicker({
           </p>
         )}
         {!providers.length && (
-          <Link href="/settings/providers" className="underline">
+          <button
+            type="button"
+            className="underline"
+            onClick={() => {
+              setOpen(false);
+              window.dispatchEvent(new Event("console:open-settings"));
+              window.dispatchEvent(
+                new CustomEvent("console:settings-section", {
+                  detail: "providers",
+                }),
+              );
+            }}
+          >
             Connect a provider on this machine
-          </Link>
+          </button>
         )}
         <input
           aria-label="Search connected models"
@@ -90,7 +114,7 @@ export function ComposerModelPicker({
           className="max-h-56 overflow-y-auto"
           aria-label="Connected models"
         >
-          {providers.map((item) => (
+          {choices.map((item) => (
             <section key={item.id}>
               <h3 className="p-2 text-[10px] uppercase text-muted-foreground">
                 {item.name}
@@ -133,14 +157,33 @@ export function ComposerModelPicker({
             </section>
           ))}
         </section>
+        <button
+          type="button"
+          className="text-left text-xs underline"
+          onClick={() => {
+            setOpen(false);
+            window.dispatchEvent(new Event("console:open-settings"));
+            window.dispatchEvent(
+              new CustomEvent("console:settings-section", { detail: "models" }),
+            );
+          }}
+        >
+          Manage model choices
+        </button>
         <ChoiceSelect
           label="Thinking level"
           value={session.thinkingLevel ?? "off"}
           disabled={disabled || working || !model}
-          items={(model?.thinkingLevels ?? ["off"]).map((level) => ({
-            value: level,
-            label: level,
-          }))}
+          items={(model?.thinkingLevels ?? ["off"])
+            .filter(
+              (level) =>
+                preferences.thinkingLevels.includes(level) ||
+                level === session.thinkingLevel,
+            )
+            .map((level) => ({
+              value: level,
+              label: level,
+            }))}
           onChange={(level) => {
             if (session.model)
               void save({
