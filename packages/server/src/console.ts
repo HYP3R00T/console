@@ -110,6 +110,22 @@ export async function registerConsole(
     additionalProperties: false,
   };
   const string = { type: "string", minLength: 1, maxLength: 200 };
+  app.get("/connection-info", () => ({
+    product: "console",
+    apiVersion: 1,
+    machine: { id: credentials.deviceId, name: machine.get().name },
+    authentication:
+      (options.accessToken ?? process.env.CONSOLE_ACCESS_TOKEN)
+        ? "bearer"
+        : "loopback",
+    capabilities: [
+      "projects",
+      "sessions",
+      "conversations",
+      "sandbox",
+      "shared-state",
+    ],
+  }));
   app.get<{ Querystring: { connected?: boolean } }>(
     "/providers",
     {

@@ -1,5 +1,6 @@
 import { constants } from "node:fs";
 import { access, realpath, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { delimiter, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineDoc } from "@earendil-works/pi-durable";
@@ -88,7 +89,14 @@ export async function validateSandbox(
       throw httpError(400, "Sandbox paths must be existing directories.");
     }
     // Additive path grants cannot carve credentials out of an allowed ancestor.
-    const secrets = [privatePath, resolve(sourcePath, ".env")];
+    const secrets = [
+      privatePath,
+      resolve(sourcePath, ".env"),
+      join(
+        process.env.XDG_DATA_HOME ?? join(homedir(), ".local/share"),
+        "console-web",
+      ),
+    ];
     if (
       secrets.some(
         (secret) => contains(result, secret) || contains(secret, result),

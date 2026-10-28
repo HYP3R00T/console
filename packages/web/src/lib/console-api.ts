@@ -96,13 +96,18 @@ export async function api<T>(
   const backend =
     machineId ??
     (typeof window === "undefined"
-      ? "local"
-      : sessionStorage.getItem("console.backend") || "local");
-  const prefix =
-    path.startsWith("/backends") || backend === "local"
-      ? "/api/v1"
-      : `/api/v1/backends/${encodeURIComponent(backend)}/api`;
-  const response = await fetch(`${prefix}${path}`, {
+      ? ""
+      : sessionStorage.getItem("console.backend") || "");
+  const registry = path === "/backends" || path.startsWith("/backends/");
+  if (!registry && !backend)
+    throw new ApiError(
+      "Connect a machine before opening its projects or sessions.",
+      409,
+    );
+  const target = registry
+    ? `/api/machines${path.slice("/backends".length)}`
+    : `/api/machines/${encodeURIComponent(backend)}/api${path}`;
+  const response = await fetch(target, {
     method,
     signal,
     cache: "no-store",
@@ -161,6 +166,10 @@ export type Machine = {
 };
 
 export type BackendConnection = {
+  ssh?: { host: string; port: number; backendPort: number };
+  lastUsed?: string;
+  machineId?: string;
+  apiVersion?: number;
   id: string;
   name: string;
   url?: string;
@@ -196,6 +205,7 @@ export type AgentInspection = {
     permitted: boolean;
   }[];
   extensions: {
+    enabled: boolean;
     name: string;
     tools: string[];
     sections: number;
