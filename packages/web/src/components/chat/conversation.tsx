@@ -31,7 +31,6 @@ export function SessionChat({
   onCommand,
   online,
   working,
-  dirty,
   configured,
   text,
   uncertain,
@@ -54,7 +53,6 @@ export function SessionChat({
   onCommand: (command: string) => void;
   online: boolean;
   working: boolean;
-  dirty: boolean;
   configured: boolean;
   text: string;
   uncertain: boolean;
@@ -96,7 +94,7 @@ export function SessionChat({
           <Link href="/machines" className="hidden hover:underline sm:inline">
             {machineName || "This machine"}
           </Link>
-          {(session.sandbox?.workspace || projectName) && (
+          {(session.workspace || projectName) && (
             <>
               <ChevronRightIcon
                 className="size-3 shrink-0"
@@ -106,10 +104,10 @@ export function SessionChat({
               <Link
                 href="/workspaces"
                 className="max-w-32 truncate hover:underline"
-                title={session.sandbox.workspace}
+                title={session.workspace}
               >
                 {projectName ||
-                  session.sandbox.workspace.split("/").filter(Boolean).at(-1) ||
+                  (session.workspace ?? "").split("/").filter(Boolean).at(-1) ||
                   "/"}
               </Link>
             </>
@@ -332,7 +330,6 @@ export function SessionChat({
             ((busy && (mode === "reject" || session.queue === undefined)) ||
               session.status === "interrupted" ||
               session.status === "unavailable" ||
-              dirty ||
               !configured ||
               !session.model ||
               !text.trim()))
@@ -343,11 +340,9 @@ export function SessionChat({
         hint={
           uncertain
             ? "Delivery uncertain. Retry uses the same request."
-            : dirty
-              ? "Save session configuration before sending."
-              : !configured || !session.model
-                ? "Choose a connected model in Configuration."
-                : ""
+            : !configured || !session.model
+              ? "Choose a connected model in Configuration."
+              : ""
         }
         onCommand={onCommand}
         onText={onText}

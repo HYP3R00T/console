@@ -30,6 +30,6 @@ release tags, and release automation have not been configured.
 
 `mise.lock` uses format version 1 with explicit request bindings, including `lts` for Node.
 This keeps locked installation compatible with the development and CI mise versions while
-preserving the selected tool releases. Verify tool changes with `mise install --locked node pnpm nono`,
+preserving the selected tool releases. Verify tool changes with `mise install --locked node pnpm`,
 the same locked installation used by application CI. Refresh metadata with `mise lock`; assess
 `mise lock --upgrade` separately because newer formats can require a newer mise and dependency sidecars.

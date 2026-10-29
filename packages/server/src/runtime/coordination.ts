@@ -10,7 +10,6 @@ import {
   section,
 } from "@earendil-works/pi-durable";
 import { httpError } from "../http/errors.ts";
-import { SandboxDoc } from "../sandbox/policy.ts";
 import { updatePlan } from "./plan.ts";
 
 // One machine-wide document. Revision checks and durable tool receipts prevent lost updates/replays.
@@ -113,7 +112,7 @@ export function agentExtension(
   const child = defineTool({
     name: "subagent",
     description:
-      "Delegate a bounded task to a child conversation only when asked to delegate. Inherits current model and sandbox grants. Cannot recursively delegate. Parent cancellation also stops the child.",
+      "Delegate a bounded task to a child conversation only when asked to delegate. Inherits current model and working directory. Cannot recursively delegate. Parent cancellation also stops the child.",
     parameters: Type.Object(
       { task: Type.String({ minLength: 1, maxLength: 16000 }) },
       { additionalProperties: false },
@@ -128,16 +127,11 @@ export function agentExtension(
         ).items[0];
         if (existing) return existing.id;
         const agent = await tx.doc(AgentDoc, api.conversationId);
-        const policy = await tx.doc(SandboxDoc, api.conversationId);
         const created = await tx.createConversation({
           ownership: { kind: "task", taskId: api.taskId },
         });
         await configure(tx, created.id, {
-          extensions: resolved.extensions,
-          model: agent.model,
-          thinkingLevel: agent.thinkingLevel,
-          instructions: agent.instructions,
-          cwd: agent.cwd,
+          // Pi copies the parent AgentDoc; narrow only the child's tools.
           tools: Array.isArray(agent.tools)
             ? api.registry
                 .tools()
@@ -148,7 +142,6 @@ export function agentExtension(
                 .map(({ tool }) => tool)
             : [],
         });
-        Object.assign(await tx.doc(SandboxDoc, created.id), policy);
         return created.id;
       }, context);
       await api.details({ conversationId: id }, context);
@@ -185,7 +178,7 @@ export function agentExtension(
       section(
         "coordination",
         async () =>
-          "Shared state belongs to this machine, not just this project. Read before writing, preserve unrelated fields, and never store secrets. For multi-step work, use update_plan when available to record a short plan and keep actual statuses current. Simple questions do not need a plan. Delegate only when requested. Child conversations share the project files and the parent's permissions; they are not separate checkouts.",
+          "Shared state belongs to this machine, not just this project. Read before writing, preserve unrelated fields, and never store secrets. For multi-step work, use update_plan when available to record a short plan and keep actual statuses current. Simple questions do not need a plan. Delegate only when requested. Child conversations share the project files and the host execution environment; they are not separate checkouts.",
       ),
     ],
   });

@@ -57,10 +57,6 @@ test("machine settings and remembered project models persist; deletion is recove
     (await app.inject("/v1/machines")).json()[0].name,
     "Work laptop",
   );
-  assert.equal(
-    (await app.inject("/v1/backends")).json()[0].name,
-    "Work laptop",
-  );
   const project = (
     await app.inject({
       method: "POST",
@@ -78,7 +74,6 @@ test("machine settings and remembered project models persist; deletion is recove
     payload: {
       name: "Setup",
       workspaceId: project.id,
-      access: "setup",
       requestId: "setup",
     },
   });
@@ -86,15 +81,14 @@ test("machine settings and remembered project models persist; deletion is recove
   const id = created.json().id;
   const base = `/v1/sessions/${id}`;
   assert.equal(created.json().model.modelId, "a");
-  assert.equal(created.json().sandbox.commands, true);
-  assert.equal(created.json().sandbox.network, "unrestricted");
+  assert.equal(created.json().workspace, project.path);
   await writeFile(
     join(project.path, "package.json"),
     JSON.stringify({ name: "setup-fixture", private: true, version: "0.0.0" }),
   );
   faux.setResponses([
     fauxAssistantMessage(
-      fauxToolCall("run_command", {
+      fauxToolCall("bash", {
         command:
           "pnpm install --offline --ignore-scripts && printf ready > built.txt",
       }),

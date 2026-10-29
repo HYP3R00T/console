@@ -3,24 +3,19 @@
 import { CheckIcon, CircleIcon, LoaderCircleIcon } from "lucide-react";
 import type { InspectorPanel } from "@/components/details/agent-panels";
 import { ConversationRuntime } from "@/components/details/runtime";
-import { SandboxSettings } from "@/components/details/sandbox";
 import { ProjectResources } from "@/components/projects/resources";
-import type { Conversation, SandboxPolicy } from "@/lib/api";
+import type { Conversation } from "@/lib/api";
 
 export function SessionInspector({
   session,
   panel,
   disabled,
-  onSandboxSave,
-  onSandboxDirtyChange,
   onResourcePrompt,
   active = true,
 }: {
   session: Conversation;
   panel: InspectorPanel;
   disabled: boolean;
-  onSandboxSave: (policy: SandboxPolicy) => Promise<void>;
-  onSandboxDirtyChange: (dirty: boolean) => void;
   onResourcePrompt: (text: string) => void;
   active?: boolean;
 }) {
@@ -106,60 +101,13 @@ export function SessionInspector({
           />
         </details>
       </section>
-      <section hidden={panel !== "tools"} className="space-y-4 py-4">
-        <dl className="grid grid-cols-2 gap-3 text-xs">
-          <div>
-            <dt className="text-muted-foreground">Sandbox</dt>
-            <dd className="mt-1">
-              {session.sandbox.enabled ? "Enabled" : "Disabled"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Network</dt>
-            <dd className="mt-1 capitalize">
-              {session.sandbox.enabled
-                ? session.sandbox.network
-                : "No tool access"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Commands</dt>
-            <dd className="mt-1">
-              {session.sandbox.enabled && session.sandbox.commands
-                ? "Allowed"
-                : "Disabled"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">File writes</dt>
-            <dd className="mt-1">
-              {session.sandbox.enabled && session.sandbox.writePaths.length
-                ? "Granted paths"
-                : "Disabled"}
-            </dd>
-          </div>
-          <div className="col-span-2">
-            <dt className="text-muted-foreground">Workspace</dt>
-            <dd className="mt-1 break-all">
-              {session.sandbox.workspace || "Not set"}
-            </dd>
-          </div>
-        </dl>
-        <SandboxSettings
-          policy={session.sandbox}
-          fixedWorkspace={Boolean(session.workspaceId)}
-          disabled={disabled}
-          onSave={onSandboxSave}
-          onDirtyChange={onSandboxDirtyChange}
-        />
-      </section>
       <section hidden={panel !== "extend"} className="py-4">
         <details>
           <summary className="cursor-pointer text-xs font-medium">
             Project instructions, skills and prompts
           </summary>
           <p className="py-2 text-xs text-muted-foreground">
-            Project files available through this conversation’s access policy.
+            Project instructions and resources from the working directory.
           </p>
           <ProjectResources
             active={active && panel === "extend"}

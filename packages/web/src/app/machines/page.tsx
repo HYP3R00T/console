@@ -124,8 +124,8 @@ export default function Machines() {
 
           <p className="border-t pt-4 text-xs text-muted-foreground">
             This is the selected execution machine. Saved connections belong to
-            this web app. Sandboxed file tools require explicit session grants;
-            shell commands require a separate opt-in.
+            this web app. Native Pi tools and shell commands execute directly on
+            the backend host.
           </p>
         </section>
       ))}

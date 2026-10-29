@@ -9,7 +9,6 @@ import { openWorkspaces } from "../projects/workspaces.ts";
 import { openAgentState } from "../runtime/coordination.ts";
 import { purgeConversationDatabase } from "../runtime/purge.ts";
 import { openConversation } from "../runtime/session.ts";
-import { defaultSandbox } from "../sandbox/policy.ts";
 
 type Session = {
   id: string;
@@ -61,7 +60,7 @@ export async function openSessions(
     }
   }
   const defaultProject = await workspaces.ensureDefault();
-  // Associate legacy sessions without moving their databases or changing saved grants.
+  // Associate legacy sessions without moving their databases or rewriting conversation history.
   db.prepare(
     "UPDATE sessions SET workspaceId=? WHERE workspaceId IS NULL OR workspaceId=''",
   ).run(defaultProject.id);
@@ -86,7 +85,7 @@ export async function openSessions(
       workspaces.get(String(row.workspaceId));
     return row as Session;
   }
-  function open(id: string, duringMaintenance = false) {
+  function open(id: string, duringMaintenance = false, cwd?: string) {
     if (maintenance.has(id) && !duringMaintenance)
       throw httpError(409, "Session maintenance in progress.");
     let promise = opened.get(id);
@@ -94,7 +93,20 @@ export async function openSessions(
       const path =
         id === "default" ? directory : join(directory, "sessions", id);
       promise = mkdir(path, { recursive: true, mode: 0o700 }).then(() =>
-        openConversation(models, path, directory, state, id),
+        openConversation(
+          models,
+          path,
+          cwd ??
+            workspaces.get(
+              String(
+                db
+                  .prepare("SELECT workspaceId FROM sessions WHERE id=?")
+                  .get(id)?.workspaceId || defaultProject.id,
+              ),
+            ).path,
+          state,
+          id,
+        ),
       );
       opened.set(id, promise);
       void promise.catch(() => opened.delete(id));
@@ -134,12 +146,7 @@ export async function openSessions(
           }),
       );
     },
-    create(
-      name: string,
-      requestId: string,
-      workspaceId?: string,
-      access: "none" | "read" | "edit" | "project" | "setup" = "none",
-    ) {
+    create(name: string, requestId: string, workspaceId?: string) {
       const next = pending.then(async () => {
         const existing = db
           .prepare("SELECT id FROM sessions WHERE requestId = ?")
@@ -162,18 +169,7 @@ export async function openSessions(
           name: name.trim() || `Conversation #${number}`,
           createdAt: new Date().toISOString(),
         };
-        const runtime = await open(row.id);
-        if (workspace)
-          await runtime.configureSandbox({
-            ...defaultSandbox(),
-            workspace: workspace.path,
-            enabled: access !== "none",
-            commands: ["project", "setup"].includes(access),
-            writePaths: ["edit", "project", "setup"].includes(access)
-              ? [workspace.path]
-              : [],
-            network: access === "setup" ? "unrestricted" : "blocked",
-          });
+        const runtime = await open(row.id, false, workspace.path);
         const settings = machine?.get();
         let preferred = workspace?.lastConfiguration
           ? JSON.parse(workspace.lastConfiguration)
@@ -244,19 +240,6 @@ export async function openSessions(
           machine?.remember(chosen);
           if (row.workspaceId) workspaces.remember(row.workspaceId, chosen);
           return result;
-        },
-        configureSandbox: async (
-          policy: import("../sandbox/policy.ts").SandboxPolicy,
-        ) => {
-          if (
-            row.workspaceId &&
-            policy.workspace !== workspaces.get(row.workspaceId).path
-          )
-            throw httpError(
-              400,
-              "This session is bound to its project directory. Create a session in another project to change directories.",
-            );
-          return runtime.configureSandbox(policy);
         },
       };
     },

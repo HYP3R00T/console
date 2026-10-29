@@ -1,6 +1,6 @@
 # Console requirements
 
-Status: working product baseline for review. Local provider settings, named persistent sessions, and model/thinking controls are implemented. Each session starts with a main conversation; filesystem, shell, and network tools require an explicit sandbox policy; coordination tools can operate without filesystem access. The machine dashboard exposes the local backend and its database paths; sandboxed listing, directory creation, and file writes can create project structure. Registered backend connections, projects, and multiple conversations per session are implemented.
+Status: local providers, persistent sessions, model controls, projects, forks and subagents are implemented. Pi Durable native tools execute directly on the host under the backend account. There is no filesystem, network or credential confinement; a project sets the working directory only. The maintainer explicitly removed nono and all access presets to study the minimal Durable backend.
 
 This document records what Console is intended to do and why. [Architecture](architecture.md)
 describes how we intend to provide it, including choices that remain unresolved. Requirements
@@ -31,16 +31,16 @@ the conversation model later. Separate conversations do not automatically isolat
 
 Begin with one user, one local backend, a web client, and manually submitted work in an existing
 workspace. Prove this path before adding remote hosts, additional clients, or automatic triggers.
-The current integration proves isolated, named sessions and configurable model conversations. Users can create, select, and reopen sessions and save model/thinking settings. A sandbox policy selects a readable workspace, explicit read/write directories, and blocked/unrestricted network access. New project conversations use project-confined coding tools and commands with network blocked; users can narrow or disable that policy. Sandboxed shell execution is available only with explicit command permission; native history forks and task-owned subagents are implemented.
+The current integration provides named persistent sessions and configurable conversations. Users can create, select and reopen sessions, save model/thinking settings, and select installed tools. Native read/write/edit/bash run through NodeExecutionEnv in the backend process environment. Project paths are starting directories, not access boundaries. Native history forks and task-owned subagents are implemented.
 
-Machine settings persist a readable name, default project directory, and model defaults. Projects can register directories or clone public GitHub repositories. Sessions receive automatic numbers; additional agents use Pi conversation IDs and can be renamed. Native forks and delegated child agents appear beneath their parent. Shared machine state, active-task inspection, tool selection, and installed extension controls are available. Sessions and conversations have recoverable deletion; project files and databases are retained. Home shows an overview; Chat provides a resizable machine/project/conversation tree. Session containers remain internal. Each machine has a persistent Default project for unassigned conversations, with an independent working directory; existing saved grants are preserved during association. Agent controls open on demand; Settings is a full page for machine defaults, providers, and model preferences.
+Machine settings persist a readable name, default project directory, and model defaults. Projects can register directories or clone public GitHub repositories. Sessions receive automatic numbers; additional agents use Pi conversation IDs and can be renamed. Native forks and delegated child agents appear beneath their parent. Shared machine state, active-task inspection, tool selection, and installed extension controls are available. Sessions and conversations have recoverable deletion; project files and databases are retained. Home shows an overview; Chat provides a resizable machine/project/conversation tree. Session containers remain internal. Each machine has a persistent Default project for unassigned conversations, with an independent working directory. Agent controls open on demand; Settings is a full page for machine defaults, providers, and model preferences.
 
 Connection onboarding is explicit: the web app can start with no machine, validates a server's
 identity/API before saving a connection, and supports disconnect/reconnect without stopping work
 or erasing backend data. A running local backend is never auto-enrolled. An explicit loopback check can fill its address.
 Disconnected machines retain recent address/name metadata for reconnection; tokens are cleared.
 Managed SSH connections use existing trusted keys and forward to an already-running remote server. Extension controls select
-actual installed Pi extensions, including prompt sections/hooks, within existing sandbox authority.
+actual installed Pi extensions, including prompt sections/hooks.
 
 ## Required target behavior
 
@@ -57,8 +57,8 @@ actual installed Pi extensions, including prompt sections/hooks, within existing
   rules; it must not silently restart cancelled work or blindly repeat an uncertain external action.
 - **REQ-6 — Explicit controls:** cancellation, completion, archiving, and deletion must remain
   distinct. Exact controls included in the first implementation must be settled in its issue.
-- **REQ-7 — Bounded authority:** runs execute within the selected workspace and configured tools,
-  permissions, and limits. Starting an assignment does not imply authority to merge, deploy, or publish.
+- **REQ-7 — Execution clarity:** runs start in the selected project using configured tools with
+  the backend account's host authority. No sandbox or human approval gate is implemented. Starting an assignment does not imply authority to merge, deploy, or publish.
 - **REQ-8 — Reviewable results:** users can distinguish the agent's completion claim from recorded
   verification evidence and unresolved limitations. A completed run does not make the session disappear.
 
@@ -86,7 +86,7 @@ supported discrete thinking levels without a search requirement.
 ## Later capabilities
 
 The [Console feature inventory](features.md) tracks implemented, partial, missing and deferred
-capabilities across the whole product, including nono and the requested Pi expansion.
+capabilities across the whole product, including execution authority and the requested Pi expansion.
 [Pi integration scope](pi-capabilities.md) records the compatibility boundary. Inventory status
 is not complete verification or authorization to implement deferred work. Steering and queued follow-ups,
 withdrawal, usage/context inspection, manual compaction, and reset with an optional handoff are

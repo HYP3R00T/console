@@ -4,7 +4,6 @@ import { join } from "node:path";
 import type { CredentialStore, Models } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import type { FastifyInstance } from "fastify";
-import { registerBackends } from "../connections/backends.ts";
 import { openCredentials } from "../models/credentials.ts";
 import { createProviders } from "../models/providers.ts";
 import { resolveConfiguration } from "../platform/configuration.ts";
@@ -13,7 +12,6 @@ import {
   registerMachineSettings,
 } from "../platform/machine-settings.ts";
 import { registerWorkspaces } from "../projects/workspaces.ts";
-import { sandboxSupport } from "../sandbox/runner.ts";
 import { openSessions } from "../sessions/catalog.ts";
 import { registerSessionRoutes } from "../sessions/routes.ts";
 
@@ -122,7 +120,6 @@ export async function registerConsole(
       "projects",
       "sessions",
       "conversations",
-      "sandbox",
       "shared-state",
       "runtime-controls",
       "project-resources",
@@ -169,12 +166,11 @@ export async function registerConsole(
         capabilities: {
           remoteMachines: true,
           shell: true,
-          sandboxedFiles: true,
+          execution: "host",
         },
       },
     ];
   });
-  app.get("/sandbox/support", () => sandboxSupport());
   app.post<{ Params: { id: string } }>(
     "/providers/:id/refresh",
     { schema: { params } },
@@ -254,7 +250,6 @@ export async function registerConsole(
       return reply.code(204).send();
     },
   );
-  await registerBackends(app, directory, () => machine.get().name);
   registerMachineSettings(app, machine, models, directory);
   registerWorkspaces(app, sessions.workspaces, (id) =>
     sessions.trashWorkspace(id),

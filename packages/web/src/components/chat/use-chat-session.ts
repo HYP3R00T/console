@@ -44,7 +44,6 @@ export function useChatSession() {
   const [connectionError, setConnectionError] = useState("");
   const [detailError, setDetailError] = useState("");
   const [working, setWorking] = useState(false);
-  const [sandboxDirty, setSandboxDirty] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [messageModes, setMessageModes] = useState<Record<string, MessageMode>>(
     {},
@@ -66,7 +65,6 @@ export function useChatSession() {
   const chooseConversation = useCallback((cid: string) => {
     conversationRef.current = cid;
     setConversationId(cid);
-    setSandboxDirty(false);
     setDetailOnline(false);
     setDetailError("");
     const url = new URL(window.location.href);
@@ -80,7 +78,6 @@ export function useChatSession() {
     setConversations([]);
     selectedRef.current = id;
     setSelected(id);
-    setSandboxDirty(false);
     setError("");
     setDetailOnline(false);
     setDetailError("");
@@ -110,7 +107,6 @@ export function useChatSession() {
           {
             requestId: input.requestId,
             workspaceId: input.workspaceId || undefined,
-            access: "project",
           },
           undefined,
           input.machineId,
@@ -403,8 +399,6 @@ export function useChatSession() {
     working,
     setWorking,
     setSnapshot,
-    sandboxDirty,
-    setSandboxDirty,
     drafts,
     setDrafts,
     messageModes,

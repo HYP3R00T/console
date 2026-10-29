@@ -9,10 +9,11 @@ import {
   Harness,
   type Conversation as PiConversation,
 } from "@earendil-works/pi-durable";
+import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
+import { CodingTools } from "@earendil-works/pi-durable/tools";
 import { httpError } from "../http/errors.ts";
-import { SandboxDoc } from "../sandbox/policy.ts";
-import { sandboxExtension } from "../sandbox/tools.ts";
+import { projectExtension } from "../projects/context.ts";
 import { agentConfiguration } from "./configuration.ts";
 import { assertIdle, type Runtime } from "./context.ts";
 import { agentExtension, type openAgentState } from "./coordination.ts";
@@ -22,16 +23,17 @@ import { conversationSummary, conversationView } from "./view.ts";
 export async function openConversation(
   models: Models,
   directory: string,
-  privateDirectory = directory,
+  cwd = process.cwd(),
   sharedState?: ReturnType<typeof openAgentState>,
   sessionId = directory,
 ) {
   const storage = await openNodeSqliteStorage(
     join(directory, "conversation.sqlite"),
   );
-  const sandbox = sandboxExtension(privateDirectory);
+  const project = projectExtension();
   const registry = createRegistry();
-  registry.install(sandbox.extension);
+  registry.install(CodingTools);
+  registry.install(project);
   const coordination = sharedState
     ? agentExtension(sharedState, sessionId)
     : undefined;
@@ -41,6 +43,7 @@ export async function openConversation(
     {
       models,
       registry,
+      env: (target) => new NodeExecutionEnv({ cwd: target.cwd ?? cwd }),
       identity: {
         attribution: {
           name: "Console",
@@ -52,7 +55,11 @@ export async function openConversation(
   );
   const main = await harness.root(context, {
     agent: {
-      tools: coordination?.tools ?? [],
+      cwd,
+      tools: registry
+        .snapshot()
+        .tools()
+        .map(({ tool }) => tool),
       instructions:
         "You are Console's assistant. Use available tools and report limitations accurately. Delegate only when asked.",
     },
@@ -69,9 +76,7 @@ export async function openConversation(
     storage,
     harness,
     registry,
-    sandbox,
     coordination,
-    privateDirectory,
     serialize,
   };
   function bind(root: PiConversation) {
@@ -99,7 +104,6 @@ export async function openConversation(
           });
           if (!view.entries.some((entry) => String(entry.id) === entryId))
             throw httpError(404, "History entry not found.");
-          const policy = await harness.snapshot(SandboxDoc, root.id, context);
           const fork = await root.fork(
             Number(entryId) as EntryId,
             {
@@ -108,7 +112,6 @@ export async function openConversation(
                 Object.assign(await tx.doc(ConversationInfo, id), {
                   requestId,
                 });
-                if (policy) Object.assign(await tx.doc(SandboxDoc, id), policy);
               },
             },
             context,
@@ -250,7 +253,6 @@ export async function openConversation(
           );
         if (existing) return existing;
         const agent = await harness.snapshot(AgentDoc, main.id, context);
-        const policy = await harness.snapshot(SandboxDoc, main.id, context);
         const current = await main.agent(context);
         const created = await harness.createConversation(
           {
@@ -278,7 +280,6 @@ export async function openConversation(
                 name,
                 requestId,
               });
-              if (policy) Object.assign(await tx.doc(SandboxDoc, id), policy);
             },
           },
           context,

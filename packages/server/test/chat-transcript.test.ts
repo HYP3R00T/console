@@ -116,9 +116,9 @@ test("legacy servers retain ambiguous parallel output without guessing or reopen
 
 test("errors, stopped calls and streamed reasoning remain explicit, without inventing success", () => {
   const failed = buildTranscript([
-    message(1, "toolResult", '{"stdout":"","stderr":"failed","exitCode":2}', {
+    message(1, "toolResult", '{"output":"failed","exitCode":2}', {
       toolCallId: "failed",
-      toolName: "run_command",
+      toolName: "bash",
     }),
   ]);
   assert.ok(
@@ -151,7 +151,7 @@ test("errors, stopped calls and streamed reasoning remain explicit, without inve
   );
   assert.equal(streaming[1].steps[0].text, "Visible reasoning");
   assert.match(
-    toolOutput('{"stdout":"out","stderr":"err","exitCode":2,"truncated":true}'),
+    toolOutput('{"output":"out\\nerr","exitCode":2,"truncated":true}'),
     /out\nerr\nExit code: 2\nOutput truncated/,
   );
 });

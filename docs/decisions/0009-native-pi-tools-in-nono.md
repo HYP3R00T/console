@@ -1,5 +1,8 @@
 # Execute Pi coding tools inside nono
 
+Execution-policy note (2026-10-30): sandbox-related decisions below are superseded by
+[direct host execution](../architecture.md#direct-host-execution). Other decisions remain historical context.
+
 Status: accepted through the maintainer's request for usable, isolated project agents.
 
 ## Context

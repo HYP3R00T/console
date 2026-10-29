@@ -7,7 +7,6 @@ import type {
 } from "@earendil-works/pi-durable";
 import type { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { httpError } from "../http/errors.ts";
-import type { sandboxExtension } from "../sandbox/tools.ts";
 import type { agentExtension } from "./coordination.ts";
 
 // One session owns these resources and this mutation queue; bound conversations share them.
@@ -16,9 +15,7 @@ export type Runtime = {
   storage: Awaited<ReturnType<typeof openNodeSqliteStorage>>;
   harness: Harness;
   registry: ReturnType<typeof createRegistry>;
-  sandbox: ReturnType<typeof sandboxExtension>;
   coordination: ReturnType<typeof agentExtension> | undefined;
-  privateDirectory: string;
   serialize: <T>(operation: () => Promise<T>) => Promise<T>;
 };
 export type RuntimeInspection = Awaited<ReturnType<Harness["inspect"]>>;

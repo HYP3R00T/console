@@ -259,33 +259,33 @@ export function toolTitle(step: ToolActivity) {
         : typeof args?.url === "string"
           ? args.url
           : "";
-  const verb = ["bash", "run_command"].includes(step.name)
-    ? "Command"
-    : ["read", "read_file"].includes(step.name)
-      ? "Read"
-      : step.name === "list_directory"
-        ? "List"
-        : ["write", "write_file"].includes(step.name)
-          ? "Write"
-          : step.name === "edit"
-            ? "Edit"
-            : step.name === "update_plan"
-              ? "Plan"
-              : step.name.replaceAll("_", " ");
+  const verb =
+    step.name === "bash"
+      ? "Command"
+      : step.name === "read"
+        ? "Read"
+        : step.name === "list_directory"
+          ? "List"
+          : step.name === "write"
+            ? "Write"
+            : step.name === "edit"
+              ? "Edit"
+              : step.name === "update_plan"
+                ? "Plan"
+                : step.name.replaceAll("_", " ");
   return `${verb}${subject ? ` · ${subject}` : ""}`;
 }
 
 export function toolOutput(text: string) {
   try {
     const result: unknown = JSON.parse(text);
-    if (typeof result === "object" && result !== null && "stdout" in result) {
-      const output = typeof result.stdout === "string" ? result.stdout : "";
-      const error =
-        "stderr" in result && typeof result.stderr === "string"
-          ? result.stderr
-          : "";
-      return `${output}${error ? `${output ? "\n" : ""}${error}` : ""}${"exitCode" in result ? `\nExit code: ${result.exitCode}` : ""}${"truncated" in result && result.truncated ? "\nOutput truncated by the tool." : ""}`.trim();
-    }
+    if (
+      typeof result === "object" &&
+      result !== null &&
+      "output" in result &&
+      typeof result.output === "string"
+    )
+      return `${result.output}${"exitCode" in result ? `\nExit code: ${result.exitCode}` : ""}${"truncated" in result && result.truncated ? "\nOutput truncated by the tool." : ""}`.trim();
     return JSON.stringify(result, null, 2);
   } catch {
     return text;

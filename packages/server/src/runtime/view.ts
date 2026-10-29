@@ -12,14 +12,7 @@ import {
   UsageDoc,
 } from "@earendil-works/pi-durable";
 import { httpError } from "../http/errors.ts";
-import {
-  defaultSandbox,
-  SandboxDoc,
-  type SandboxPolicy,
-  validateSandbox,
-} from "../sandbox/policy.ts";
-import type { ProjectResources } from "../sandbox/resources.ts";
-import { runSandbox } from "../sandbox/runner.ts";
+import { projectResources } from "../projects/resources.ts";
 import type { Runtime, RuntimeInspection } from "./context.ts";
 import { PlanDoc } from "./plan.ts";
 import { offeredTools } from "./tools.ts";
@@ -56,7 +49,6 @@ export async function conversationSummary(
   const { harness, models } = runtime;
   const agent = await harness.snapshot(AgentDoc, root.id, context);
   const inspection = currentInspection ?? (await harness.inspect(context));
-  const policy = await harness.snapshot(SandboxDoc, root.id, context);
   const tasks = inspection.tasks.filter(
     (task) => task.record.conversationId === root.id,
   );
@@ -65,7 +57,7 @@ export async function conversationSummary(
     : undefined;
   return {
     id: String(root.id),
-    workspace: policy?.workspace || undefined,
+    workspace: agent?.cwd,
     enabledTools: (await root.agent(context)).tools.map((tool) => tool.name),
     model: agent?.model,
     thinkingLevel: model
@@ -82,10 +74,8 @@ export async function conversationSummary(
 }
 
 export function conversationView(runtime: Runtime, root: PiConversation) {
-  const { harness, models, storage, privateDirectory, registry } = runtime;
+  const { harness, models, storage, registry } = runtime;
   const summary = () => conversationSummary(runtime, root);
-  const offered = (policy: SandboxPolicy) =>
-    offeredTools(runtime, root, policy);
   async function history(before?: string) {
     if (
       before !== undefined &&
@@ -148,32 +138,16 @@ export function conversationView(runtime: Runtime, root: PiConversation) {
     summary,
     history,
     async resources() {
-      const policy = await validateSandbox(
-        (await harness.snapshot(SandboxDoc, root.id, context)) ??
-          defaultSandbox(),
-        privateDirectory,
-      );
-      if (!policy.enabled)
-        return { enabled: false, instructions: [], skills: [], prompts: [] };
-      return {
-        enabled: true,
-        ...(JSON.parse(
-          await runSandbox(
-            policy,
-            { operation: "resources" },
-            privateDirectory,
-          ),
-        ) as ProjectResources),
-      };
+      const cwd = (await root.agent(context)).cwd;
+      return cwd
+        ? projectResources(cwd)
+        : { instructions: [], skills: [], prompts: [] };
     },
     async inspect() {
       const agent = await root.agent(context);
       const active = new Set(agent.tools.map((item) => item.name));
-      const policy =
-        (await harness.snapshot(SandboxDoc, root.id, context)) ??
-        defaultSandbox();
       const permitted = new Set(
-        (await offered(policy)).map((item) => item.name),
+        (await offeredTools(runtime, root)).map((tool) => tool.name),
       );
       const inspection = await harness.inspect(context);
       return {
@@ -248,9 +222,6 @@ export function conversationView(runtime: Runtime, root: PiConversation) {
       const partial = live?.generation?.message as Message | undefined;
       return {
         ...state,
-        sandbox:
-          (await harness.snapshot(SandboxDoc, root.id, context)) ??
-          defaultSandbox(),
         ...page,
         plan: await harness.snapshot(PlanDoc, root.id, context),
         queue: (inbox?.items ?? [])
