@@ -25,3 +25,11 @@ resulting changes before committing them.
 Private packages receive versions and changelogs too, but are not published to npm or tagged
 by this configuration. Changesets does not automatically commit. Publishing, deployment,
 release tags, and release automation have not been configured.
+
+## Tool lockfile compatibility
+
+`mise.lock` uses format version 1 with explicit request bindings, including `lts` for Node.
+This keeps locked installation compatible with the development and CI mise versions while
+preserving the selected tool releases. Verify tool changes with `mise install --locked node pnpm nono`,
+the same locked installation used by application CI. Refresh metadata with `mise lock`; assess
+`mise lock --upgrade` separately because newer formats can require a newer mise and dependency sidecars.
