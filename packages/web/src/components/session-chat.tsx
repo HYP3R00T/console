@@ -1,19 +1,24 @@
 "use client";
 
 import {
+  ArrowDownIcon,
   ChevronRightIcon,
   FolderIcon,
+  LoaderCircleIcon,
   MessageSquareIcon,
   MonitorIcon,
   SlidersHorizontalIcon,
   TerminalSquareIcon,
 } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
+import { ChatActivity, ContextEntry } from "@/components/chat-activity";
 import { ChatComposer } from "@/components/chat-composer";
-import { MessageReasoning } from "@/components/message-reasoning";
+import { ChatMarkdown } from "@/components/chat-markdown";
+import { ChatMessage } from "@/components/chat-message";
 import { Button } from "@/components/ui/button";
 import { useChatHistory } from "@/components/use-chat-history";
+import { buildTranscript } from "@/lib/chat-transcript";
 import type { Conversation, MessageMode } from "@/lib/console-api";
 
 export function SessionChat({
@@ -63,6 +68,21 @@ export function SessionChat({
 }) {
   const history = useChatHistory(session, historyPath);
   const busy = session.status !== "idle";
+  const transcript = useMemo(
+    () =>
+      buildTranscript(
+        history.messages,
+        session.liveTools,
+        session.status === "running",
+        session.partialReasoning,
+      ),
+    [
+      history.messages,
+      session.liveTools,
+      session.status,
+      session.partialReasoning,
+    ],
+  );
   return (
     <section
       className="flex min-h-0 min-w-0 flex-1 flex-col"
@@ -135,7 +155,16 @@ export function SessionChat({
         ref={history.viewport}
         style={{ overflowAnchor: "none" }}
         onScroll={history.onScroll}
-        onWheel={(event) => history.onWheel(event.deltaY)}
+        onWheel={(event) => {
+          if (
+            event.target instanceof Element &&
+            event.target.closest(
+              "pre, [data-slot=trace-collapsible-content-inner]",
+            )
+          )
+            history.pauseFollowing();
+          else history.onWheel(event.deltaY);
+        }}
         className="min-h-0 flex-1 overflow-y-auto"
         aria-label="Conversation history"
       >
@@ -185,91 +214,56 @@ export function SessionChat({
               )}
             </div>
           )}
-          {history.messages.map(
-            (message) =>
-              Boolean(
-                message.text ||
-                  message.reasoning?.length ||
-                  message.toolCalls?.length,
-              ) && (
-                <article
-                  key={message.id}
-                  data-message-id={message.id}
-                  className={`mx-auto max-w-3xl space-y-3 ${message.role === "user" ? "flex flex-col items-end py-2" : "py-4"}`}
-                >
-                  <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    {message.kind === "pi.compaction"
-                      ? "Context summary"
-                      : message.kind === "pi.reset"
-                        ? "Context handoff"
-                        : message.role === "user"
-                          ? "You"
-                          : message.role === "toolResult"
-                            ? `Tool · ${message.toolName}`
-                            : "Assistant"}
-                  </h2>
-                  <MessageReasoning parts={message.reasoning} />
-                  {message.toolCalls?.map((call) => (
-                    <details key={call.id} className="border p-3 text-xs">
-                      <summary>Call · {call.name}</summary>
-                      <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap wrap-break-word">
-                        {JSON.stringify(call.arguments, null, 2)}
-                      </pre>
-                    </details>
-                  ))}
-                  {message.text && (
-                    <p
-                      className={`whitespace-pre-wrap wrap-break-word text-sm leading-7 ${message.role === "user" ? "max-w-[90%] rounded-none bg-muted/60 px-4 py-3" : ""}`}
-                    >
-                      {message.text}
-                    </p>
-                  )}
-                  {message.entryId && message.role === "assistant" && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-xs text-muted-foreground"
-                      disabled={!online || working || busy}
-                      onClick={() => onFork(message.entryId ?? "")}
-                    >
-                      Fork from here
-                    </Button>
-                  )}
-                </article>
-              ),
+          {transcript.map((block) =>
+            block.kind === "activity" ? (
+              <ChatActivity
+                key={block.id}
+                block={block}
+                running={
+                  session.status === "running" &&
+                  block.id === transcript.at(-1)?.id
+                }
+                plan={session.plan}
+                onInspect={history.pauseFollowing}
+              />
+            ) : block.kind === "context" ? (
+              <ContextEntry
+                key={block.id}
+                message={block.message}
+                onInspect={history.pauseFollowing}
+              />
+            ) : (
+              <ChatMessage
+                key={block.id}
+                message={block.message}
+                canFork={online && !working && !busy}
+                onFork={onFork}
+              />
+            ),
           )}
-          {(session.liveTools ?? []).map((tool) => (
-            <details
-              key={tool.id}
-              className="mx-auto max-w-3xl border p-3 text-xs"
-              open={tool.status === "running"}
-            >
-              <summary>
-                {tool.name} · {tool.status}
-              </summary>
-              {tool.output && (
-                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap wrap-break-word">
-                  {tool.output}
-                </pre>
-              )}
-            </details>
-          ))}
-          {(session.partial || !!session.partialReasoning?.length) && (
+          {session.partial && (
             <article
-              key={session.partialId}
-              className="mx-auto max-w-3xl space-y-2 p-4"
+              className="mx-auto max-w-3xl min-w-0"
+              aria-label="Assistant response in progress"
             >
-              <h2 className="text-xs font-medium text-muted-foreground">
-                Assistant · generating
-              </h2>
-              <MessageReasoning parts={session.partialReasoning} />
-              {session.partial && (
-                <p className="whitespace-pre-wrap wrap-break-word text-sm leading-7">
-                  {session.partial}
-                </p>
-              )}
+              <ChatMarkdown text={session.partial} />
             </article>
           )}
+          {session.status === "running" &&
+            !session.partial &&
+            !session.liveTools?.length &&
+            !session.partialReasoning?.length && (
+              <div
+                role="status"
+                className="mx-auto flex max-w-3xl items-center gap-2 text-xs text-muted-foreground"
+              >
+                <LoaderCircleIcon
+                  className="size-3.5 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+                Working
+              </div>
+            )}
           {session.outcome &&
             !["done", "placed", "queued"].includes(session.outcome) && (
               <p role="status" className="text-sm text-muted-foreground">
@@ -277,6 +271,20 @@ export function SessionChat({
               </p>
             )}
         </div>
+        {!history.following && (
+          <div className="sticky bottom-3 flex justify-center">
+            <Button
+              size="icon-sm"
+              variant="outline"
+              className="bg-background shadow-sm"
+              aria-label="Jump to latest message"
+              title="Jump to latest message"
+              onClick={history.jumpToLatest}
+            >
+              <ArrowDownIcon />
+            </Button>
+          </div>
+        )}
       </section>
       {!!session.queue?.length && (
         <section
@@ -333,9 +341,7 @@ export function SessionChat({
               ? "Save session configuration before sending."
               : !configured || !session.model
                 ? "Choose a connected model in Configuration."
-                : session.sandbox?.enabled
-                  ? "Sandboxed tools · work continues when you close this window"
-                  : "No workspace tools · work continues when you close this window"
+                : ""
         }
         onCommand={onCommand}
         onText={onText}

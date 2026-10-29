@@ -393,3 +393,22 @@ Project Markdown cannot widen permissions or execute extensions. Workspace-root 
 user resource directories, executable plugins, MCP and full CLI compatibility are separate adapters.
 The user selected equivalent Console features on the existing Durable runtime. Remaining delivery
 is tracked in [Pi capability delivery](pi-capabilities.md), without treating dependency APIs as completed UI.
+
+## Readable transcript projection
+
+The backend retains Pi's entries, tool-call IDs and error flags. The web's `chat-transcript.ts` derives
+message, context and activity blocks without changing storage. Calls/results pair by call ID, including
+parallel calls that finish out of order. Results whose call is outside the loaded page remain visible;
+loading earlier history joins them without dropping the output. Committed results override stale live
+slots. Missing results remain unknown/interrupted, not successful.
+
+The chat uses the existing shadcn Trace components following its AI Elements patterns. Activity and
+individual outputs have separate disclosures, with bounded scrollable code/terminal output. Markdown
+replies render through react-markdown/remark-gfm; raw HTML and automatic remote-image loading are disabled.
+Disclosure choices remain while their rows are mounted. User inspection pauses bottom-following;
+Jump to latest resumes it. Grouped message aliases preserve history anchors when earlier entries merge.
+
+`console.plan` is a rewindable conversation document populated only by `update_plan`. Status is an
+agent report, not proof of verification. Tool results retain historical updates; snapshots expose the
+latest plan. Forks recover the plan at the selected entry and independent conversations start without
+one. The web associates plans with their recorded activity rather than generating progress from prose.

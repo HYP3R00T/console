@@ -35,6 +35,8 @@ isolation, power-loss recovery, and production throughput have not been establis
 - [x] Request native compaction with optional instructions and durable retry receipts.
 - [x] Reset model context with an optional handoff, preserving stored history and deduplicating retries.
 - [x] Show tool-call arguments, available live tool output/status, task ownership and dependencies.
+- [x] Present saved work through grouped, collapsible activity and Markdown replies without changing stored history.
+- [x] Record conversation plans with durable progress, historical tool results and fork-aware state.
 
 Compaction uses Pi's defaults; no per-conversation threshold editor is implemented. Cost is the
 runtime's provider/catalog estimate, not an account billing total. Context usage is estimated from
@@ -90,7 +92,8 @@ symlink directories/files. Saving or registering a workspace does not grant arbi
 
 - [ ] Backend event stream, web proxy/consumer, reconnect and backpressure tests.
 - [ ] Dedicated CLI/TUI, reusable client SDK, structured streaming and submit-and-wait API.
-- [ ] Rich Markdown/code rendering; transcript export/import and explicit sharing.
+- [x] Rich Markdown/code rendering with collapsible tool output and recorded plans.
+- [ ] Transcript export/import and explicit sharing.
 - [ ] Complete fork-entry selection, context-boundary visibility and tree navigation.
 - [ ] Explicit remote provisioning/service-management workflows and execution migration design.
 - [ ] Backup/restore, resource quotas, cost limits and abrupt-crash/external-effect recovery proof.

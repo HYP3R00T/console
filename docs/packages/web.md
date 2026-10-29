@@ -48,7 +48,7 @@ removed selection leads back to onboarding, without falling back to another mach
 - `src/components/agent-panels.tsx`: live State, Tasks, Tools, and Extend inspectors.
 - `src/components/chat-composer.tsx`: expanding text input, model/configuration shortcut, Send, and Stop.
 - `src/components/session-chat.tsx`: transcript, composer, and cancel/resume controls.
-- `src/components/message-reasoning.tsx`: provider-visible thinking in shadcn Trace rows; opens while thinking and closes afterward unless manually toggled.
+- `src/components/chat-activity.tsx`: grouped tool activity, reasoning and recorded plans using shadcn Trace disclosures.
 - `src/components/session-inspector.tsx`: per-agent model, thinking, and sandbox controls in the contextual panel.
 - `src/components/sandbox-settings.tsx`: explicit opt-in workspace, read/write directories, and network policy.
 - `src/app/settings/page.tsx`: full-page model preferences, machine defaults, and provider configuration.
@@ -98,7 +98,8 @@ The layout takes structural inspiration from [Durable Pi](https://github.com/dis
 and its [interface walkthrough](https://www.youtube.com/watch?v=DNDYYHsypZg), while retaining
 Console's shadcn theme and square Lyra controls. The header links to Home, Chat, and Settings; the left tree navigates machines, projects, sessions, and conversations. Agent configuration opens on demand. Conversation provider pickers show only connected providers; the connection-management page still offers other providers through search. On narrow screens the resizable panels stack vertically. Breadcrumbs show the local machine, saved workspace when present, and session.
 The composer sends with Enter and inserts a newline with Shift+Enter; IME composition does not
-submit. Text paste works normally. Image/file attachments, transcription, and measured token/cost dashboards are not implemented.
+submit. Text paste works normally. Image/file attachments and transcription are not implemented.
+Conversation controls expose Pi's recorded usage/cost estimates; there is no account-wide billing dashboard.
 
 ## Try the integration
 
@@ -277,3 +278,28 @@ The supported commands are `/skill:name request` and `/prompt:name arguments`, w
 parameters and quoted arguments. Instructions stay inside the approved workspace. Exact Pi CLI
 configuration/plugin compatibility is not promised. An older connected server shows unavailable
 runtime controls and retains legacy text submission until the operator restarts the updated backend.
+
+## Compact transcript and activity
+
+`chat-transcript.ts` projects saved messages into readable replies and contiguous activity groups.
+`chat-message.tsx` renders user bubbles and Markdown replies, with accessible copy/fork icon buttons.
+There are no repeated You/Assistant headings or fork buttons on internal tool-call turns.
+`chat-activity.tsx` composes the existing shadcn Trace primitives for tools, terminal output,
+reasoning, context boundaries and plans, following the AI Elements Message/Tool/Terminal/Plan patterns.
+
+Completed activity is collapsed. Running activity opens automatically; users can close it while work
+continues. Failures remain identified in the summary even when folded. Each call expands independently
+into its arguments and recorded output. Terminal JSON is presented as stdout/stderr/exit code; file
+contents stay code-like, not rendered Markdown. Long content is bounded and scrollable. Worker output
+availability still follows the existing backend; this redesign does not add byte-by-byte terminal streaming.
+
+Replies support Markdown lists, tables, links and fenced code. Raw HTML is not executed and remote
+images become links. Rendering never removes records from Pi. Disclosure clicks pause automatic
+following and Jump to latest restores it; polling preserves mounted disclosure state. Older pages can
+merge into a grouped activity while retaining an anchor through its source message aliases.
+
+Plans come only from recorded update_plan results or the persisted plan document. The latest plan
+for an activity shows a completed/total count and per-step states, opens while active, and collapses
+when complete unless manually overridden. Plan statuses are agent-reported. Existing conversations
+can enable update_plan in Tools or reapply the saved sandbox policy; new conversations include it in
+the coordination tools. The State tab continues to refer to machine-wide shared JSON, not this plan.
