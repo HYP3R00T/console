@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mergeMessages } from "../../web/src/lib/chat-history.ts";
+import { mergeMessages } from "../../web/src/lib/chat/history.ts";
 import {
   buildTranscript,
   type ChatMessage,
   parsePlan,
   toolOutput,
-} from "../../web/src/lib/chat-transcript.ts";
+} from "../../web/src/lib/chat/transcript.ts";
 
 function message(
   id: number,

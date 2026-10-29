@@ -9,15 +9,15 @@ import {
   fauxProvider,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import type { Conversation } from "../../web/src/lib/console-api.ts";
+import type { Conversation } from "../../web/src/lib/api.ts";
 import { createApp } from "../src/app.ts";
+import { defaultSandbox } from "../src/sandbox/policy.ts";
 import {
   expandPrompt,
   loadProjectResource,
   projectResources,
-} from "../src/project-resources.ts";
-import { defaultSandbox } from "../src/sandbox-policy.ts";
-import { runSandbox } from "../src/sandbox-runner.ts";
+} from "../src/sandbox/resources.ts";
+import { runSandbox } from "../src/sandbox/runner.ts";
 
 test("project discovery respects instruction scope/precedence, resource boundaries and quoted arguments", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "console-resources-"));

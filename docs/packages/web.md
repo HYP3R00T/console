@@ -41,32 +41,35 @@ removed selection leads back to onboarding, without falling back to another mach
 
 ## Structure and boundaries
 
-- `src/app/layout.tsx`: shared document structure and metadata.
-- `src/app/page.tsx`: Home overview with actual machine counts and selected-machine summaries.
-- `src/app/chat/page.tsx`: session selection, polling, drafts, submission identities, and resizable navigation.
-- `src/components/network-sidebar.tsx`: collapsible machines/projects/conversations, context menus, inline rename/Trash confirmation, creation, and remote selection.
-- `src/components/agent-panels.tsx`: conversation activity/tool/instruction controls and separate machine shared state.
-- `src/components/chat-composer.tsx`: expanding text input, model/configuration shortcut, Send, and Stop.
-- `src/components/session-chat.tsx`: transcript, composer, and cancel/resume controls.
-- `src/components/chat-activity.tsx`: grouped tool activity, reasoning and recorded plans using shadcn Trace disclosures.
-- `src/components/session-inspector.tsx`: conversation overview/plan, collapsed usage controls, access summary and project resource disclosures.
-- `src/components/sandbox-settings.tsx`: explicit opt-in workspace, read/write directories, and network policy.
-- `src/app/settings/page.tsx`: full-page model preferences, machine defaults, and provider configuration.
-- `src/app/machines/page.tsx`: machine inventory, storage paths, editable name/project directory, and model defaults.
-- `src/components/choice-select.tsx`: shared shadcn Select controls for model, provider, thinking, and network choices.
-- `src/components/provider-connection.tsx`: generic Pi prompts, OAuth links, device codes, and cancellation.
-- `src/lib/console-api.ts`: browser API calls and view types; no provider SDKs or persisted secrets.
-- `src/app/globals.css`: Tailwind imports and shadcn theme tokens.
-- `src/components/ui/`: shadcn components, starting with the preset's Button.
-- `src/components/theme-provider.tsx`: system light/dark mode through `next-themes`.
-- `components.json`: shadcn component paths and style configuration.
-- `src/lib/machine-store.ts`: independent connection registry, compatibility handshake, and bounded authenticated proxy.
-- `src/app/api/machines/[[...path]]/route.ts`: same-origin connection/proxy routes.
-- `next.config.ts`: Next.js configuration; no default backend rewrite.
+App Router files select screens and API handlers; domain folders own their implementation.
+The chat route is a thin entry point to `components/chat/workspace.tsx`.
 
-Keep server-owned execution, workspace access, and permissions in Fastify. Next.js can
-provide routing, layouts, and future login UI, but that does not replace backend authorization.
-Authentication, shared sessions, and team access have not been implemented.
+| Folder | Owns |
+| --- | --- |
+| `src/app/` | Routes, layouts, global styles and same-origin API handlers |
+| `src/components/chat/` | Transcript/composer/model picker, chat request state, history and workspace layout |
+| `src/components/details/` | Scoped details panel, conversation overview, runtime controls, tools/instructions and sandbox editor |
+| `src/components/navigation/` | Sidebar composition, machine/conversation branches, persistent disclosure, row menus and Trash |
+| `src/components/machines/` | Connection context/UI, settings, shared state and project-tree loading |
+| `src/components/models/` | Model preferences, provider settings and authentication prompts |
+| `src/components/projects/` | Project creation, inspection and resource selection |
+| `src/components/layout/` | Shared application shell and theme provider |
+| `src/components/shared/` | Reusable domain-neutral form/confirmation controls |
+| `src/components/ui/` | Existing shadcn primitives; generated component configuration stays here |
+| `src/lib/api.ts` | Shared browser view types and authenticated same-origin API client |
+| `src/lib/chat/` | Pure history merging and transcript projection |
+| `src/lib/server/` | Web-server connection registry/proxy and SSH transport; never import into client components |
+
+`chat/use-chat-session.ts` owns polling, URL selection, drafts, stable request identities and
+mutations. `chat/use-workspace-layout.ts` owns panel state, resizing, responsive layout and focus.
+The workspace composes Navigation, Content and Details without introducing a second state store.
+The details panel keeps conversation forms mounted when hidden; shared machine state has a separate
+component/lifecycle. `navigation/branch.tsx` owns persistent expansion; tree API polling belongs to
+`machines/use-project-tree.ts`. Keep these ownership boundaries when adding a control.
+
+`components.json` retains shadcn aliases and theme configuration. `next.config.ts` has no default
+backend rewrite. Server-owned execution, workspaces and authority stay in Fastify; the Next.js
+proxy does not replace backend authorization. Team authentication remains unimplemented.
 
 ## Styling and components
 
@@ -171,7 +174,7 @@ until the user selects tools or reapplies their sandbox. No paid/live inference 
 The machine toggle changes its icon without a persistent selected background. Tree action menus
 appear on hover/focus in their own reserved flex space; trailing metadata yields to the menu button. Rename replaces the label with an input;
 Enter/blur saves and Escape cancels.
-`composer-model-picker.tsx` uses a compact shadcn Popover with the configured model list and a
+`components/chat/model-picker.tsx` uses a compact shadcn Popover with the configured model list and a
 native discrete range control for supported, preferred thinking levels (including the saved level).
 There is no search field or permissions shortcut. Model selection saves immediately; the slider
 saves on release, keyboard adjustment or blur, with one commit per adjustment. Failures remain
@@ -184,10 +187,10 @@ can be enabled without granting files; the workspace editor is expanded when its
 
 ## UI responsibilities
 
-`console-shell.tsx` owns the icon-only Home, Chat, and Settings navigation. Settings is a real
+`components/layout/console-shell.tsx` owns the icon-only Home, Chat, and Settings navigation. Settings is a real
 `/settings` page with Model choices, Machine defaults, and Providers sections. Its machine selector
 scopes provider credentials and defaults; model menu preferences belong to the web server.
-`provider-settings.tsx` contains provider UI; `/settings/providers` remains a compatible entry point.
+`components/models/provider-settings.tsx` contains provider UI; `/settings/providers` remains a compatible entry point.
 Machine gears open Settings for that machine. Every machine exposes Add project, including when
 it already has projects; this opens the existing repository-clone/directory-registration page.
 
@@ -212,7 +215,7 @@ The initial Main conversation uses its session name until renamed. Session conta
 additional roots appear beside the initial conversation and forks/subagents nest beneath their parent.
 Deleting the last remaining conversation uses session deletion so the backend lifecycle stays valid.
 
-The Projects heading has a square hover/focus plus button. `project-dialog.tsx` uses the shadcn
+The Projects heading has a square hover/focus plus button. `components/projects/dialog.tsx` uses the shadcn
 Base UI Dialog and shared Select/Button components for a name and an existing machine-local folder,
 a new folder, or a public GitHub clone. Requests target that machine explicitly and preserve their
 idempotency key when retried unchanged. Clone state remains visible through project controls.
@@ -268,10 +271,10 @@ runtime controls and retains legacy text submission until the operator restarts 
 
 ## Compact transcript and activity
 
-`chat-transcript.ts` projects saved messages into readable replies and contiguous activity groups.
-`chat-message.tsx` renders user bubbles and Markdown replies, with accessible copy/fork icon buttons.
+`lib/chat/transcript.ts` projects saved messages into readable replies and contiguous activity groups.
+`components/chat/message.tsx` renders user bubbles and Markdown replies, with accessible copy/fork icon buttons.
 There are no repeated You/Assistant headings or fork buttons on internal tool-call turns.
-`chat-activity.tsx` composes the existing shadcn Trace primitives for tools, terminal output,
+`components/chat/activity.tsx` composes the existing shadcn Trace primitives for tools, terminal output,
 reasoning, context boundaries and plans, following the AI Elements Message/Tool/Terminal/Plan patterns.
 
 Completed activity is collapsed. Running activity opens automatically; users can close it while work

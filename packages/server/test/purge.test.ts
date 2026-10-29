@@ -10,7 +10,7 @@ import {
   fauxProvider,
 } from "@earendil-works/pi-ai/providers/faux";
 import { createApp } from "../src/app.ts";
-import { openConversation } from "../src/conversation.ts";
+import { openConversation } from "../src/runtime/session.ts";
 
 const headers = { "x-console-request": "1" };
 

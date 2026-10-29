@@ -12,8 +12,8 @@ import {
   fauxThinking,
 } from "@earendil-works/pi-ai/providers/faux";
 import { createApp } from "../src/app.ts";
-import { openConversation } from "../src/conversation.ts";
-import { defaultSandbox } from "../src/sandbox-policy.ts";
+import { openConversation } from "../src/runtime/session.ts";
+import { defaultSandbox } from "../src/sandbox/policy.ts";
 
 const headers = { "x-console-request": "1" };
 const options = {

@@ -9,9 +9,9 @@ import {
   fauxProvider,
 } from "@earendil-works/pi-ai/providers/faux";
 import { createApp } from "../src/app.ts";
-import { openConversation } from "../src/conversation.ts";
-import { openCredentials } from "../src/credentials.ts";
-import { createProviders } from "../src/providers.ts";
+import { openCredentials } from "../src/models/credentials.ts";
+import { createProviders } from "../src/models/providers.ts";
+import { openConversation } from "../src/runtime/session.ts";
 
 async function until<T>(read: () => Promise<T>, ready: (value: T) => boolean) {
   for (let attempt = 0; attempt < 200; attempt++) {

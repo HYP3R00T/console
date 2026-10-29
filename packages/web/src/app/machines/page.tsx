@@ -2,9 +2,9 @@
 
 import { DatabaseIcon, MonitorIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { BackendConnections } from "@/components/backend-connections";
-import { useBackend } from "@/components/connection-context";
-import { api, type Machine } from "@/lib/console-api";
+import { useBackend } from "@/components/machines/connection-context";
+import { BackendConnections } from "@/components/machines/connections";
+import { api, type Machine } from "@/lib/api";
 
 export default function Machines() {
   const { id } = useBackend();

@@ -8,11 +8,11 @@ import {
   fauxAssistantMessage,
   fauxProvider,
 } from "@earendil-works/pi-ai/providers/faux";
+import type { Conversation } from "../../web/src/lib/api.ts";
 import {
   type HistoryPage,
   mergeMessages,
-} from "../../web/src/lib/chat-history.ts";
-import type { Conversation } from "../../web/src/lib/console-api.ts";
+} from "../../web/src/lib/chat/history.ts";
 import { createApp } from "../src/app.ts";
 import { historyAnswer, seedHistory } from "./fixtures/history.ts";
 

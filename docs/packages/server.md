@@ -21,15 +21,36 @@ Port `0` lets the operating system select an available port; the listening addre
 
 ## Structure and extension
 
-- `src/app.ts` constructs the HTTP application without opening a port, making it directly testable.
-- `src/main.ts` owns configuration, listening, logging, and process signals.
-- `test/app.test.ts` exercises the HTTP surface without binding a network socket.
+The source tree is organized by responsibility. Start at the owning domain, not a flat list
+of unrelated implementation files. `src/main.ts` remains the development/production entry point;
+`src/app.ts` constructs Fastify without opening a port.
+
+| Folder | Owns | Starting points |
+| --- | --- | --- |
+| `src/http/` | Application composition, authentication/error boundary | `console.ts`, `errors.ts` |
+| `src/models/` | Pi provider authentication, catalogs and persisted credentials | `providers.ts`, `credentials.ts` |
+| `src/platform/` | Data-directory resolution and machine defaults | `configuration.ts`, `machine-settings.ts` |
+| `src/connections/` | Backend compatibility registry/proxy | `backends.ts`; the web owns its current connection registry |
+| `src/projects/` | Workspace catalog, directory registration and clone lifecycle | `workspaces.ts` |
+| `src/sessions/` | Session catalog and HTTP operations | `catalog.ts`, lifecycle `routes.ts`, `conversation-routes.ts`, `schemas.ts` |
+| `src/runtime/` | One Harness, its conversations and durable operations | `session.ts` assembles `configuration.ts`, `input.ts` and read-only `view.ts` |
+| `src/sandbox/` | Policy validation, nono supervision and restricted workers | `policy.ts`, `runner.ts`, `worker.ts`, `pi-tools.ts`, `resources.ts`, `tools.ts` |
+
+`runtime/context.ts` describes shared session resources and the mutation queue. Configuration and
+input operations use that same queue; extracted files do not create independent locks or Harnesses.
+`runtime/documents.ts` retains document kinds/versions; `coordination.ts` and `plan.ts` own agent tools.
+`runtime/purge.ts` remains the pinned-schema maintenance adapter. HTTP code calls session/runtime
+operations; provider errors use the shared HTTP error helper without making other domains depend
+on provider authentication. Sandbox workers never receive credential stores or Harness authority.
 
 Node runs erasable TypeScript directly during development and tests. This does not check types;
-run the separate type-check command. Production startup uses compiled JavaScript. Keep runtime
-dependencies in this package's manifest, and review Biome fixes with the repository conventions.
+run the separate type-check command. Production uses compiled JavaScript with the same domain
+layout under `dist/`. Worker/resource module URLs and package-metadata paths must work in both
+layouts. Tests use the actual owning modules rather than compatibility re-export files.
 
-The Pi integration remains in this package: `console.ts` wires routes, `providers.ts` relays Pi authentication, `credentials.ts` stores machine credentials, `sessions.ts` owns the session catalog, `session-routes.ts` validates session operations, and `conversation.ts` owns each harness. See [architecture](../architecture.md#first-pi-integration) for storage, request identity, and recovery semantics.
+Keep runtime dependencies in this package's manifest. See [architecture](../architecture.md#first-pi-integration)
+for storage, request identity and recovery semantics. Behavior changes still require the matching
+[feature inventory](../features.md) entry; moving source files does not mark missing features delivered.
 
 ## Local API
 
@@ -122,7 +143,7 @@ and command cancellation. Tests use scripted inference and disposable directorie
 - Session and conversation creation accept an optional nonblank name. Omit it for automatic
   `Session #N` or `Root #N`. Main remains the first conversation; names never change identity.
 
-`agent-extension.ts` owns shared state storage and coordination tools. `subagent` creates a native
+`runtime/coordination.ts` owns shared state storage and coordination tools. `subagent` creates a native
 task-owned child with inherited grants and no recursive delegation. `agent-controls.test.ts` proves
 numbering/idempotency, state conflicts/receipts, real state/delegation calls, fork history, ancestry,
 and restart persistence. `hierarchy.test.ts` also verifies remote state stays on the selected machine.
@@ -156,7 +177,7 @@ inherit actual selections. No browser-supplied extension code is executed.
 ## Native Pi coding tools
 
 `console.sandbox` registers Pi Durable's actual `read`, `write`, `edit`, and `bash` definitions.
-Their implementations run in `sandbox-pi.ts`, loaded inside the nono worker after restrictions apply.
+Their implementations run in `sandbox/pi-tools.ts`, loaded inside the nono worker after restrictions apply.
 Only the required installed package directories are added as read-only runtime prerequisites; the
 worker receives no Harness document/task/model APIs or provider credentials. Console's older tool
 names remain for saved histories. A restricted bridge bounds output and adapts shell execution to

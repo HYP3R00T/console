@@ -25,8 +25,8 @@ import {
   defaultSandbox,
   type SandboxPolicy,
   validateSandbox,
-} from "../src/sandbox-policy.ts";
-import { runSandbox, sandboxSupport } from "../src/sandbox-runner.ts";
+} from "../src/sandbox/policy.ts";
+import { runSandbox, sandboxSupport } from "../src/sandbox/runner.ts";
 
 async function fixture(t: TestContext) {
   const root = await mkdtemp(join(tmpdir(), "console-sandbox-"));

@@ -10,8 +10,8 @@ import {
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { createApp } from "../src/app.ts";
-import { openMachineSettings } from "../src/machine-settings.ts";
-import { openWorkspaces } from "../src/workspaces.ts";
+import { openMachineSettings } from "../src/platform/machine-settings.ts";
+import { openWorkspaces } from "../src/projects/workspaces.ts";
 
 const headers = { "x-console-request": "1" };
 async function until<T>(read: () => Promise<T>, ready: (value: T) => boolean) {

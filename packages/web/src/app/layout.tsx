@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { Geist } from "next/font/google";
-import { ConsoleShell } from "@/components/console-shell";
-import { ThemeProvider } from "@/components/theme-provider";
+import { ConsoleShell } from "@/components/layout/console-shell";
+import { ThemeProvider } from "@/components/layout/theme-provider";
 import { cn } from "@/lib/utils";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });

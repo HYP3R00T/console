@@ -6,7 +6,7 @@ import test from "node:test";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import { createApp } from "../src/app.ts";
-import { resolveConfiguration } from "../src/configuration.ts";
+import { resolveConfiguration } from "../src/platform/configuration.ts";
 
 test("startup configuration validates storage and keeps source precedence explicit", () => {
   assert.throws(

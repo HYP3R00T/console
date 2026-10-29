@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { ChoiceSelect } from "@/components/choice-select";
-import { useBackend } from "@/components/connection-context";
-import { MachineSettings } from "@/components/machine-settings";
-import { ModelPreferencesSettings } from "@/components/model-preferences";
-import ProviderSettings from "@/components/provider-settings";
+import { useBackend } from "@/components/machines/connection-context";
+import { MachineSettings } from "@/components/machines/settings";
+import { ModelPreferencesSettings } from "@/components/models/preferences";
+import ProviderSettings from "@/components/models/provider-settings";
+import { ChoiceSelect } from "@/components/shared/choice-select";
 
 function SettingsContent() {
   const params = useSearchParams();

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { ConnectionError, machineStore } from "@/lib/machine-store";
-import type { SshConfig } from "@/lib/ssh-tunnel";
+import { ConnectionError, machineStore } from "@/lib/server/machine-store";
+import type { SshConfig } from "@/lib/server/ssh-tunnel";
 export const runtime = "nodejs";
 
 async function handle(

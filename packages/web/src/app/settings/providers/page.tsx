@@ -1,1 +1,1 @@
-export { default } from "@/components/provider-settings";
+export { default } from "@/components/models/provider-settings";

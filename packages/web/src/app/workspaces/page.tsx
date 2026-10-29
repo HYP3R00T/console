@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ChoiceSelect } from "@/components/choice-select";
-import { Trash } from "@/components/trash";
+import { Trash } from "@/components/navigation/trash";
+import { ChoiceSelect } from "@/components/shared/choice-select";
 import { Button } from "@/components/ui/button";
-import { api, fieldClass, type Workspace } from "@/lib/console-api";
+import { api, fieldClass, type Workspace } from "@/lib/api";
 
 type Creation = {
   name: string;
