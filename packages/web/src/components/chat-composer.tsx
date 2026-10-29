@@ -1,9 +1,21 @@
 "use client";
 
-import { ArrowUpIcon, SquareIcon } from "lucide-react";
+import {
+  ArrowUpIcon,
+  CheckIcon,
+  CornerDownRightIcon,
+  HandIcon,
+  ListPlusIcon,
+  SquareIcon,
+} from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { ChoiceSelect } from "@/components/choice-select";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { MessageMode } from "@/lib/console-api";
 
 export function ChatComposer({
@@ -152,31 +164,77 @@ export function ChatComposer({
         <div className="mt-2 flex items-center justify-between gap-2">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {modelPicker}
-            <div className="w-36">
-              <ChoiceSelect
-                label="When agent is busy"
-                value={mode}
-                disabled={disabled || uncertain || !modesAvailable}
-                items={[
-                  { value: "steer", label: "Steer current work" },
-                  { value: "followUp", label: "Queue follow-up" },
-                  { value: "reject", label: "Only when idle" },
-                ]}
-                onChange={(value) => onMode(value as MessageMode)}
-              />
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon-xs"
+                    variant="ghost"
+                    disabled={disabled || uncertain || !modesAvailable}
+                  />
+                }
+                aria-label="Message delivery mode"
+                title={
+                  mode === "steer"
+                    ? "Steer current work"
+                    : mode === "followUp"
+                      ? "Queue follow-up"
+                      : "Only when idle"
+                }
+              >
+                {mode === "steer" ? (
+                  <CornerDownRightIcon />
+                ) : mode === "followUp" ? (
+                  <ListPlusIcon />
+                ) : (
+                  <HandIcon />
+                )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="min-w-48">
+                {(
+                  [
+                    {
+                      value: "steer",
+                      label: "Steer current work",
+                      icon: CornerDownRightIcon,
+                    },
+                    {
+                      value: "followUp",
+                      label: "Queue follow-up",
+                      icon: ListPlusIcon,
+                    },
+                    {
+                      value: "reject",
+                      label: "Only when idle",
+                      icon: HandIcon,
+                    },
+                  ] as const
+                ).map((item) => (
+                  <DropdownMenuItem
+                    key={item.value}
+                    onClick={() => onMode(item.value)}
+                  >
+                    <item.icon />
+                    <span>{item.label}</span>
+                    {mode === item.value && <CheckIcon className="ml-auto" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {busy && (
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
+                size="icon"
                 disabled={!canCancel}
                 onClick={onCancel}
+                aria-label="Stop current work"
+                title="Stop current work"
               >
                 <SquareIcon data-icon="inline-start" aria-hidden="true" />
-                Stop
               </Button>
             )}
             <Button
@@ -192,12 +250,14 @@ export function ChatComposer({
           </div>
         </div>
       </form>
-      <div className="mx-auto mt-2 flex max-w-3xl flex-wrap justify-between gap-1 px-2 text-[11px] text-muted-foreground">
-        <span role="status">{hint}</span>
-        <span className="hidden sm:inline">
-          Enter to send · Alt + Enter to queue · Shift + Enter for a new line
-        </span>
-      </div>
+      {hint && (
+        <p
+          role="status"
+          className="mx-auto mt-2 max-w-3xl px-2 text-[11px] text-muted-foreground"
+        >
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

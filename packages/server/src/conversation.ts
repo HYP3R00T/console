@@ -29,6 +29,7 @@ import {
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { agentExtension, type openAgentState } from "./agent-extension.ts";
+import { PlanDoc } from "./plan.ts";
 import { expandPrompt, type ProjectResources } from "./project-resources.ts";
 import { httpError } from "./providers.ts";
 import {
@@ -176,6 +177,10 @@ export async function openConversation(
               role: message.role,
               toolName:
                 message.role === "toolResult" ? message.toolName : undefined,
+              toolCallId:
+                message.role === "toolResult" ? message.toolCallId : undefined,
+              isError:
+                message.role === "toolResult" ? message.isError : undefined,
               text: text(message),
               reasoning: reasoning(message),
               toolCalls:
@@ -548,6 +553,7 @@ export async function openConversation(
             (await harness.snapshot(SandboxDoc, root.id, context)) ??
             defaultSandbox(),
           ...page,
+          plan: await harness.snapshot(PlanDoc, root.id, context),
           queue: (inbox?.items ?? [])
             .filter((item) => item.mode !== "write")
             .map((item) => ({

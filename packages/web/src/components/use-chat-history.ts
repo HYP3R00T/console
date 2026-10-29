@@ -7,6 +7,7 @@ export function useChatHistory(session: Conversation, path: string) {
   const viewport = useRef<HTMLElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
+  const [following, setFollowing] = useState(true);
   const previousTop = useRef(0);
   const request = useRef<AbortController | null>(null);
   const anchor = useRef<{ id: string; offset: number } | null>(null);
@@ -33,7 +34,15 @@ export function useChatHistory(session: Conversation, path: string) {
     if (anchor.current) {
       const entry = Array.from(
         area.querySelectorAll<HTMLElement>("[data-message-id]"),
-      ).find((entry) => entry.dataset.messageId === anchor.current?.id);
+      )
+        .reverse()
+        .find(
+          (entry) =>
+            entry.dataset.messageId === anchor.current?.id ||
+            entry.dataset.messageIds
+              ?.split(",")
+              .includes(anchor.current?.id ?? ""),
+        );
       if (entry)
         area.scrollTop +=
           entry.getBoundingClientRect().top -
@@ -72,9 +81,22 @@ export function useChatHistory(session: Conversation, path: string) {
       const area = viewport.current;
       if (area && !pinned.current) {
         const top = area.getBoundingClientRect().top;
-        const visible = Array.from(
+        const candidates = Array.from(
           area.querySelectorAll<HTMLElement>("[data-message-id]"),
-        ).find((entry) => entry.getBoundingClientRect().bottom > top);
+        ).filter((entry) => {
+          const bounds = entry.getBoundingClientRect();
+          return (
+            bounds.height > 0 &&
+            bounds.bottom > top &&
+            bounds.top < area.getBoundingClientRect().bottom
+          );
+        });
+        const visible = candidates.find(
+          (entry) =>
+            !candidates.some(
+              (other) => entry !== other && entry.contains(other),
+            ),
+        );
         if (visible?.dataset.messageId)
           anchor.current = {
             id: visible.dataset.messageId,
@@ -98,6 +120,7 @@ export function useChatHistory(session: Conversation, path: string) {
     const upward = area.scrollTop < previousTop.current;
     pinned.current =
       area.scrollHeight - area.clientHeight - area.scrollTop <= 4;
+    setFollowing(pinned.current);
     previousTop.current = area.scrollTop;
     if (upward && area.scrollTop < 80) void loadOlder();
   }
@@ -110,9 +133,24 @@ export function useChatHistory(session: Conversation, path: string) {
     error,
     onScroll,
     loadOlder,
+    following,
+    pauseFollowing: () => {
+      pinned.current = false;
+      setFollowing(false);
+    },
+    jumpToLatest: () => {
+      pinned.current = true;
+      setFollowing(true);
+      const area = viewport.current;
+      if (area) {
+        area.scrollTop = area.scrollHeight;
+        previousTop.current = area.scrollTop;
+      }
+    },
     onWheel: (delta: number) => {
       if (delta < 0) {
         pinned.current = false;
+        setFollowing(false);
         if ((viewport.current?.scrollTop ?? 0) < 80) void loadOlder();
       }
     },

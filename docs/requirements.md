@@ -64,6 +64,12 @@ actual installed Pi extensions, including prompt sections/hooks, within existing
 
 ## Quality and operating constraints
 
+Conversation presentation must prioritize user messages and readable agent replies. Tool calls,
+terminal/file output, reasoning and recorded plans remain inspectable through compact, keyboard-accessible
+disclosures. Completed activity collapses by default; ongoing activity and failures remain identifiable.
+Presentation must preserve stored records and show unknown/interrupted state without inventing success.
+Inspecting a disclosure must not force the user back to the bottom of the transcript.
+
 - Start with a dependable single-user path; no supported concurrency or throughput target has been measured.
 - Model access must be supported and verified for the chosen provider and account. Prefer the intended
   subscription-backed path where supported; do not silently switch to separately billed access.

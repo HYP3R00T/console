@@ -49,6 +49,11 @@ export type AgentConfiguration = {
   thinkingLevel: string;
 };
 export type Conversation = SessionSummary & {
+  plan?: {
+    title: string;
+    steps: { step: string; status: "pending" | "in_progress" | "completed" }[];
+    sourceEntryId: string;
+  };
   queue?: { id: string; mode: "steer" | "followUp"; text: string }[];
   usage?: {
     models: Record<string, RecordedUsage>;
@@ -78,6 +83,8 @@ export type Conversation = SessionSummary & {
     role: string;
     text: string;
     toolName?: string;
+    toolCallId?: string;
+    isError?: boolean;
     entryId?: string;
     kind?: string;
     toolCalls?: {

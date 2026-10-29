@@ -223,3 +223,20 @@ are bounded to 32 KiB, discovery to 100 skills/templates and depth eight, with a
 Symlink resource files/directories are skipped; requested instruction directories reject symlinks.
 Permission and worker failures have no unconfined fallback. Existing conversations can reapply
 sandbox policy to select the newly installed load_project_resource tool.
+
+## Recorded plans and tool presentation metadata
+
+History snapshots include toolCallId and isError on tool results so clients can pair parallel calls
+with their actual result and expose failures. These are additive fields; transcript entries remain
+owned by Pi. The web never needs to guess pairing by tool name or completion order.
+
+The console.agent extension registers update_plan, a replay-safe tool accepting a title and up to
+30 distinct steps with pending/in_progress/completed statuses. At most one step may be in progress.
+Updates write the rewindable, conversation-scoped console.plan document through a Pi commit and
+return the same structured state as a recorded tool result. Snapshot plan is absent until first use.
+A source entry binds the plan to its recorded activity. Independent conversations do not inherit a
+plan; native forks restore the plan as of the fork entry. Plan progress is an agent claim, not a check result.
+
+New conversations select the plan tool with the other coordination tools. Existing selections remain
+unchanged until the user enables it or reapplies their sandbox/tool selection. Tests cover durable
+reopen, historical forks, isolation, validation, and preservation of the previous plan after invalid updates.

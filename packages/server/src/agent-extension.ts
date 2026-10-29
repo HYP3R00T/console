@@ -9,6 +9,7 @@ import {
   defineTool,
   section,
 } from "@earendil-works/pi-durable";
+import { updatePlan } from "./plan.ts";
 import { httpError } from "./providers.ts";
 import { SandboxDoc } from "./sandbox-policy.ts";
 
@@ -179,12 +180,12 @@ export function agentExtension(
   });
   return defineExtension({
     name: "console.agent",
-    tools: [read, update, child],
+    tools: [read, update, child, updatePlan],
     sections: [
       section(
         "coordination",
         async () =>
-          "Shared state belongs to this machine, not just this project. Read before writing, preserve unrelated fields, and never store secrets. Delegate only when requested. Child conversations share the project files and the parent's permissions; they are not separate checkouts.",
+          "Shared state belongs to this machine, not just this project. Read before writing, preserve unrelated fields, and never store secrets. For multi-step work, use update_plan when available to record a short plan and keep actual statuses current. Simple questions do not need a plan. Delegate only when requested. Child conversations share the project files and the parent's permissions; they are not separate checkouts.",
       ),
     ],
   });
