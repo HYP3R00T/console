@@ -11,13 +11,11 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 import type { Conversation } from "../../web/src/lib/api.ts";
 import { createApp } from "../src/app.ts";
-import { defaultSandbox } from "../src/sandbox/policy.ts";
 import {
   expandPrompt,
   loadProjectResource,
   projectResources,
-} from "../src/sandbox/resources.ts";
-import { runSandbox } from "../src/sandbox/runner.ts";
+} from "../src/projects/resources.ts";
 
 test("project discovery respects instruction scope/precedence, resource boundaries and quoted arguments", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "console-resources-"));
@@ -63,26 +61,19 @@ test("project discovery respects instruction scope/precedence, resource boundari
   assert.throws(() => projectResources(root, "alias"), /symlink/);
 });
 
-test("resource discovery and loads cannot escape nono through a symlink", async (t) => {
-  const root = await mkdtemp(join(tmpdir(), "console-resource-sandbox-"));
+test("resource indexing skips symlinked resource directories", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "console-resource-links-"));
   t.after(() => rm(root, { recursive: true }));
-  const workspace = join(root, "workspace");
-  const data = join(root, "private");
-  await mkdir(workspace);
-  await mkdir(data);
-  await writeFile(join(data, "SKILL.md"), "PRIVATE_RESOURCE");
+  const workspace = join(root, "workspace"),
+    outside = join(root, "outside");
   await mkdir(join(workspace, ".pi/skills"), { recursive: true });
-  await symlink(data, join(workspace, ".pi/skills/leak"));
-  const policy = { ...defaultSandbox(), enabled: true, workspace };
-  const index = await runSandbox(policy, { operation: "resources" }, data);
-  assert.ok(!index.includes("PRIVATE_RESOURCE"));
-  assert.equal(JSON.parse(index).skills.length, 0);
-  await assert.rejects(
-    runSandbox(
-      policy,
-      { operation: "resources", resourceKind: "skill", resourceName: "leak" },
-      data,
-    ),
+  await mkdir(outside);
+  await writeFile(join(outside, "SKILL.md"), "OUTSIDE_RESOURCE");
+  await symlink(outside, join(workspace, ".pi/skills/link"));
+  assert.equal(projectResources(workspace).skills.length, 0);
+  assert.throws(
+    () => loadProjectResource(workspace, "skill", "link"),
+    /not found/,
   );
 });
 
@@ -128,7 +119,7 @@ test("Pi receives scoped instructions and can load skills; templates expand befo
       method: "POST",
       url: "/v1/sessions",
       headers,
-      payload: { workspaceId: project.id, access: "read", requestId: "agent" },
+      payload: { workspaceId: project.id, requestId: "agent" },
     })
   ).json<Conversation>();
   const base = `/v1/sessions/${created.id}`;

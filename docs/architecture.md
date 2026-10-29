@@ -1,6 +1,6 @@
 # Console architecture
 
-Status: local provider configuration and multiple Pi Durable sessions are implemented. Opt-in sandboxed file/HTTP tools are implemented; registered backend connections and independent Pi conversations are implemented. Opt-in sandboxed commands, public repository cloning, persistent machine settings, and recoverable deletion are implemented. Native forks, task-owned subagents, and runtime inspection are implemented.
+Status: Pi Durable sessions, providers, projects, forks, subagents and runtime inspection are implemented. Native coding tools now use direct host execution; nono, access policies and restricted workers have been removed at the maintainer's request.
 
 [Requirements](requirements.md) owns product outcomes and scope. This document owns responsibilities,
 state, interfaces, and technical tradeoffs. It must distinguish intended design from verified implementation.
@@ -59,21 +59,20 @@ backend runs locally; relevant task content and tool results may be sent to that
 ## Source organization
 
 The existing packages remain one backend and one web application; folders are ownership boundaries,
-not new services. Entrypoints stay stable and the refactor changes no HTTP route, persisted document
-kind/version, database location, replay policy, sandbox grant or browser preference key.
+not new services. Entrypoints stay stable. The initial source reorganization preserved contracts; the subsequent
+adapter cleanup intentionally retired the old backend hub and duplicate coding-tool names.
+Database locations and document identities remain stable; removed policy records are not migrated.
 
-- Server: `http` composes routes; `models`, `platform`, `connections` and `projects` own their
+- Server: `http` composes routes; `models`, `platform` and `projects` own their
   domain services; `sessions` owns catalog/lifecycle routes; `runtime` owns the Harness,
-  configuration, input admission and read projections; `sandbox` owns the execution boundary.
+  configuration, input admission and read projections; `projects/context.ts` owns Markdown resource integration.
 - Web: App Router entries compose domain components. `chat` separates data/requests from layout;
   `details`, `navigation`, `machines`, `models`, `projects` and `layout` own their respective UI.
   `shared` contains reusable form controls and `ui` retains shadcn primitives. Pure transcript
   transformations live in `lib/chat`; server-only connection/SSH code lives in `lib/server`.
 - One session still owns one mutation queue and Harness. Splitting runtime operations into modules
   must not create parallel queues or change the order of permission, retry or recovery checks.
-- Source moves must update worker/module URLs, package-relative metadata, fixtures and evidence
-  links. Native sandbox tests cover TypeScript workers; production verification must also exercise
-  compiled JavaScript workers. Organizing files is not permission to weaken grants or copy secrets.
+- Source moves must update module paths, fixtures and evidence links. Verify both source and compiled runtime behavior.
 
 Navigation requests session summaries with optional bundled conversations, avoiding one HTTP
 request per session on updated servers. The old session response and conversation endpoints remain
@@ -135,7 +134,7 @@ These are intended constraints requiring implementation and proof, not currently
   starter. It checks the Fastify health endpoint through a web-origin proxy; see the [web guide](packages/web.md).
   The conversation dashboard and provider settings are implemented; Console user authentication and shared-session controls are not.
   shadcn preset `bddBUJXM` supplies the initial theme, Geist font, and Lucide icon choice.
-- **Pi Durable (integrated):** pinned to 1.4.0 for isolated session conversations with opt-in sandboxed tools. Provider authentication and model access use Pi AI. See the integration section below for tested and outstanding behavior.
+- **Pi Durable (integrated):** pinned to 1.4.0 for isolated session conversations with native host tools. Provider authentication and model access use Pi AI. See the integration section below for tested and outstanding behavior.
 - **SQLite (integrated):** separate databases hold Console credentials, the session catalog, and per-session Pi-owned conversation state. The first version has no backup or retention workflow; ownership and restart behavior are described below.
 - **Monorepo:** `packages/server/` is a private workspace package containing the HTTP server scaffold.
   `packages/web/` is a private Next.js workspace package. These boundaries do not require
@@ -169,12 +168,12 @@ decision and its reasoning when agreed. Keep feature tasks and verification resu
 
 The [integration decision](decisions/0001-local-pi-integration.md) records provider boundaries. The [session decision](decisions/0002-session-owned-harnesses.md) records isolation, configuration, and preservation of existing data.
 
-- Next.js owns the browser application and the independent machine registry/proxy. `/api/machines` manages explicit connections; `/api/machines/:id/api/*` forwards allowlisted requests with server-held credentials. Nothing enrolls or selects a local backend automatically. The prior backend hub API remains for compatibility, but the web client does not use it. Machine identity/settings remain on each Fastify backend; see the connection section below.
+- Next.js owns the browser application and the independent machine registry/proxy. `/api/machines` manages explicit connections; `/api/machines/:id/api/*` forwards allowlisted requests with server-held credentials. Nothing enrolls or selects a local backend automatically. The prior backend hub API has been removed; the web registry is the sole connection path. Machine identity/settings remain on each Fastify backend; see the connection section below.
 - `src/http/console.ts` registers validated routes, closes resources, and rejects browser mutations without the Console request header. No CORS or Console user authentication is configured. This is for private loopback use only.
 - `src/models/providers.ts` adapts Pi's built-in catalog, login prompts, notifications, cancellation, logout, and explicit model-catalog refresh. Environment-only providers show setup guidance. Provider discovery does not prove access to a model.
 - `src/models/credentials.ts` supplies Pi's credential-store interface. Credentials and installation identity live in `credentials.sqlite`; Pi owns login and token refresh. An exclusive SQLite lock prevents two backend processes from rotating the same credentials.
 - `src/sessions/catalog.ts` owns a SQLite catalog and one cached harness per session. New sessions store Pi state under `sessions/<uuid>/conversation.sqlite`; an existing root `conversation.sqlite` is registered as the `default` session without moving it. A session that cannot open is listed as unavailable while other sessions remain usable.
-- `src/runtime/session.ts` owns each harness and root conversation. The sandbox extension is registered, with tools disabled until explicitly configured. Configuration, submission, cancellation, and resume are serialized within each session. Conversations run independently; each conversation can accept steering and queued follow-ups during its run.
+- `src/runtime/session.ts` owns each harness and root conversation. CodingTools and the project resource extension are registered directly, with native tools selected initially. Configuration, submission, cancellation, and resume are serialized within each session. Conversations run independently; each conversation can accept steering and queued follow-ups during its run.
 - `src/sessions/routes.ts` exposes session creation, snapshots, saved configuration, and lifecycle commands. Creation request IDs deduplicate retries; message request IDs are scoped to their session.
 - Provider responses include supported thinking levels from Pi's `getSupportedThinkingLevels()` and model context capacity. Saving settings validates the selected model/level against the installed catalog and persists them in Pi's `pi.agent` document. Settings changes during unfinished work return 409. Messages use saved settings instead of carrying a second configuration.
 - Browser polling retrieves the latest 50 transcript entries, committed partial text, and lifecycle state. The browser never owns the run. Session list polling runs every two seconds; selected transcript polling runs every second. A URL query remembers selection on reload, and in-memory drafts and uncertain submission IDs remain separate per conversation while the page is open. Repeated submissions with the same request ID return the original admission, including after restart. A request ID identifies its original input and must not be reused for different content or delivery mode.
@@ -184,18 +183,23 @@ Storage defaults to `$XDG_DATA_HOME/console` or `~/.local/share/console`. `CONSO
 
 Pi packages are pinned to 1.4.0. A pnpm patch adds missing JSON import attributes to Pi AI's published declarations, preserving strict NodeNext checking. A package extension supplies the MCP SDK referenced by Google's published declarations. Reviewed Google/protobuf lifecycle scripts are explicitly disabled; neither is required for these installed SDKs to run. Revisit these workarounds on upgrades.
 
-## Configurable tool sandbox
+## Direct host execution
 
-[Decision 0003](decisions/0003-configurable-nono-workers.md) records the process boundary and the CLI choice. Pi retains execution state and model access in Fastify. Tool execution crosses into a fresh `nono wrap` worker for each call.
+`runtime/session.ts` installs Pi's `CodingTools` in a registry and opens `Harness` with
+`env: target => new NodeExecutionEnv({cwd: target.cwd ?? projectPath})`. SQLite storage preserves
+Pi conversations, documents, inboxes and tasks. Console supplies HTTP routing, provider setup,
+project/session metadata, input identity, read projections and optional coordination/resources.
 
-- `sandbox/policy.ts` defines the saved `console.sandbox` Pi document and validates directory grants. Defaults disable tools, allow no writes, and block network. Enabling requires an existing absolute workspace, which becomes readable. Additional readable and writable directories are explicit; writable grants include reads.
-- `sandbox/tools.ts` registers `read_file`/`list_directory`, optional `write_file`/`create_directory`, and optional `fetch_url`. It reads the saved policy and revalidates grants for every invocation. The model cannot change policy through these tools. `run_command` is offered only when the saved policy explicitly enables commands.
-- `sandbox/runner.ts` creates a nono capability manifest inside Console's protected data directory. It supplies a minimal environment, no provider secrets, and fixed read-only prerequisites for Node, the worker/package metadata, system libraries, OpenSSL configuration, and required device files. It executes nono 0.80.0 directly without a shell or inherited profiles.
-- `sandbox/worker.ts` runs only after nono installs restrictions and execs Node, so Node's worker threads inherit them. File/HTTP calls have a ten-second deadline and bounded input/output; command limits are described below; text files and HTTP bodies are limited to 64 KiB. Unknown operations/arguments cannot be selected by the model.
-- Policies cannot grant Console's private storage or its environment file. Writable grants also exclude the running Console source and Node/nono executable paths. This prevents a tool from rewriting its policy, backend, or launcher. Readable/writable roots are additive; overlapping broad parents are rejected rather than pretending to carve private children out on Linux.
-- Policy updates require an idle session, validate paths, and run a restricted startup check before saving an enabled policy. They commit policy and offered tools together. Disabling remains possible even if an old workspace no longer exists. Existing policies are never replaced after a failed activation, and tools never retry outside nono.
+Native `read`, `write`, `edit` and `bash` run directly with the backend account's filesystem,
+network and inherited environment authority. The working directory is not confinement. Tool
+selection controls what the model is offered; it is not an OS security boundary. There is no
+nono executable, policy document, subprocess bridge, grant API or sandbox editor in this path.
+Existing database records are retained without translating old tool/extension names or tasks.
 
-Network currently supports blocked or explicitly unrestricted access. Unrestricted includes local services and exposes HTTP GET; domain allowlists and other nono features are not exposed yet. Console account authentication remains deferred, so this is a private single-user application, not a multi-user boundary. Unsupported/missing nono or kernel enforcement fails closed. Native tests exercise filesystem denial, symlink escapes, TCP/UDP denial with positive controls, persisted policies, and real Pi tool invocation on Linux. macOS behavior has not been verified here.
+The earlier [worker decision](decisions/0003-configurable-nono-workers.md) and
+[native-tool decision](decisions/0009-native-pi-tools-in-nono.md) describe superseded designs.
+Native Pi owns shell cancellation, replay policies and tool output handling; Console no longer
+adds disposable homes, private-path exclusions, fixed command deadlines or scratch cleanup.
 
 ## Backend and workspace configuration
 
@@ -217,8 +221,8 @@ The web proxy requires HTTPS or a loopback HTTP origin (including an operator-ma
 rejects redirects and non-Console resources, and bounds requests/responses. Remote connections need
 an access token; a loopback backend without configured token authentication accepts an empty field.
 These are trusted operator connections, not team accounts. The old implicit `/api/v1/*` web proxy
-returns 410. The backend's legacy `/backends` routes are unused by the browser and are not imported
-into the new registry. No existing backend data is migrated or deleted.
+returns 410. The backend's legacy `/backends` routes have been removed. Existing `backends.sqlite`
+files are left untouched, without an import into the web registry.
 `catalog.sqlite` stores projects as workspace identities with canonical directory paths. A project
 may register an existing directory or explicitly create one under an existing parent. Registration
 does not enable agent tools. New sessions may bind to a workspace; legacy unbound sessions remain
@@ -226,7 +230,7 @@ valid. Session and project names are editable without moving directories or data
 
 Every session still owns one Pi Harness and SQLite database. Its conversations now use Pi's own
 `createConversation()` API, with name/request identity stored atomically in `console.conversation`.
-New conversations inherit the main conversation's model and sandbox policy, then retain independent
+New conversations inherit the main conversation's model and working directory, then retain independent
 settings, transcript, inputs, and cancellation. Requests use `/sessions/:id/conversations/:conversationId`.
 The legacy session endpoints address Main when active, otherwise the first active conversation. Workspace filesystem edits
 are shared; separate conversations do not create filesystem isolation. Pi scheduling is session-wide:
@@ -247,16 +251,9 @@ uses Git without user credential helpers, hooks, templates, or file/ext transpor
 a temporary sibling and publishes the directory after success. Failed clones can be retried.
 Registration/cloning never runs repository setup scripts or grants agent tools.
 
-Access presets are None, Read, Edit, Project, and Setup. The web client starts project conversations
-with Project: project reads/writes and commands, with network blocked. Setup explicitly grants project
-writes, shell commands, and unrestricted network; existing policies stay unchanged. Commands
-run Bash without startup profiles inside a fresh nono worker. Their working directory stays
-within the project; saved filesystem/network grants apply to child processes. A disposable home
-contains caches, temporary files, and runtime locks, without access to the operator's home or
-provider credentials. Commands time out after 110 seconds, with a 125-second parent bound;
-stdout/stderr are capped at 32 KiB each. Cancellation kills the worker process group. Commands
-are never replayed automatically. Hard CPU/memory quotas and private-repository credential setup
-are not implemented; additional toolchains may need explicit readable directories.
+New conversations select native coding tools and start in the project directory.
+Commands use Pi's host environment, including installed tools and ordinary network access.
+No Console resource quota or project confinement is applied.
 
 Deleting an idle session or conversation marks it as Trash. Deleting a project hides its sessions;
 restore the project before restoring individual sessions. Moving to Trash removes neither project files nor conversation databases. The last active conversation cannot be deleted separately; delete its session instead.
@@ -275,13 +272,13 @@ creation and editable afterward. Trash does not recycle these identities.
 
 The details panel separates Conversation, Project and Machine scope and reads actual runtime data. Tools
 come from Pi's installed registry with schemas, descriptions, and replay policies; selection cannot
-exceed the saved sandbox grants. Extension checkboxes select actual Pi extensions, including their prompt sections and hooks.
-Their tools still require saved sandbox grants. They do not install arbitrary code. Child agents
+include tools outside the installed registry. Extension checkboxes select actual Pi extensions, including their prompt sections and hooks.
+Tools execute with host authority. They do not install arbitrary code. Child agents
 and new conversations inherit the actual extension selection. Instructions are saved separately.
 Tasks lists live Pi model/tool tasks, not a catalog of example jobs.
 
 `console.agent` supplies `read_state`, `update_state`, and explicit `subagent` delegation. New
-sessions select these coordination tools without enabling filesystem/network/shell access. Existing
+sessions select coordination and native coding tools. Existing
 conversations keep their saved selection until explicitly changed. Machine-wide JSON lives in
 `agent-state.sqlite`; compare-and-swap revisions reject stale full-object saves. Tool updates use
 session/task receipts committed in the same SQLite transaction so replay cannot apply them twice.
@@ -289,8 +286,8 @@ State is shared across projects on the machine and must not contain credentials.
 
 The subagent tool creates a Pi conversation owned by its durable tool task in one commit, reuses
 it on replay, and submits with a stable request ID. It inherits the parent's model, instructions,
-and sandbox policy; recursive delegation is excluded. Parent cancellation reaches owned work.
-Forks use Pi's native `fork(entryId)` API, preserve history ancestry and current sandbox policy,
+and working directory; recursive delegation is excluded. Parent cancellation reaches owned work.
+Forks use Pi's native `fork(entryId)` API, preserve history ancestry and agent configuration,
 and remain independent of their parent's cancellation. Both share project files. Neither operation
 creates a Git worktree. Conversation inspection exposes parent identity from Pi records.
 
@@ -373,8 +370,8 @@ Pi owns persisted agent choices, conversations, task ownership, submissions, and
 code must be registered again when reopening storage; durable records store names, not executable
 code. Console follows that registry/Harness boundary and uses owned child conversations and stable
 request IDs for delegation. Existing tests verify restart, explicit resume, cancellation, forks,
-subagents, and real sandboxed tool invocation without paid inference. These examples do not supply
-machine discovery, SSH transport, browser settings, or a production sandbox policy: Console owns
+subagents, and real native tool invocation without paid inference. These examples do not supply
+machine discovery, SSH transport, browser settings, or host execution policy: Console owns
 those layers. Console keeps pinned Pi 1.4.0; newer upstream examples are design references, not
 proof that newer APIs are available. Hot extension replacement, custom durable jobs, and a Chord
 reactive-view migration remain unimplemented. Real remote SSH and macOS isolation are unverified.
@@ -392,27 +389,19 @@ when their conversation component unmounts.
 ## Default project ownership
 
 Each machine persists a protected Default project for conversations created without a project.
-Its directory is `<dataDirectory>-projects/default`, outside private databases and credentials.
-New session records always reference a project and bind sandbox configuration to that directory.
-Filesystem, command, write, and network authority still require the selected access preset; a
-project association alone grants no tools. Existing unassigned records are associated with Default
-without moving databases or changing saved sandbox policies. Legacy grants are preserved, so
-this association does not retroactively confine an existing conversation to the new directory.
-Sessions remain internal Pi persistence/lifecycle boundaries; this change does not merge transcripts,
-introduce OS containers, or change machine-wide shared state into project-private state.
+Its directory is `<dataDirectory>-projects/default`. New session records reference a project;
+the runtime sets AgentDoc.cwd to that directory. Project association organizes work and sets
+its starting directory, without constraining filesystem access. Session databases and project
+files remain distinct; machine-wide state is still shared across projects.
 
 ## Pi coding execution boundary
 
-Pi Durable's official coding tools execute inside the existing nono worker, not in the provider-host
-process. The child loads a limited read-only set of runtime packages and receives a sandbox-local
-Node execution environment without provider credentials or Harness authority. File access remains
-kernel-confined. The Bash environment adapter keeps child processes in the worker's process group;
-cancellation and timeouts kill that group. Output is bounded and scratch files expire after a call.
-The assigned directory is included in prompt context independently of tool enablement.
+Native Pi coding tools execute through `NodeExecutionEnv` directly. They use the same host
+account and environment as the backend. `host-runtime.test.ts` verifies native read/write/edit/bash,
+project cwd, access outside the project, cancellation and persisted history on reopening.
 
-Project, conversation and machine controls have explicit scope navigation. Shared machine state
-is not presented as conversation state; project metadata contains no conversation tabs.
-See [native Pi coding tools](decisions/0009-native-pi-tools-in-nono.md).
+Project, conversation and machine controls retain explicit scope navigation. Shared machine
+state is not presented as conversation state; project metadata contains no conversation tabs.
 
 ## Runtime controls and project resources
 
@@ -423,11 +412,11 @@ compaction uses a native CompactionTask plus a receipt in one atomic Pi commit; 
 request-identified native reset write. Neither action implicitly resumes an interrupted session.
 Automatic compaction still uses Pi defaults. See the server guide for routes and replay semantics.
 
-Project instructions, skill catalogs and prompt templates are read inside nono, not by an
-unrestricted resource loader in Fastify. The sandbox extension renders current root instructions
+Project instructions, skill catalogs and prompt templates are read directly by the bounded
+Markdown loader in Fastify. The project extension renders current root instructions
 and exposes explicit nested-context/resource loading. The web inspector shows the loaded sources;
 resource commands expand before durable input admission, after duplicate-request detection.
-Project Markdown cannot widen permissions or execute extensions. Workspace-root scope is intentional;
+Markdown indexing limits do not confine native tools. Resource loading does not execute extensions. Workspace-root scope is intentional;
 user resource directories, executable plugins, MCP and full CLI compatibility are separate adapters.
 The user selected equivalent Console features on the existing Durable runtime. Remaining delivery
 is tracked in the [Console feature inventory](features.md), without treating dependency APIs as completed UI.

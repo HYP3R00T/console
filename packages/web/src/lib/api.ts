@@ -75,7 +75,6 @@ export type Conversation = SessionSummary & {
   }[];
   compactionFailed?: boolean;
   liveTools?: { id: string; name: string; status: string; output?: string }[];
-  sandbox: SandboxPolicy;
   thinkingLevel: string;
   hasOlder: boolean;
   olderCursor?: string;
@@ -115,15 +114,6 @@ export type RecordedUsage = {
 export type MessageMode = "reject" | "steer" | "followUp";
 
 export type ReasoningPart = { id: string; text: string; streaming: boolean };
-
-export type SandboxPolicy = {
-  enabled: boolean;
-  commands?: boolean;
-  workspace: string;
-  readPaths: string[];
-  writePaths: string[];
-  network: "blocked" | "unrestricted";
-};
 
 export class ApiError extends Error {
   status: number;
@@ -208,7 +198,7 @@ export type Machine = {
   capabilities: {
     remoteMachines: boolean;
     shell: boolean;
-    sandboxedFiles: boolean;
+    execution: "host";
   };
 };
 

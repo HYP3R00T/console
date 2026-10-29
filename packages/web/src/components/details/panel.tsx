@@ -16,12 +16,11 @@ import { AgentPanels } from "@/components/details/agent-panels";
 import { SessionInspector } from "@/components/details/overview";
 import { ProjectInspector } from "@/components/projects/inspector";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
 
 const inspectorTabs = [
   { id: "session", label: "Overview", icon: MessageSquareIcon },
   { id: "tasks", label: "Activity", icon: ListTodoIcon },
-  { id: "tools", label: "Access", icon: WrenchIcon },
+  { id: "tools", label: "Tools", icon: WrenchIcon },
   { id: "extend", label: "Instructions", icon: PuzzleIcon },
 ] as const;
 
@@ -187,16 +186,6 @@ export function DetailsPanel({
                   }));
                   document.getElementById("message")?.focus();
                 }}
-                onSandboxDirtyChange={chat.setSandboxDirty}
-                onSandboxSave={(input) =>
-                  chat.operate(session.id, async () => {
-                    await api(
-                      `${chat.conversationPath(session.id)}/sandbox`,
-                      "PATCH",
-                      input,
-                    );
-                  })
-                }
               />
               <div
                 hidden={layout.panel === "session" || layout.panel === "state"}

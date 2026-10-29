@@ -8,20 +8,14 @@ import {
   type SubmissionId,
 } from "@earendil-works/pi-durable";
 import { httpError } from "../http/errors.ts";
-import {
-  defaultSandbox,
-  SandboxDoc,
-  validateSandbox,
-} from "../sandbox/policy.ts";
-import { expandPrompt } from "../sandbox/resources.ts";
-import { runSandbox } from "../sandbox/runner.ts";
+import { expandPrompt, loadProjectResource } from "../projects/resources.ts";
 
 import type { Runtime } from "./context.ts";
 import { assertIdle as requireIdle } from "./context.ts";
 import { CompactionReceipts } from "./documents.ts";
 import { conversationSummary } from "./view.ts";
 export function conversationInput(runtime: Runtime, root: PiConversation) {
-  const { models, storage, harness, serialize, privateDirectory } = runtime;
+  const { models, storage, harness, serialize } = runtime;
   const assertIdle = () => requireIdle(runtime, root);
   const summary = () => conversationSummary(runtime, root);
   return {
@@ -59,41 +53,23 @@ export function conversationInput(runtime: Runtime, root: PiConversation) {
         const command =
           /^\/(skill|prompt):([a-zA-Z0-9_-]+)(?:\s+([\s\S]*))?$/.exec(content);
         if (command) {
-          const policy = await validateSandbox(
-            (await harness.snapshot(SandboxDoc, root.id, context)) ??
-              defaultSandbox(),
-            privateDirectory,
-          );
-          if (!policy.enabled)
-            throw httpError(
-              400,
-              "Enable a project workspace before using project resources.",
-            );
           const kind = command[1] as "skill" | "prompt";
           let resource: { path: string; content: string };
           try {
-            resource = JSON.parse(
-              await runSandbox(
-                policy,
-                {
-                  operation: "resources",
-                  resourceKind: kind,
-                  resourceName: command[2],
-                },
-                privateDirectory,
-              ),
-            );
+            const cwd = (await root.agent(context)).cwd;
+            if (!cwd) throw new Error("No project directory");
+            resource = loadProjectResource(cwd, kind, command[2]);
           } catch {
             throw httpError(
               400,
-              "Project resource could not be loaded. Reload the resources and check its name and permissions.",
+              "Project resource could not be loaded. Reload the resources and check its name and project directory.",
             );
           }
           try {
             content =
               kind === "prompt"
                 ? expandPrompt(resource.content, command[3] ?? "")
-                : `Use the following project skill from ${resource.path}. Supporting file paths are relative to its directory. Stay within the saved permissions.\n\n${resource.content}\n\nUser request: ${command[3] ?? ""}`;
+                : `Use the following project skill from ${resource.path}. Supporting file paths are relative to its directory.\n\n${resource.content}\n\nUser request: ${command[3] ?? ""}`;
           } catch {
             throw httpError(400, "Template arguments contain invalid quoting.");
           }

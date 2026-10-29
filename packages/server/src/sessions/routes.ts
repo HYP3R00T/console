@@ -99,7 +99,6 @@ export function registerSessionRoutes(
       name?: string;
       requestId: string;
       workspaceId?: string;
-      access?: "none" | "read" | "edit" | "project" | "setup";
     };
   }>(
     "/sessions",
@@ -113,7 +112,6 @@ export function registerSessionRoutes(
             name: nameBody.properties.name,
             requestId: string,
             workspaceId: string,
-            access: { enum: ["none", "read", "edit", "project", "setup"] },
           },
         },
       },
@@ -123,7 +121,6 @@ export function registerSessionRoutes(
         request.body.name ?? "",
         request.body.requestId,
         request.body.workspaceId,
-        request.body.access,
       );
       return reply.code(201).send(await sessions.get(row.id));
     },

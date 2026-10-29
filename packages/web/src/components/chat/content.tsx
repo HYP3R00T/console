@@ -93,7 +93,6 @@ export function ChatContent({
           machineName={chat.machine?.name}
           online={chat.online && chat.detailOnline}
           working={chat.working}
-          dirty={chat.sandboxDirty}
           configured={Boolean(
             chat.providers.find(
               (provider) => provider.id === session.model?.provider,

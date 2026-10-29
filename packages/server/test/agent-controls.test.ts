@@ -89,6 +89,12 @@ test("numbered agents, real tool controls, native forks and task-owned subagents
   assert.equal((await app.inject(unnamed)).json().id, root.json().id);
   const inspection = (await app.inject(`${base}/inspect`)).json();
   assert.ok(
+    !inspection.tools.some((tool: { name: string }) =>
+      ["read_file", "write_file", "run_command"].includes(tool.name),
+    ),
+  );
+
+  assert.ok(
     inspection.tools.some(
       (tool: { name: string; enabled: boolean }) =>
         tool.name === "subagent" && tool.enabled,
@@ -97,7 +103,7 @@ test("numbered agents, real tool controls, native forks and task-owned subagents
   assert.ok(
     inspection.tools.some(
       (tool: { name: string; permitted: boolean }) =>
-        tool.name === "run_command" && !tool.permitted,
+        tool.name === "bash" && tool.permitted,
     ),
   );
   assert.equal(
@@ -106,7 +112,7 @@ test("numbered agents, real tool controls, native forks and task-owned subagents
         method: "PATCH",
         url: `${base}/agent`,
         headers,
-        payload: { tools: ["run_command"] },
+        payload: { tools: ["not_installed"] },
       })
     ).statusCode,
     400,
@@ -248,6 +254,23 @@ test("numbered agents, real tool controls, native forks and task-owned subagents
   );
   assert.ok(child, JSON.stringify(result.messages));
   assert.equal(child.parentId, created.json().conversationId);
+  const childView = (
+    await app.inject(`${base}/conversations/${child.id}`)
+  ).json();
+  assert.deepEqual(childView.model, result.model);
+  assert.equal(childView.thinkingLevel, result.thinkingLevel);
+  assert.equal(childView.workspace, result.workspace);
+  const childInspection = (
+    await app.inject(`${base}/conversations/${child.id}/inspect`)
+  ).json();
+  assert.equal(childInspection.instructions, "Delegate only when asked.");
+  assert.equal(
+    childInspection.tools.find(
+      (tool: { name: string }) => tool.name === "subagent",
+    ).permitted,
+    false,
+  );
+
   assert.ok(
     !(await app.inject(`${base}/conversations/${child.id}/inspect`))
       .json()

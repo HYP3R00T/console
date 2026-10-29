@@ -54,7 +54,7 @@ export function ChatComposer({
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const commands = [
-    ["config", "Model, thinking, and sandbox"],
+    ["config", "Model and thinking"],
     ["state", "Machine shared state"],
     ["tasks", "Active Pi tasks"],
     ["tools", "Tool definitions and selection"],

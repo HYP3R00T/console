@@ -1,6 +1,5 @@
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { FastifyInstance } from "fastify";
-import type { SandboxPolicy } from "../sandbox/policy.ts";
 import type { openSessions } from "./catalog.ts";
 import { params, string } from "./schemas.ts";
 
@@ -129,50 +128,6 @@ export function registerConversationRoutes(
       { schema: { params } },
       (request) =>
         sessions.get(request.params.id, request.params.conversationId),
-    );
-    app.patch<{
-      Params: ConversationParams;
-      Body: SandboxPolicy;
-    }>(
-      `${base}/sandbox`,
-      {
-        schema: {
-          params,
-          body: {
-            type: "object",
-            additionalProperties: false,
-            required: [
-              "enabled",
-              "workspace",
-              "readPaths",
-              "writePaths",
-              "network",
-            ],
-            properties: {
-              enabled: { type: "boolean" },
-              commands: { type: "boolean" },
-              workspace: { type: "string", maxLength: 2000 },
-              readPaths: {
-                type: "array",
-                maxItems: 20,
-                items: { type: "string", minLength: 1, maxLength: 2000 },
-              },
-              writePaths: {
-                type: "array",
-                maxItems: 20,
-                items: { type: "string", minLength: 1, maxLength: 2000 },
-              },
-              network: { enum: ["blocked", "unrestricted"] },
-            },
-          },
-        },
-      },
-      async (request) => {
-        await (await conversationFor(request.params)).configureSandbox(
-          request.body,
-        );
-        return sessions.get(request.params.id, request.params.conversationId);
-      },
     );
     app.patch<{
       Params: ConversationParams;

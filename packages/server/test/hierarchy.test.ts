@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +9,7 @@ import {
   fauxAssistantMessage,
   fauxProvider,
 } from "@earendil-works/pi-ai/providers/faux";
+import { openMachineStore } from "../../web/src/lib/server/machine-store.ts";
 import { createApp } from "../src/app.ts";
 
 const headers = { "x-console-request": "1" };
@@ -21,7 +22,7 @@ async function until<T>(read: () => Promise<T>, ready: (value: T) => boolean) {
   throw new Error("Expected state did not arrive");
 }
 
-test("remote hub keeps tokens private and persists backend → project → session → conversations", async (t) => {
+test("web registry keeps tokens private and persists backend → project → session → conversations", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "console-hierarchy-"));
   const faux = fauxProvider();
   const models = createModels();
@@ -40,46 +41,65 @@ test("remote hub keeps tokens private and persists backend → project → sessi
     {},
     { dataDirectory: join(root, "hub"), accessToken: "", models: () => models },
   );
+  let store = openMachineStore(join(root, "web/connections.sqlite"));
   t.after(async () => {
+    await store.close();
     await hub.close();
     await peer.close();
     await rm(root, { recursive: true });
   });
   assert.equal((await peer.inject("/v1/machines")).statusCode, 401);
-  const bad = await hub.inject({
-    method: "POST",
-    url: "/v1/backends",
-    headers,
-    payload: { name: "Peer", url: address, token: "wrong" },
+  await assert.rejects(
+    store.connect({ url: address, token: "wrong" }),
+    /authentication failed/,
+  );
+  assert.equal(store.list().length, 0);
+  const connection = await store.connect({
+    name: "Peer",
+    url: address,
+    token: "test-remote-secret",
   });
-  assert.equal(bad.statusCode, 400);
-  assert.equal((await hub.inject("/v1/backends")).json().length, 1);
-  const connection = await hub.inject({
-    method: "POST",
-    url: "/v1/backends",
-    headers,
-    payload: { name: "Peer", url: address, token: "test-remote-secret" },
-  });
-  assert.equal(connection.statusCode, 201, connection.body);
-  assert.doesNotMatch(connection.body, /test-remote-secret|"token"/);
-  const backendId = connection.json().id;
-  const prefix = `/v1/backends/${backendId}/api`;
+  const backendId = connection.id;
   assert.doesNotMatch(
-    (await hub.inject("/v1/backends")).body,
+    JSON.stringify(store.list()),
     /test-remote-secret|"token"/,
   );
-  const remoteState = await hub.inject({
+  const prefix = "/v1";
+  async function request(
+    input:
+      | string
+      | {
+          url: string;
+          method?: string;
+          headers?: Record<string, string>;
+          payload?: unknown;
+        },
+  ) {
+    const req = typeof input === "string" ? { url: input } : input;
+    const result = await store.proxy(
+      backendId,
+      req.url.slice(prefix.length + 1),
+      req.method ?? "GET",
+      req.payload,
+    );
+    return {
+      statusCode: result.status,
+      body: JSON.stringify(result.data),
+      json: () => result.data,
+    };
+  }
+  const remoteState = await request({
     method: "PUT",
     url: `${prefix}/state`,
     headers,
     payload: { value: { machine: "peer" }, revision: 0 },
   });
   assert.equal(remoteState.statusCode, 200, remoteState.body);
-  assert.deepEqual((await hub.inject(`${prefix}/state`)).json().value, {
+  assert.deepEqual((await request(`${prefix}/state`)).json().value, {
     machine: "peer",
   });
   assert.deepEqual((await hub.inject("/v1/state")).json().value, {});
-  const workspace = await hub.inject({
+  const workspace = await request({
     method: "POST",
     url: `${prefix}/workspaces`,
     headers,
@@ -91,7 +111,7 @@ test("remote hub keeps tokens private and persists backend → project → sessi
     },
   });
   assert.equal(workspace.statusCode, 201, workspace.body);
-  const repeated = await hub.inject({
+  const repeated = await request({
     method: "POST",
     url: `${prefix}/workspaces`,
     headers,
@@ -104,7 +124,7 @@ test("remote hub keeps tokens private and persists backend → project → sessi
   });
   assert.equal(repeated.json().id, workspace.json().id);
   const workspaceId = workspace.json().id;
-  const session = await hub.inject({
+  const session = await request({
     method: "POST",
     url: `${prefix}/sessions`,
     headers,
@@ -114,27 +134,11 @@ test("remote hub keeps tokens private and persists backend → project → sessi
   assert.equal(session.json().workspaceId, workspaceId);
   assert.equal(session.json().workspace, join(root, "project"));
   const id = session.json().id;
-  assert.equal(
-    (
-      await hub.inject({
-        method: "PATCH",
-        url: `${prefix}/sessions/${id}/sandbox`,
-        headers,
-        payload: {
-          enabled: false,
-          workspace: join(root, "other"),
-          readPaths: [],
-          writePaths: [],
-          network: "blocked",
-        },
-      })
-    ).statusCode,
-    400,
-  );
+
   const base = `${prefix}/sessions/${id}`;
   assert.equal(
     (
-      await hub.inject({
+      await request({
         method: "PATCH",
         url: `${base}/config`,
         headers,
@@ -149,7 +153,7 @@ test("remote hub keeps tokens private and persists backend → project → sessi
     headers,
     payload: { name: "Research", requestId: "research" },
   };
-  const results = await Promise.all([hub.inject(create), hub.inject(create)]);
+  const results = await Promise.all([request(create), request(create)]);
   assert.equal(results[0].statusCode, 201, results[0].body);
   assert.equal(results[0].json().id, results[1].json().id);
   const cid = results[0].json().id;
@@ -157,7 +161,7 @@ test("remote hub keeps tokens private and persists backend → project → sessi
   faux.setResponses([fauxAssistantMessage("Research result")]);
   assert.equal(
     (
-      await hub.inject({
+      await request({
         method: "POST",
         url: `${conversation}/messages`,
         headers,
@@ -167,13 +171,13 @@ test("remote hub keeps tokens private and persists backend → project → sessi
     202,
   );
   await until(
-    async () => (await hub.inject(conversation)).json(),
+    async () => (await request(conversation)).json(),
     (value) => value.messages.at(-1)?.text === "Research result",
   );
-  assert.equal((await hub.inject(base)).json().messages.length, 0);
+  assert.equal((await request(base)).json().messages.length, 0);
   assert.equal(
     (
-      await hub.inject({
+      await request({
         method: "PATCH",
         url: conversation,
         headers,
@@ -184,7 +188,7 @@ test("remote hub keeps tokens private and persists backend → project → sessi
   );
   assert.equal(
     (
-      await hub.inject({
+      await request({
         method: "PATCH",
         url: base,
         headers,
@@ -193,11 +197,9 @@ test("remote hub keeps tokens private and persists backend → project → sessi
     ).statusCode,
     200,
   );
-  assert.equal((await hub.inject(`${base}/conversations`)).json().length, 2);
-  assert.equal(
-    (await hub.inject(`${base}/conversations/99999`)).statusCode,
-    404,
-  );
+  assert.equal((await request(`${base}/conversations`)).json().length, 2);
+  assert.equal((await request(`${base}/conversations/99999`)).statusCode, 404);
+  await store.close();
   await hub.close();
   await peer.close();
   peer = createApp(
@@ -214,20 +216,21 @@ test("remote hub keeps tokens private and persists backend → project → sessi
     {},
     { dataDirectory: join(root, "hub"), accessToken: "", models: () => models },
   );
+  store = openMachineStore(join(root, "web/connections.sqlite"));
   assert.equal(
-    (await hub.inject(`${conversation}`)).json().messages.at(-1).text,
+    (await request(`${conversation}`)).json().messages.at(-1).text,
     "Research result",
   );
   assert.equal(
-    (await hub.inject(`${base}/conversations`))
+    (await request(`${base}/conversations`))
       .json()
       .find((item: { id: string }) => item.id === cid).name,
     "Findings",
   );
-  assert.equal((await hub.inject(`${base}`)).json().name, "Renamed session");
+  assert.equal((await request(`${base}`)).json().name, "Renamed session");
   assert.equal((await hub.inject("/v1/sessions")).json().length, 0);
   assert.equal(
-    (await hub.inject(`${prefix}/workspaces`))
+    (await request(`${prefix}/workspaces`))
       .json()
       .find((item: { id: string }) => item.id === workspaceId)?.id,
     workspaceId,
@@ -235,17 +238,8 @@ test("remote hub keeps tokens private and persists backend → project → sessi
   await assert.rejects(
     readFile(join(root, "hub", "sessions", id, "conversation.sqlite")),
   );
-  assert.equal(
-    (
-      await hub.inject({
-        method: "DELETE",
-        url: `/v1/backends/${backendId}`,
-        headers,
-      })
-    ).statusCode,
-    204,
-  );
-  assert.equal((await hub.inject(`${prefix}/sessions`)).statusCode, 404);
+  await store.disconnect(backendId);
+  await assert.rejects(request(`${prefix}/sessions`), /not connected/);
   assert.equal(
     (
       await peer.inject({
@@ -257,10 +251,15 @@ test("remote hub keeps tokens private and persists backend → project → sessi
   );
 });
 
-test("backend connections reject insecure origins, redirects, and unauthenticated remote callers", async (t) => {
+test("backend access guards and the supported registry reject unsafe calls", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "console-remote-guard-"));
-  const app = createApp({}, { dataDirectory: root, accessToken: "" });
+  const app = createApp(
+    {},
+    { dataDirectory: join(root, "backend"), accessToken: "" },
+  );
+  const store = openMachineStore(join(root, "web.sqlite"));
   t.after(async () => {
+    await store.close();
     await app.close();
     await rm(root, { recursive: true });
   });
@@ -269,21 +268,13 @@ test("backend connections reject insecure origins, redirects, and unauthenticate
     "https://user:pass@example.com",
     "https://example.com/path",
     "file:///tmp/data",
-  ]) {
-    assert.equal(
-      (
-        await app.inject({
-          method: "POST",
-          url: "/v1/backends",
-          headers,
-          payload: { name: "Invalid", url, token: "test" },
-        })
-      ).statusCode,
-      400,
+  ])
+    await assert.rejects(
+      store.connect({ url, token: "test" }),
+      /HTTPS|origin|URL/,
     );
-  }
   assert.equal(
-    (await app.inject({ url: "/v1/backends", remoteAddress: "192.0.2.1" }))
+    (await app.inject({ url: "/v1/machines", remoteAddress: "192.0.2.1" }))
       .statusCode,
     403,
   );
@@ -291,12 +282,8 @@ test("backend connections reject insecure origins, redirects, and unauthenticate
     (
       await app.inject({
         method: "POST",
-        url: "/v1/backends",
-        payload: {
-          name: "No header",
-          url: "https://example.com",
-          token: "test",
-        },
+        url: "/v1/sessions",
+        payload: { requestId: "no-header" },
       })
     ).statusCode,
     403,
@@ -311,18 +298,35 @@ test("backend connections reject insecure origins, redirects, and unauthenticate
   t.after(() => new Promise<void>((accept) => redirect.close(() => accept())));
   const address = redirect.address();
   assert.ok(address && typeof address !== "string");
-  const result = await app.inject({
-    method: "POST",
-    url: "/v1/backends",
-    headers,
-    payload: {
-      name: "Redirect",
-      url: `http://127.0.0.1:${address.port}`,
-      token: "test",
-    },
-  });
-  assert.equal(result.statusCode, 502);
+  await assert.rejects(
+    store.connect({ url: `http://127.0.0.1:${address.port}`, token: "test" }),
+    /Cannot reach/,
+  );
   assert.equal(requests, 1);
+});
+
+test("retired backend hub routes do not open or erase the old registry", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "console-retired-hub-"));
+  const path = join(directory, "backends.sqlite");
+  await writeFile(path, "existing registry stays untouched");
+  const app = createApp({}, { dataDirectory: directory });
+  t.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true });
+  });
+  for (const method of ["GET", "POST", "PATCH", "DELETE"] as const)
+    assert.equal(
+      (await app.inject({ method, url: "/v1/backends", headers })).statusCode,
+      404,
+    );
+  assert.equal(
+    (await app.inject("/v1/backends/old/api/sessions")).statusCode,
+    404,
+  );
+  assert.equal(
+    await readFile(path, "utf8"),
+    "existing registry stays untouched",
+  );
 });
 
 test("conversation work is independent and interrupted sessions require explicit resume", async (t) => {

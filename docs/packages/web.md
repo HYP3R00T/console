@@ -48,7 +48,7 @@ The chat route is a thin entry point to `components/chat/workspace.tsx`.
 | --- | --- |
 | `src/app/` | Routes, layouts, global styles and same-origin API handlers |
 | `src/components/chat/` | Transcript/composer/model picker, chat request state, history and workspace layout |
-| `src/components/details/` | Scoped details panel, conversation overview, runtime controls, tools/instructions and sandbox editor |
+| `src/components/details/` | Scoped details panel, conversation overview, runtime controls, tools/instructions and installed tool selection |
 | `src/components/navigation/` | Sidebar composition, machine/conversation branches, persistent disclosure, row menus and Trash |
 | `src/components/machines/` | Connection context/UI, settings, shared state and project-tree loading |
 | `src/components/models/` | Model preferences, provider settings and authentication prompts |
@@ -116,22 +116,16 @@ Conversation controls expose Pi's recorded usage/cost estimates; there is no acc
 
 Run `mise run dev`, open `http://127.0.0.1:3001`, and follow **Provider settings**. Select OpenAI and **Sign in with ChatGPT** for the subscription flow; API key is a separate explicit choice. Other provider methods come from the installed Pi version. Authorization opens the provider's page; any requested code, selection, or credential is relayed to Pi through Fastify. Console itself has no account sign-in yet.
 
-Return to the dashboard and create or select a named session. Choose a model from the composer list and adjust its discrete thinking slider. Changes save immediately; provider setup stays in Settings. Unfinished work must complete or be cancelled before settings can change. Session selection is retained in the URL; unsent drafts and uncertain submissions stay separate per session while the page is open. Partial text and state are polled once per second. Network failure is shown separately from saved run status. An uncertain submission retains its request ID for retry while the page is open; reloading retrieves existing work without resubmitting. After backend restart, use Resume for interrupted work or Cancel to abandon it. New project conversations enable project-confined coding tools and commands with network blocked. Expand **Sandbox** under Conversation → Access to narrow or disable access, or explicitly allow network access. Existing policies are preserved until changed.
+Return to the dashboard and create or select a named session. Choose a model from the composer list and adjust its discrete thinking slider. Changes save immediately; provider setup stays in Settings. Unfinished work must complete or be cancelled before settings can change. Session selection is retained in the URL; unsent drafts and uncertain submissions stay separate per session while the page is open. Partial text and state are polled once per second. Network failure is shown separately from saved run status. An uncertain submission retains its request ID for retry while the page is open; reloading retrieves existing work without resubmitting. After backend restart, use Resume for interrupted work or Cancel to abandon it. New project conversations select native host coding tools. Tool selection is available in Conversation → Tools.
 
 Provider status means configuration exists, not that credentials or subscription entitlement have been tested. Environment-only providers require machine setup; Refresh models retrieves supported dynamic catalogs. The initial UI does not edit custom provider definitions or machine environment variables.
 
-## Configure a sandbox
+## Select tools
 
-Open **Conversation → Access → Sandbox** in the details panel. Select an existing absolute workspace and enable sandboxed tools. The workspace is readable by default; leave writable directories empty for read-only use and keep network blocked unless needed. Additional directory grants use one absolute path per line. Save explicitly while the session is idle. Unsaved sandbox changes block Send, just like unsaved model settings.
-
-Enabled policies can also be saved again without editing paths, to refresh their tool selection
-after an upgrade. Existing sessions need this reapplication to select newly added tools.
-With writable grants, `create_directory` and `write_file` can build nested project structure;
-`list_directory` inspects readable directories. Enable **Shell commands** explicitly for dependency installation and checks. Commands use a
-disposable home, bounded output/time, and the saved filesystem/network policy. Existing sessions
-need their sandbox policy saved again to select newly available tools.
-
-Unrestricted network permits HTTP GET, including local services. Provider credentials are never forwarded to the worker. Startup prerequisites remain readable, and Console's private storage and runtime protection cannot be removed through the editor. Saving checks native activation; an unavailable nono/kernel leaves the previous policy unchanged. Tool output is shown in the transcript.
+Open **Conversation → Tools** to select installed tools and extensions while idle. Native coding
+tools run directly on the host with the backend account's authority. The project identifies their
+starting directory; it does not restrict access. There are no access presets or sandbox editor.
+Model choice and thinking remain in the composer; machine and project settings retain their scopes.
 
 ## Shared shell and hierarchy
 
@@ -147,15 +141,13 @@ directories or clones public GitHub repositories, with failure/retry status. New
 a project; existing unassigned sessions remain available. The left tree includes empty registered
 projects and a New session action. The conversation selector opens a session's separate Pi
 conversations. Manage session & conversations creates and renames them; Configuration edits the
-selected conversation's model and sandbox. New conversations inherit Main's saved settings.
+selected conversation's model and working directory. New conversations inherit Main's saved settings.
 
 Home is an overview; Conversations (`/chat`) is the work surface. The conversation sidebar
 always offers a machine list with Configure and Add actions. Its shadcn Resizable handle supports
 pointer and keyboard resizing. Machine/provider/model controls reuse shadcn Select.
 
-The API accepts None, Read, Edit, Project, and Setup access presets. Direct UI creation uses Project
-(read/write project files and commands, network blocked). Setup enables project
-writes, commands, and unrestricted network; it is never selected by default. New sessions
+New sessions use direct host execution and
 remember project and machine model preferences. Provider pickers show connected providers only.
 Manage session/conversations and Projects expose Trash/Restore actions; project files and databases
 are preserved. The final active conversation is deleted through its session.
@@ -175,9 +167,9 @@ entry, not a copied text prompt. Type `/` for keyboard-selectable UI commands: c
 tools, extend, new, new-session, stop, and resume. These commands do not invoke inference themselves.
 
 State edits retain their base revision; background polling never overwrites a draft. A stale save
-requires Reload before editing again. Tool switches are limited to installed tools permitted by saved sandbox grants. Extension switches
-select real Pi extensions and their sections/hooks; they cannot broaden sandbox authority. Existing conversations remain unchanged
-until the user selects tools or reapplies their sandbox. No paid/live inference is used in UI checks.
+requires Reload before editing again. Tool switches are limited to installed tools. Extension switches
+select real Pi extensions and their sections/hooks; they execute with host authority. Existing conversations remain unchanged
+until the user selects tools or updates their tool selection. No paid/live inference is used in UI checks.
 
 The machine toggle changes its icon without a persistent selected background. Tree action menus
 appear on hover/focus in their own reserved flex space; trailing metadata yields to the menu button. Rename replaces the label with an input;
@@ -190,8 +182,7 @@ visible and the slider restores its saved value. Provider/catalog management sta
 
 Trash offers Delete forever followed by a named confirmation. UI verification must not confirm
 permanent deletion of personal data; erasure tests use temporary fixtures. Main/delegated entries
-explain that their owning session must be deleted. Tool setup remains explicit: state/delegation
-can be enabled without granting files; the workspace editor is expanded when its policy is off.
+explain that their owning session must be deleted. Tool switches control the definitions offered to the model; bash retains host account authority.
 
 ## UI responsibilities
 
@@ -209,7 +200,7 @@ space to the conversation rather than growing the tree. User resizing is remembe
 
 The panel identifies its selected entity and offers Conversation, Project and Machine scopes.
 Conversation sections are Overview (reported plan and folded usage/context), Activity (active model/
-tool tasks), Access (sandbox summary/editor and folded tool selection), and Instructions (project
+tool tasks), Tools (folded tool and extension selection), and Instructions (project
 resources, custom instructions and folded extensions). Machine owns shared state and machine-settings
 navigation. Project owns project name/path/status. A fork/child shows its parent's human-visible name.
 Shared-state JSON editing and long technical details stay behind disclosures. Runtime task dependencies
@@ -236,13 +227,11 @@ and opens a numbered conversation immediately, expands its project, and focuses 
 The menu action, empty-state button, and existing `new-session` command use the same creation path.
 Creation stays scoped to the chosen machine/project, preserves request IDs across unchanged retries,
 and blocks duplicate clicks while pending. There is no project/access selection modal. New contexts
-start with the Project sandbox preset: project reads/writes and commands, with network blocked.
-Permissions remain editable inside the conversation. If nono cannot enforce the policy, creation
-fails visibly; there is no unconfined execution fallback.
+select native coding tools and start in the project directory. No sandbox activation is required.
 
-Project settings show only project controls; shared state belongs to Machine. Conversation Access
-contains tool selection, including Console compatibility tools and native Pi read/write/edit/bash,
-all under the same saved grants. Same-level conversation rows reserve an identical disclosure slot;
+Project settings show only project controls; shared state belongs to Machine. Conversation Tools
+contains tool selection, including native Pi read/write/edit/bash and the project resource tool,
+all running with backend host authority. Same-level conversation rows reserve an identical disclosure slot;
 clicking any expandable row (including its name or chevron) toggles it; a conversation row also
 selects that conversation. Expansion choices persist in localStorage, keyed by connection and stable
 project/session/conversation IDs, so renames and reloads retain them. Explicit saved choices take
@@ -267,7 +256,7 @@ are shown. Automatic compaction still uses Pi's defaults; threshold editing rema
 The transcript includes expandable tool-call arguments, available live tool status/output, and
 labels for saved compaction summaries and handoff entries. Tasks also exposes session-wide ownership,
 wait dependencies, sleep deadlines, cancellation and blocked reasons. Transport remains polling;
-worker output is not a continuous byte stream. See the [Console feature inventory](../features.md).
+tool output is not a continuous byte stream. See the [Console feature inventory](../features.md).
 
 Project resources in Conversation controls lists loaded instruction sources and indexed skills/templates.
 Use skill/template fills the composer without sending. Add the request or template arguments and
@@ -287,8 +276,8 @@ reasoning, context boundaries and plans, following the AI Elements Message/Tool/
 
 Completed activity is collapsed. Running activity opens automatically; users can close it while work
 continues. Failures remain identified in the summary even when folded. Each call expands independently
-into its arguments and recorded output. Terminal JSON is presented as stdout/stderr/exit code; file
-contents stay code-like, not rendered Markdown. Long content is bounded and scrollable. Worker output
+into its arguments and recorded output. Native command output is presented with its exit code; file
+contents stay code-like, not rendered Markdown. Long content is bounded and scrollable. Tool output
 availability still follows the existing backend; this redesign does not add byte-by-byte terminal streaming.
 
 Replies support Markdown lists, tables, links and fenced code. Raw HTML is not executed and remote
@@ -299,5 +288,5 @@ merge into a grouped activity while retaining an anchor through its source messa
 Plans come only from recorded update_plan results or the persisted plan document. The latest plan
 for an activity shows a completed/total count and per-step states, opens while active, and collapses
 when complete unless manually overridden. Plan statuses are agent-reported. Existing conversations
-can enable update_plan in Tools or reapply the saved sandbox policy; new conversations include it in
+can enable update_plan in Tools or update their tool selection; new conversations include it in
 the coordination tools. The State tab continues to refer to machine-wide shared JSON, not this plan.

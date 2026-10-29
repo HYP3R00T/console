@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { api, type Conversation } from "@/lib/api";
 
 type Resources = {
-  enabled: boolean;
   instructions: { name: string; path: string; content: string }[];
   skills: { name: string; path: string; description: string }[];
   prompts: { name: string; path: string; description: string }[];
@@ -28,7 +27,7 @@ export function ProjectResources({
   const available = Boolean(session.contextUsage);
   const resourceUrl = `${path}/resources?revision=${revision}`;
   useEffect(() => {
-    if (!session.sandbox.enabled || !available) {
+    if (!session.workspace || !available) {
       setResources(undefined);
       return;
     }
@@ -45,7 +44,7 @@ export function ProjectResources({
         if (!controller.signal.aborted) setError(cause.message);
       });
     return () => controller.abort();
-  }, [resourceUrl, session.sandbox.enabled, available, active]);
+  }, [resourceUrl, session.workspace, available, active]);
   return (
     <section aria-label="Project resources" className="space-y-3 border-t pt-4">
       <div className="flex items-center justify-between gap-2">
@@ -53,7 +52,7 @@ export function ProjectResources({
         <Button
           size="sm"
           variant="ghost"
-          disabled={!session.sandbox.enabled || !session.contextUsage}
+          disabled={!session.workspace || !session.contextUsage}
           onClick={() => setRevision((value) => value + 1)}
         >
           Reload resources
@@ -62,11 +61,11 @@ export function ProjectResources({
       <p className="text-xs text-muted-foreground">
         Project instructions load for each model request. Skills load when
         invoked; templates fill the composer through /skill:name and
-        /prompt:name. Resource files grant no extra access.
+        /prompt:name. Tools execute directly on the host.
       </p>
-      {!session.sandbox.enabled && (
+      {!session.workspace && (
         <p className="text-xs">
-          Enable the workspace policy to discover project resources.
+          Select a project working directory to discover resources.
         </p>
       )}
       {error && (

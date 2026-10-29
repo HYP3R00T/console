@@ -31,7 +31,7 @@ export class ConnectionError extends Error {
 const loopback = (url: URL) =>
   ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname);
 const routes =
-  /^(machines|connection-info|machine-settings|providers|connections|workspaces|sessions|sandbox|state)(\/|$)/;
+  /^(machines|connection-info|machine-settings|providers|connections|workspaces|sessions|state)(\/|$)/;
 
 // Owned by the web server, independently of every execution machine. Tokens never leave this module.
 export function openMachineStore(path: string, tunnelFactory = startSshTunnel) {

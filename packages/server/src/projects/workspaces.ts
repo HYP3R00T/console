@@ -106,6 +106,28 @@ export function openWorkspaces(
       throw httpError(404, "Project not found.");
     return item;
   }
+  function assertProjectPath(path: string, privatePath: string) {
+    if (
+      path === privatePath ||
+      path.startsWith(privatePath + sep) ||
+      privatePath.startsWith(path + sep)
+    )
+      throw httpError(400, "Projects cannot overlap Console private storage.");
+  }
+  async function canonicalDestination(path: string) {
+    let ancestor = dirname(path);
+    while (
+      !(await stat(ancestor).then(
+        () => true,
+        () => false,
+      ))
+    )
+      ancestor = dirname(ancestor);
+    return resolve(
+      await realpath(ancestor),
+      path.slice(ancestor.length).replace(/^\/+/, ""),
+    );
+  }
   function startClone(item: Workspace) {
     const controller = new AbortController();
     const staging = join(
@@ -229,38 +251,15 @@ export function openWorkspaces(
           );
         let path = resolve(target);
         const privatePath = await realpath(directory);
-        if (
-          path === privatePath ||
-          path.startsWith(privatePath + sep) ||
-          privatePath.startsWith(path + sep) ||
-          path === dirname(path)
-        )
+        if (path === dirname(path))
           throw httpError(
             400,
             "Projects cannot overlap Console private storage.",
           );
+        assertProjectPath(path, privatePath);
         if (input.createDirectory || repository) {
-          let ancestor = dirname(path);
-          while (
-            !(await stat(ancestor).then(
-              () => true,
-              () => false,
-            ))
-          )
-            ancestor = dirname(ancestor);
-          path = resolve(
-            await realpath(ancestor),
-            path.slice(ancestor.length).replace(/^\/+/, ""),
-          );
-          if (
-            path === privatePath ||
-            path.startsWith(privatePath + sep) ||
-            privatePath.startsWith(path + sep)
-          )
-            throw httpError(
-              400,
-              "Projects cannot overlap Console private storage.",
-            );
+          path = await canonicalDestination(path);
+          assertProjectPath(path, privatePath);
         }
         if (repository) {
           if (
@@ -273,20 +272,8 @@ export function openWorkspaces(
               400,
               "Clone destination already exists; register it as an existing directory instead.",
             );
-          // Canonicalize the closest existing ancestor before any creation.
-          let ancestor = dirname(path);
-          while (
-            !(await stat(ancestor).then(
-              () => true,
-              () => false,
-            ))
-          )
-            ancestor = dirname(ancestor);
-          const canonical = await realpath(ancestor);
-          path = resolve(
-            canonical,
-            path.slice(ancestor.length).replace(/^\/+/, ""),
-          );
+          // Re-resolve after the async destination check before publishing a clone job.
+          path = await canonicalDestination(path);
         } else {
           try {
             if (input.createDirectory)
@@ -300,15 +287,7 @@ export function openWorkspaces(
             );
           }
         }
-        if (
-          path === privatePath ||
-          path.startsWith(privatePath + sep) ||
-          privatePath.startsWith(path + sep)
-        )
-          throw httpError(
-            400,
-            "Projects cannot overlap Console private storage.",
-          );
+        assertProjectPath(path, privatePath);
         const existing = db
           .prepare("SELECT * FROM workspaces WHERE path=?")
           .get(path) as Workspace | undefined;

@@ -161,8 +161,8 @@ export default function Projects() {
         )}
         <p className="text-xs text-muted-foreground sm:col-span-2">
           Cloning does not run repository scripts. Once ready, create a session
-          and explicitly enable sandboxed commands and writable/network grants
-          to ask the agent to install dependencies and verify setup.
+          and use the native Pi coding tools to ask the agent to install
+          dependencies and verify setup.
         </p>
         <div className="flex gap-2">
           <Button type="submit" disabled={working}>

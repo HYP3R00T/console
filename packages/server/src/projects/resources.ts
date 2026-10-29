@@ -1,4 +1,4 @@
-// Filesystem helpers run inside nono (or fixture tests); prompt expansion is pure.
+// Project resource indexing and prompt expansion; execution uses the host environment.
 import {
   closeSync,
   constants,

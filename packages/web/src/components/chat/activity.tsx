@@ -37,9 +37,8 @@ import {
 
 function ToolIcon({ tool }: { tool: ToolActivity }) {
   if (tool.status === "error") return <TriangleAlertIcon />;
-  if (["bash", "run_command"].includes(tool.name)) return <TerminalIcon />;
-  if (["read", "read_file", "write", "write_file", "edit"].includes(tool.name))
-    return <FileTextIcon />;
+  if (tool.name === "bash") return <TerminalIcon />;
+  if (["read", "write", "edit"].includes(tool.name)) return <FileTextIcon />;
   if (tool.name === "list_directory") return <FolderSearchIcon />;
   if (tool.name === "update_plan") return <RouteIcon />;
   return <WrenchIcon />;

@@ -100,9 +100,8 @@ export function AgentPanels({
               {!enabled.length && (
                 <div className="space-y-2 border p-3">
                   <p className="text-xs">
-                    This conversation has no tools selected. State and
-                    delegation need no filesystem grant; file and command tools
-                    need a workspace policy.
+                    This conversation has no tools selected. Choose installed
+                    tools below, or enable the coordination tools.
                   </p>
                   <Button
                     size="sm"
@@ -128,7 +127,8 @@ export function AgentPanels({
                   Tool selection · {enabled.length}/{inspection.tools.length}
                 </summary>
                 <p className="py-2 text-xs text-muted-foreground">
-                  Enabled for this conversation. Access limits are set above.
+                  Enabled for this conversation. Tools execute directly on the
+                  host.
                 </p>
                 {inspection.tools.map((tool) => (
                   <Collapsible key={tool.name} className="border">
@@ -159,7 +159,8 @@ export function AgentPanels({
                       <p>{tool.description}</p>
                       <p className="text-muted-foreground">
                         {tool.extension}
-                        {!tool.permitted && " · requires sandbox permission"}
+                        {!tool.permitted &&
+                          " · unavailable for this conversation"}
                       </p>
                       <pre className="max-h-64 overflow-auto whitespace-pre-wrap">
                         {JSON.stringify(tool.parameters, null, 2)}
@@ -259,7 +260,7 @@ export function AgentPanels({
                         prompt sections · {extension.hooks} hooks
                       </p>
                       <p className="text-muted-foreground">
-                        Applies to this conversation; access grants still apply.
+                        Applies to this conversation. Tools run on the host.
                       </p>
                     </div>
                   );
