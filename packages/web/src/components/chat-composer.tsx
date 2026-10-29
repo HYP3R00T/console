@@ -2,7 +2,9 @@
 
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { ChoiceSelect } from "@/components/choice-select";
 import { Button } from "@/components/ui/button";
+import type { MessageMode } from "@/lib/console-api";
 
 export function ChatComposer({
   text,
@@ -17,6 +19,9 @@ export function ChatComposer({
   onSend,
   onCancel,
   onCommand,
+  mode,
+  onMode,
+  modesAvailable,
 }: {
   text: string;
   disabled: boolean;
@@ -27,9 +32,12 @@ export function ChatComposer({
   hint: string;
   modelPicker: ReactNode;
   onText: (text: string) => void;
-  onSend: () => void;
+  onSend: (mode?: MessageMode) => void;
   onCancel: () => void;
   onCommand: (command: string) => void;
+  mode: MessageMode;
+  onMode: (mode: MessageMode) => void;
+  modesAvailable: boolean;
 }) {
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState(false);
@@ -40,7 +48,7 @@ export function ChatComposer({
     ["tools", "Tool definitions and selection"],
     ["extend", "Extensions and instructions"],
     ["new", "New numbered agent"],
-    ["new-session", "Create a session"],
+    ["new-session", "New conversation in this project"],
     ["stop", "Cancel current work"],
     ["resume", "Resume interrupted work"],
   ].filter(([name]) => name?.startsWith(text.slice(1).toLowerCase()));
@@ -137,12 +145,27 @@ export function ChatComposer({
               !event.nativeEvent.isComposing
             ) {
               event.preventDefault();
-              if (!sending) onSend();
+              if (!sending) onSend(event.altKey ? "followUp" : undefined);
             }
           }}
         />
         <div className="mt-2 flex items-center justify-between gap-2">
-          {modelPicker}
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {modelPicker}
+            <div className="w-36">
+              <ChoiceSelect
+                label="When agent is busy"
+                value={mode}
+                disabled={disabled || uncertain || !modesAvailable}
+                items={[
+                  { value: "steer", label: "Steer current work" },
+                  { value: "followUp", label: "Queue follow-up" },
+                  { value: "reject", label: "Only when idle" },
+                ]}
+                onChange={(value) => onMode(value as MessageMode)}
+              />
+            </div>
+          </div>
           <div className="flex shrink-0 items-center gap-2">
             {busy && (
               <Button
@@ -172,7 +195,7 @@ export function ChatComposer({
       <div className="mx-auto mt-2 flex max-w-3xl flex-wrap justify-between gap-1 px-2 text-[11px] text-muted-foreground">
         <span role="status">{hint}</span>
         <span className="hidden sm:inline">
-          Enter to send · Shift + Enter for a new line
+          Enter to send · Alt + Enter to queue · Shift + Enter for a new line
         </span>
       </div>
     </div>

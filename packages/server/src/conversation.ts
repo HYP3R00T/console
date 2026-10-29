@@ -9,19 +9,27 @@ import {
   clampThinkingLevel,
   getSupportedThinkingLevels,
 } from "@earendil-works/pi-ai/models";
+import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
 import {
   AgentDoc,
+  CompactionTask,
   type ConversationId,
   configure,
   createRegistry,
+  DEFAULT_COMPACTION_POLICY,
   defineDoc,
   type EntryId,
   Harness,
+  InboxDoc,
   LiveDoc,
   type Conversation as PiConversation,
+  ResetEntry,
+  type SubmissionId,
+  UsageDoc,
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { agentExtension, type openAgentState } from "./agent-extension.ts";
+import { expandPrompt, type ProjectResources } from "./project-resources.ts";
 import { httpError } from "./providers.ts";
 import {
   defaultSandbox,
@@ -43,6 +51,17 @@ const ConversationInfo = defineDoc<{
   history: "latest",
   fork: "initial",
   initial: () => ({ name: "", requestId: "" }),
+  checkpointWhen: () => true,
+});
+
+// Atomic receipts keep a retried compact action from starting a second paid summary.
+const CompactionReceipts = defineDoc<{ requests: Record<string, string> }>({
+  kind: "console.compactions",
+  version: 1,
+  scope: "conversation",
+  history: "latest",
+  fork: "initial",
+  initial: () => ({ requests: {} }),
   checkpointWhen: () => true,
 });
 
@@ -122,6 +141,62 @@ export async function openConversation(
     return next;
   }
   function bind(root: PiConversation) {
+    async function history(before?: string) {
+      if (
+        before !== undefined &&
+        (!/^[1-9][0-9]*$/.test(before) || !Number.isSafeInteger(Number(before)))
+      )
+        throw httpError(400, "Invalid history cursor.");
+      const entries = await root.entries(
+        {
+          order: "descending",
+          ...(before ? { maxEntryId: (Number(before) - 1) as EntryId } : {}),
+        },
+        50,
+        undefined,
+        context,
+      );
+      return {
+        hasOlder: Boolean(entries.next),
+        olderCursor: entries.next
+          ? String(entries.items.at(-1)?.id)
+          : undefined,
+        messages: [...entries.items].reverse().flatMap((entry) =>
+          (entry.model ?? [])
+            .filter(
+              (message) =>
+                message.role === "user" ||
+                message.role === "assistant" ||
+                message.role === "toolResult",
+            )
+            .map((message, index) => ({
+              id: `${entry.id}-${index}`,
+              entryId: String(entry.id),
+              kind: entry.kind,
+              role: message.role,
+              toolName:
+                message.role === "toolResult" ? message.toolName : undefined,
+              text: text(message),
+              reasoning: reasoning(message),
+              toolCalls:
+                message.role === "assistant"
+                  ? message.content.flatMap((block) =>
+                      block.type === "toolCall"
+                        ? [
+                            {
+                              id: block.id,
+                              name: block.name,
+                              arguments: block.arguments,
+                            },
+                          ]
+                        : [],
+                    )
+                  : [],
+            })),
+        ),
+      };
+    }
+
     async function offered(policy: SandboxPolicy) {
       const record = await storage.conversation(root.id, context);
       const selected = new Set(
@@ -187,6 +262,25 @@ export async function openConversation(
     }
     return {
       summary,
+      async resources() {
+        const policy = await validateSandbox(
+          (await harness.snapshot(SandboxDoc, root.id, context)) ??
+            defaultSandbox(),
+          privateDirectory,
+        );
+        if (!policy.enabled)
+          return { enabled: false, instructions: [], skills: [], prompts: [] };
+        return {
+          enabled: true,
+          ...(JSON.parse(
+            await runSandbox(
+              policy,
+              { operation: "resources" },
+              privateDirectory,
+            ),
+          ) as ProjectResources),
+        };
+      },
       async inspect() {
         const agent = await root.agent(context);
         const active = new Set(agent.tools.map((item) => item.name));
@@ -230,6 +324,21 @@ export async function openConversation(
               name: task.record.kind,
               state: task.state.kind,
             })),
+          taskGraph: inspection.tasks.map((task) => ({
+            id: String(task.record.id),
+            name: task.record.kind,
+            conversationId: String(task.record.conversationId),
+            owner: task.record.owner ? String(task.record.owner) : undefined,
+            background: task.record.background,
+            abortRequested: task.record.abortRequested,
+            state: task.state.kind,
+            waitingOn:
+              task.state.kind === "waiting" ? task.state.on.map(String) : [],
+            wakeAt:
+              task.state.kind === "sleeping" ? task.state.until : undefined,
+            blockedReason:
+              task.state.kind === "blocked" ? task.state.reason : undefined,
+          })),
           scheduling: inspection.scheduling,
         };
       },
@@ -412,14 +521,17 @@ export async function openConversation(
           return summary();
         });
       },
+      history,
       async snapshot() {
-        const entries = await root.entries(
-          { order: "descending" },
-          100,
-          undefined,
-          context,
-        );
+        const page = await history();
         const live = await harness.snapshot(LiveDoc, root.id, context);
+        const inbox = await harness.snapshot(InboxDoc, root.id, context);
+        const usage = await harness.snapshot(UsageDoc, root.id, context);
+        const view = await root.context(context);
+        const agent = await root.agent(context);
+        const model = agent.model
+          ? models.getModel(agent.model.provider, agent.model.modelId)
+          : undefined;
         const last = (
           await storage.scanSubmissions(
             { conversationId: root.id, order: "descending" },
@@ -435,24 +547,41 @@ export async function openConversation(
           sandbox:
             (await harness.snapshot(SandboxDoc, root.id, context)) ??
             defaultSandbox(),
-          hasOlder: Boolean(entries.next),
-          messages: [...entries.items].reverse().flatMap((entry) =>
-            (entry.model ?? [])
-              .filter(
-                (message) =>
-                  message.role === "user" ||
-                  message.role === "assistant" ||
-                  message.role === "toolResult",
-              )
-              .map((message, index) => ({
-                id: `${entry.id}-${index}`,
-                entryId: String(entry.id),
-                role: message.role,
-                toolName:
-                  message.role === "toolResult" ? message.toolName : undefined,
-                text: text(message),
-                reasoning: reasoning(message),
-              })),
+          ...page,
+          queue: (inbox?.items ?? [])
+            .filter((item) => item.mode !== "write")
+            .map((item) => ({
+              id: String(item.id),
+              mode: item.mode,
+              text:
+                "content" in item && typeof item.content === "string"
+                  ? item.content
+                  : "",
+            })),
+          usage: usage ?? { models: {}, tools: {} },
+          contextUsage: {
+            estimatedTokens: estimateContextTokens(view.messages).tokens,
+            capacity: model?.contextWindow ?? 0,
+            // These are Pi 1.4's defaults; Console does not override Harness settings.
+            reserveTokens: DEFAULT_COMPACTION_POLICY.reserveTokens,
+            backgroundTokens: DEFAULT_COMPACTION_POLICY.backgroundTokens,
+          },
+          compactions: (live?.compactions ?? []).map((item) => ({
+            id: String(item.taskId),
+            reason: item.reason,
+            blocking: item.blocking,
+            attempt: item.attempt,
+            retryAt: item.retry?.at,
+          })),
+          // Provider exception text can contain secrets. Expose a safe status only.
+          compactionFailed: Boolean(live?.compactionFailure),
+          liveTools: [...(live?.tools ?? []), ...(live?.nestedTools ?? [])].map(
+            (item) => ({
+              id: item.callId,
+              name: item.name,
+              status: item.status,
+              output: item.output,
+            }),
           ),
           partial: partial ? text(partial) : "",
           partialReasoning: partial
@@ -465,7 +594,11 @@ export async function openConversation(
           outcome: last?.status === "unanswered" ? last.reason : last?.status,
         };
       },
-      submit(input: { text: string; requestId: string }) {
+      submit(input: {
+        text: string;
+        requestId: string;
+        whenBusy?: "reject" | "steer" | "followUp";
+      }) {
         return serialize(async () => {
           const duplicate = await storage.submissionByRequest(
             root.id,
@@ -475,7 +608,8 @@ export async function openConversation(
           if (duplicate) return { id: String(duplicate.id) };
           if (!input.text.trim())
             throw httpError(400, "Message must not be blank.");
-          await assertIdle();
+          if (!input.whenBusy || input.whenBusy === "reject")
+            await assertIdle();
           const inspection = await harness.inspect(context);
           if (inspection.scheduling === "paused" && inspection.tasks.length)
             throw httpError(
@@ -491,12 +625,181 @@ export async function openConversation(
           if (!(await models.checkAuth(agent.model.provider)))
             throw httpError(400, "Configure this provider first.");
           await root.configure({ thinkingLevel: agent.thinkingLevel }, context);
+          let content = input.text;
+          const command =
+            /^\/(skill|prompt):([a-zA-Z0-9_-]+)(?:\s+([\s\S]*))?$/.exec(
+              content,
+            );
+          if (command) {
+            const policy = await validateSandbox(
+              (await harness.snapshot(SandboxDoc, root.id, context)) ??
+                defaultSandbox(),
+              privateDirectory,
+            );
+            if (!policy.enabled)
+              throw httpError(
+                400,
+                "Enable a project workspace before using project resources.",
+              );
+            const kind = command[1] as "skill" | "prompt";
+            let resource: { path: string; content: string };
+            try {
+              resource = JSON.parse(
+                await runSandbox(
+                  policy,
+                  {
+                    operation: "resources",
+                    resourceKind: kind,
+                    resourceName: command[2],
+                  },
+                  privateDirectory,
+                ),
+              );
+            } catch {
+              throw httpError(
+                400,
+                "Project resource could not be loaded. Reload the resources and check its name and permissions.",
+              );
+            }
+            try {
+              content =
+                kind === "prompt"
+                  ? expandPrompt(resource.content, command[3] ?? "")
+                  : `Use the following project skill from ${resource.path}. Supporting file paths are relative to its directory. Stay within the saved permissions.\n\n${resource.content}\n\nUser request: ${command[3] ?? ""}`;
+            } catch {
+              throw httpError(
+                400,
+                "Template arguments contain invalid quoting.",
+              );
+            }
+            if (!content.trim())
+              throw httpError(400, "Expanded project prompt is blank.");
+            if (content.length > 64000)
+              throw httpError(
+                400,
+                "Expanded project prompt exceeds 64,000 characters.",
+              );
+          }
           const submission = await root.submit(
             {
               type: "input",
-              content: input.text,
+              content,
               requestId: input.requestId,
-              whenBusy: "reject",
+              whenBusy: input.whenBusy ?? "reject",
+            },
+            context,
+          );
+          return { id: String(submission.id) };
+        });
+      },
+      withdraw(id: string) {
+        return serialize(async () => {
+          if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id)))
+            throw httpError(400, "Invalid submission ID.");
+          const record = await storage.submission(
+            Number(id) as SubmissionId,
+            context,
+          );
+          if (
+            !record ||
+            record.conversationId !== root.id ||
+            record.type !== "input"
+          )
+            throw httpError(404, "Submission not found in this conversation.");
+          const submission = await harness.submission(record.id, context);
+          if (!submission) throw httpError(404, "Submission not found.");
+          const result = await submission.abort(context);
+          if (result === "already_placed")
+            throw httpError(
+              409,
+              "This message is already part of the run; stop the run to cancel it.",
+            );
+        });
+      },
+      compact(input: { requestId: string; instructions?: string }) {
+        return serialize(async () => {
+          const receipts = await harness.snapshot(
+            CompactionReceipts,
+            root.id,
+            context,
+          );
+          const receiptKey = `request:${input.requestId}`;
+          if (receipts?.requests[receiptKey])
+            return { id: receipts.requests[receiptKey] };
+          await assertIdle();
+          const inspection = await harness.inspect(context);
+          if (inspection.scheduling === "paused" && inspection.tasks.length)
+            throw httpError(
+              409,
+              "Resume or cancel interrupted work before compacting.",
+            );
+          const agent = await root.agent(context);
+          if (!agent.model || !(await models.checkAuth(agent.model.provider)))
+            throw httpError(
+              400,
+              "Connect a provider and choose a model before compacting.",
+            );
+          const id = await root.commit(async (tx) => {
+            const saved = await tx.doc(CompactionReceipts, root.id);
+            const task = await tx.createTask(
+              CompactionTask,
+              {
+                reason: "manual" as const,
+                ...(input.instructions
+                  ? { instructions: input.instructions }
+                  : {}),
+              },
+              { ownership: { kind: "conversation" }, conversationId: root.id },
+            );
+            const live = await tx.doc(LiveDoc, root.id);
+            live.compactions ??= [];
+            live.compactions.push({
+              taskId: task,
+              reason: "manual",
+              blocking: false,
+              attempt: 1,
+            });
+            saved.requests[receiptKey] = String(task);
+            return String(task);
+          }, context);
+          harness.resume();
+          return { id };
+        });
+      },
+      reset(input: { requestId: string; handoff?: string }) {
+        return serialize(async () => {
+          const duplicate = await storage.submissionByRequest(
+            root.id,
+            input.requestId,
+            context,
+          );
+          if (duplicate) return { id: String(duplicate.id) };
+          await assertIdle();
+          const inspection = await harness.inspect(context);
+          if (inspection.scheduling === "paused" && inspection.tasks.length)
+            throw httpError(
+              409,
+              "Resume or cancel interrupted work before resetting context.",
+            );
+          const submission = await root.submit(
+            {
+              type: "write",
+              requestId: input.requestId,
+              entry: {
+                kind: ResetEntry.kind,
+                head: "self",
+                ...(input.handoff
+                  ? {
+                      model: [
+                        {
+                          role: "user",
+                          content: input.handoff,
+                          timestamp: Date.now(),
+                        },
+                      ],
+                    }
+                  : {}),
+              },
             },
             context,
           );
@@ -540,6 +843,7 @@ export async function openConversation(
             : row.parent
               ? String(row.parent.conversationId)
               : undefined,
+          isMain: row.id === main.id,
           kind: row.owner ? "subagent" : row.parent ? "fork" : "root",
           requestId: info?.requestId,
           deleted: Boolean(info?.deleted),

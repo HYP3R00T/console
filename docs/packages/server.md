@@ -152,3 +152,74 @@ and configured token. A loopback server with no configured token can be connecte
 an installed Pi extension. Idle-only changes select the extension itself, including sections/hooks;
 its offered tools remain within sandbox grants. Unknown extensions are rejected and child agents
 inherit actual selections. No browser-supplied extension code is executed.
+
+## Native Pi coding tools
+
+`console.sandbox` registers Pi Durable's actual `read`, `write`, `edit`, and `bash` definitions.
+Their implementations run in `sandbox-pi.ts`, loaded inside the nono worker after restrictions apply.
+Only the required installed package directories are added as read-only runtime prerequisites; the
+worker receives no Harness document/task/model APIs or provider credentials. Console's older tool
+names remain for saved histories. A restricted bridge bounds output and adapts shell execution to
+keep descendants in the worker's process group for cancellation. Scratch output expires per call.
+
+`access: project` grants project writes and commands with network blocked. UI conversation creation
+uses this preset; API callers can still request None, Read, Edit, or explicit Setup. Existing policies
+are not automatically widened. Reapplying an enabled policy selects newly installed permitted tools.
+Prompt context includes the assigned project directory even when filesystem tools are disabled.
+Native tests cover tool calls through Pi, edits, outside/private paths, symlinks, network denial,
+clean environments and cancellation of delayed descendant writes. Resource quotas remain unimplemented.
+
+## Runtime controls and inspection
+
+`POST /sessions/:id[/conversations/:conversationId]/messages` accepts optional
+`whenBusy: reject|steer|followUp`. Omission preserves the original reject behavior. Steers join
+at a tool-round boundary; follow-ups start after the current run. Both use Pi's persisted inbox.
+A reused request ID returns its original submission, regardless of retries. Interrupted work
+rejects all new delivery modes until explicitly resumed or cancelled.
+
+`DELETE .../submissions/:submissionId` withdraws a queued input in that conversation. An input
+already placed in a run returns 409; use conversation cancellation to stop active work.
+`POST .../compact` accepts `{ requestId, instructions? }`; an atomic Pi commit creates the native
+compaction task, its live status, and a receipt in `console.compactions`. Retrying the same action,
+including after restart, returns the original task. `POST .../reset` accepts `{ requestId, handoff? }`
+and durably submits Pi's reset entry with its request ID. Both controls currently require idle
+work and never implicitly resume an interrupted sibling conversation. Reset retains old history
+and does not ask the model to answer until the next input.
+
+Snapshots include queued input, Pi usage ledgers, context estimates/default compaction margins,
+compaction progress, a sanitized failure flag, and available live tool status/output. Provider
+exception strings remain private. Transcript projections include tool calls and context-entry kinds.
+`GET .../inspect` also supplies session-wide task ownership, waits, sleep deadlines and blocked reasons,
+without exposing task checkpoints or provider request payloads.
+
+`test/runtime-controls.test.ts` covers steering/follow-up boundaries, deduplication and scoped
+withdrawal, queued input across reopen, explicit recovery, long-history compaction, and reset/handoff.
+See [Pi capability delivery](../pi-capabilities.md) for the remaining expansion; runtime availability
+alone does not establish a completed Console integration.
+
+## Project Markdown resources
+
+`GET /sessions/:id[/conversations/:conversationId]/resources` returns the current workspace's
+instruction sources, skill index and prompt index. Resource reads execute inside nono using the
+saved policy. Disabled filesystem access returns an empty disabled index. No parent above the
+workspace, personal home, executable extension or MCP configuration is loaded implicitly.
+
+At each model request, the sandbox extension includes the first applicable context file at the
+workspace root in this order: AGENTS.override.md, AGENTS.md, AGENTS.MD, CLAUDE.md, CLAUDE.MD.
+Project `.pi/SYSTEM.md` and `.pi/APPEND_SYSTEM.md` follow as prompt sections. They do not replace
+Console's boundary instructions or the saved conversation instructions, which still render last.
+`load_project_resource` with `kind: instructions` and a relative `directory` reads the applicable
+root-to-directory chain before subdirectory work. Source directory scope stays explicit.
+
+Skills are SKILL.md roots under `.pi/skills` and `.agents/skills`; `.pi` wins duplicate directory
+names. Templates are Markdown files under `.pi/prompts`. Names use letters, numbers, underscores
+and hyphens. Frontmatter is removed from invoked content; skill names come from directory names.
+`/skill:name request` loads the skill before durable admission; `/prompt:name arguments` expands
+its template. Parameters support $1, ${1}, $@ and ${@:start:count}; quoted arguments are preserved
+as one value. Retrying an admitted request never reloads or duplicates its expansion.
+
+Resources are re-read for model requests; Reload resources refreshes the browser index. File reads
+are bounded to 32 KiB, discovery to 100 skills/templates and depth eight, with a 128 KiB index cap.
+Symlink resource files/directories are skipped; requested instruction directories reject symlinks.
+Permission and worker failures have no unconfined fallback. Existing conversations can reapply
+sandbox policy to select the newly installed load_project_resource tool.

@@ -95,7 +95,7 @@ export function registerSessionRoutes(
       name?: string;
       requestId: string;
       workspaceId?: string;
-      access?: "none" | "read" | "edit" | "setup";
+      access?: "none" | "read" | "edit" | "project" | "setup";
     };
   }>(
     "/sessions",
@@ -114,7 +114,7 @@ export function registerSessionRoutes(
             },
             requestId: string,
             workspaceId: string,
-            access: { enum: ["none", "read", "edit", "setup"] },
+            access: { enum: ["none", "read", "edit", "project", "setup"] },
           },
         },
       },
@@ -220,6 +220,17 @@ export function registerSessionRoutes(
       },
     );
     app.get<{ Params: { id: string; conversationId?: string } }>(
+      `${base}/resources`,
+      { schema: { params } },
+      async (request) =>
+        (
+          await sessions.conversation(
+            request.params.id,
+            request.params.conversationId,
+          )
+        ).resources(),
+    );
+    app.get<{ Params: { id: string; conversationId?: string } }>(
       `${base}/inspect`,
       { schema: { params } },
       async (req) =>
@@ -285,6 +296,31 @@ export function registerSessionRoutes(
               )
             ).fork(req.body.entryId, req.body.requestId),
           ),
+    );
+    app.get<{
+      Params: { id: string; conversationId?: string };
+      Querystring: { before?: string };
+    }>(
+      `${base}/history`,
+      {
+        schema: {
+          params,
+          querystring: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              before: { type: "string", pattern: "^[1-9][0-9]{0,15}$" },
+            },
+          },
+        },
+      },
+      async (request) =>
+        (
+          await sessions.conversation(
+            request.params.id,
+            request.params.conversationId,
+          )
+        ).history(request.query.before),
     );
     app.get<{ Params: { id: string; conversationId?: string } }>(
       `${base}`,
@@ -375,7 +411,11 @@ export function registerSessionRoutes(
     );
     app.post<{
       Params: { id: string; conversationId?: string };
-      Body: { text: string; requestId: string };
+      Body: {
+        text: string;
+        requestId: string;
+        whenBusy?: "reject" | "steer" | "followUp";
+      };
     }>(
       `${base}/messages`,
       {
@@ -388,6 +428,10 @@ export function registerSessionRoutes(
             properties: {
               text: { type: "string", minLength: 1, maxLength: 32000 },
               requestId: string,
+              whenBusy: {
+                type: "string",
+                enum: ["reject", "steer", "followUp"],
+              },
             },
           },
         },
@@ -402,6 +446,91 @@ export function registerSessionRoutes(
                 request.params.conversationId,
               )
             ).submit(request.body),
+          ),
+    );
+    app.delete<{
+      Params: { id: string; conversationId?: string; submissionId: string };
+    }>(
+      `${base}/submissions/:submissionId`,
+      {
+        schema: {
+          params: {
+            ...params,
+            required: [...params.required, "submissionId"],
+            properties: { ...params.properties, submissionId: string },
+          },
+        },
+      },
+      async (request, reply) => {
+        await (
+          await sessions.conversation(
+            request.params.id,
+            request.params.conversationId,
+          )
+        ).withdraw(request.params.submissionId);
+        return reply.code(204).send();
+      },
+    );
+    app.post<{
+      Params: { id: string; conversationId?: string };
+      Body: { requestId: string; instructions?: string };
+    }>(
+      `${base}/compact`,
+      {
+        schema: {
+          params,
+          body: {
+            type: "object",
+            required: ["requestId"],
+            additionalProperties: false,
+            properties: {
+              requestId: string,
+              instructions: { type: "string", maxLength: 8000 },
+            },
+          },
+        },
+      },
+      async (request, reply) =>
+        reply
+          .code(202)
+          .send(
+            await (
+              await sessions.conversation(
+                request.params.id,
+                request.params.conversationId,
+              )
+            ).compact(request.body),
+          ),
+    );
+    app.post<{
+      Params: { id: string; conversationId?: string };
+      Body: { requestId: string; handoff?: string };
+    }>(
+      `${base}/reset`,
+      {
+        schema: {
+          params,
+          body: {
+            type: "object",
+            required: ["requestId"],
+            additionalProperties: false,
+            properties: {
+              requestId: string,
+              handoff: { type: "string", maxLength: 8000 },
+            },
+          },
+        },
+      },
+      async (request, reply) =>
+        reply
+          .code(202)
+          .send(
+            await (
+              await sessions.conversation(
+                request.params.id,
+                request.params.conversationId,
+              )
+            ).reset(request.body),
           ),
     );
     app.post<{ Params: { id: string; conversationId?: string } }>(

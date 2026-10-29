@@ -70,7 +70,7 @@ test("web connections start empty, authenticate explicitly, persist and disconne
   assert.equal(store.list()[0]?.status, "unknown");
   assert.equal(
     (await store.proxy(connected.id, "workspaces", "GET")).data.length,
-    1,
+    2,
   );
   assert.throws(
     () => store.proxy(connected.id, "backends", "GET"),
@@ -96,7 +96,7 @@ test("web connections start empty, authenticate explicitly, persist and disconne
         headers: { authorization: "Bearer fixture-connection-secret" },
       })
     ).json().length,
-    1,
+    2,
   );
   await assert.rejects(
     store.reconnect(connected.id),

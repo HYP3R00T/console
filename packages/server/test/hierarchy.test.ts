@@ -227,7 +227,9 @@ test("remote hub keeps tokens private and persists backend → project → sessi
   assert.equal((await hub.inject(`${base}`)).json().name, "Renamed session");
   assert.equal((await hub.inject("/v1/sessions")).json().length, 0);
   assert.equal(
-    (await hub.inject(`${prefix}/workspaces`)).json()[0].id,
+    (await hub.inject(`${prefix}/workspaces`))
+      .json()
+      .find((item: { id: string }) => item.id === workspaceId)?.id,
     workspaceId,
   );
   await assert.rejects(

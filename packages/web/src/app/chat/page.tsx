@@ -19,7 +19,6 @@ import { AgentPanels, type InspectorPanel } from "@/components/agent-panels";
 import { ComposerModelPicker } from "@/components/composer-model-picker";
 import { useBackend } from "@/components/connection-context";
 import { NetworkSidebar } from "@/components/network-sidebar";
-import { NewSessionDialog } from "@/components/new-session-dialog";
 import { ProjectInspector } from "@/components/project-inspector";
 import { SessionChat } from "@/components/session-chat";
 import { SessionInspector } from "@/components/session-inspector";
@@ -36,13 +35,14 @@ import {
   type Conversation,
   type ConversationSummary,
   type Machine,
+  type MessageMode,
   type Provider,
   type SessionSummary,
   type Workspace,
 } from "@/lib/console-api";
 
 const inspectorTabs = [
-  { id: "session", label: "Session", icon: MessageSquareIcon },
+  { id: "session", label: "Conversation", icon: MessageSquareIcon },
   { id: "state", label: "State", icon: BracesIcon },
   { id: "tasks", label: "Tasks", icon: ListTodoIcon },
   { id: "tools", label: "Tools", icon: WrenchIcon },
@@ -70,7 +70,7 @@ function usePanelOpen(key: string) {
   return [open, setOpen] as const;
 }
 
-type Submission = { text: string; requestId: string };
+type Submission = { text: string; requestId: string; whenBusy?: MessageMode };
 
 export default function Home() {
   const { connections, id: machineId, select: selectMachine } = useBackend();
@@ -151,6 +151,13 @@ export default function Home() {
     { name?: string; requestId: string } | undefined
   >(undefined);
   const [creating, setCreating] = useState(false);
+  const creationInFlight = useRef(false);
+  const focusNewConversation = useRef(false);
+  const creationAttempt = useRef<{
+    machineId: string;
+    workspaceId: string;
+    requestId: string;
+  }>(undefined);
   const [machine, setMachine] = useState<Machine>();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [selected, setSelected] = useState("");
@@ -166,6 +173,9 @@ export default function Home() {
   const [dirty, setDirty] = useState(false);
   const [sandboxDirty, setSandboxDirty] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [messageModes, setMessageModes] = useState<Record<string, MessageMode>>(
+    {},
+  );
   const [pending, setPending] = useState<
     Record<string, Submission | undefined>
   >({});
@@ -209,6 +219,55 @@ export default function Home() {
       url.searchParams.delete(key);
     window.history.replaceState(null, "", url.pathname + url.search);
   }, []);
+
+  useEffect(() => {
+    if (!creating || !online || creationInFlight.current) return;
+    creationInFlight.current = true;
+    const previous = creationAttempt.current;
+    const input =
+      previous?.machineId === machineId && previous.workspaceId === workspaceId
+        ? previous
+        : { machineId, workspaceId, requestId: crypto.randomUUID() };
+    creationAttempt.current = input;
+    setWorking(true);
+    setError("");
+    void (async () => {
+      try {
+        const created = await api<Conversation>(
+          "/sessions",
+          "POST",
+          {
+            requestId: input.requestId,
+            workspaceId: input.workspaceId || undefined,
+            access: "project",
+          },
+          undefined,
+          input.machineId,
+        );
+        creationAttempt.current = undefined;
+        ++epoch.current;
+        focusNewConversation.current = true;
+        select(created.id);
+        setSnapshot(created);
+        setDetailOnline(true);
+        setDetailError("");
+        window.dispatchEvent(new Event("console:tree-changed"));
+      } catch (cause) {
+        setError((cause as Error).message);
+      } finally {
+        creationInFlight.current = false;
+        setCreating(false);
+        setWorking(false);
+      }
+    })();
+  }, [creating, online, machineId, workspaceId, select]);
+
+  useEffect(() => {
+    if (focusNewConversation.current && session) {
+      document.getElementById("message")?.focus({ preventScroll: true });
+      focusNewConversation.current = false;
+    }
+  }, [session]);
 
   useEffect(() => {
     const deleted = (event: Event) => {
@@ -409,13 +468,16 @@ export default function Home() {
       chooseConversation(row.id);
     });
   }
-  async function send() {
+  async function send(mode?: MessageMode) {
     if (!session || working) return;
     const id = session.id;
     const key = `${id}:${session.conversationId}`;
     const input = pending[key] ?? {
       text: drafts[key] ?? "",
       requestId: crypto.randomUUID(),
+      ...(session.queue === undefined
+        ? {}
+        : { whenBusy: mode ?? messageModes[key] ?? "steer" }),
     };
     setPending((items) => ({ ...items, [key]: input }));
     await operate(id, async () => {
@@ -545,6 +607,7 @@ export default function Home() {
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   <NetworkSidebar
                     selected={selected}
+                    creating={creating || working}
                     conversationId={session?.conversationId}
                     onSelect={(id, cid) => {
                       setContextPanel("");
@@ -587,6 +650,11 @@ export default function Home() {
             <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
               {session ? (
                 <SessionChat
+                  key={`${session.id}:${session.conversationId}`}
+                  historyPath={conversationPath(
+                    session.id,
+                    session.conversationId,
+                  )}
                   modelPicker={
                     <ComposerModelPicker
                       session={session}
@@ -598,6 +666,7 @@ export default function Home() {
                         session.status !== "idle"
                       }
                       onConfigure={() => {
+                        setContextPanel("");
                         setPanel("session");
                         setInspectorOpen(true);
                       }}
@@ -619,8 +688,10 @@ export default function Home() {
                   onFork={(entryId) => void fork(entryId)}
                   onCommand={(command) => {
                     if (command === "new") void newAgent();
-                    else if (command === "new-session") setCreating(true);
-                    else if (command === "stop" || command === "resume")
+                    else if (command === "new-session") {
+                      setWorkspaceId(session.workspaceId ?? "");
+                      setCreating(true);
+                    } else if (command === "stop" || command === "resume")
                       void operate(session.id, async () => {
                         await api(
                           `${conversationPath(session.id)}/${command === "stop" ? "cancel" : "resume"}`,
@@ -628,6 +699,7 @@ export default function Home() {
                         );
                       });
                     else {
+                      setContextPanel("");
                       setPanel(
                         command === "config"
                           ? "session"
@@ -639,13 +711,18 @@ export default function Home() {
                   agentName={
                     conversations.find(
                       (item) => item.id === session.conversationId,
-                    )?.name
+                    )?.name === "Main"
+                      ? session.name
+                      : conversations.find(
+                          (item) => item.id === session.conversationId,
+                        )?.name
                   }
                   projectName={
                     workspaces.find((item) => item.id === session.workspaceId)
                       ?.name
                   }
                   onConfigure={() => {
+                    setContextPanel("");
                     setPanel("session");
                     setInspectorOpen(true);
                   }}
@@ -664,7 +741,19 @@ export default function Home() {
                   onText={(text) =>
                     setDrafts((items) => ({ ...items, [draftKey]: text }))
                   }
-                  onSend={() => void send()}
+                  mode={messageModes[draftKey] ?? "steer"}
+                  onMode={(mode) =>
+                    setMessageModes((items) => ({ ...items, [draftKey]: mode }))
+                  }
+                  onSend={(mode) => void send(mode)}
+                  onWithdraw={(id) =>
+                    void operate(session.id, async () => {
+                      await api(
+                        `${conversationPath(session.id)}/submissions/${id}`,
+                        "DELETE",
+                      );
+                    })
+                  }
                   onControl={(action) =>
                     void operate(session.id, async () => {
                       await api(
@@ -690,7 +779,7 @@ export default function Home() {
                   <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
                     {selected
                       ? "Loading saved history from this machine."
-                      : "Create a session, connect a provider, and give your agent something to work on."}
+                      : "Create a conversation, connect a provider, and give your agent something to work on."}
                   </p>
                   {!selected && (
                     <Button
@@ -699,7 +788,7 @@ export default function Home() {
                       onClick={() => setCreating(true)}
                     >
                       <PlusIcon data-icon="inline-start" />
-                      New session
+                      New conversation
                     </Button>
                   )}
                 </section>
@@ -735,25 +824,27 @@ export default function Home() {
               inspectorOpen ? "flex h-full min-h-0 flex-col" : "hidden"
             }
           >
-            <nav aria-label="Agent panels" className="flex shrink-0">
-              {inspectorTabs.map(({ id, label, icon: Icon }) => (
-                <button
-                  type="button"
-                  key={id}
-                  aria-current={
-                    !contextPanel && panel === id ? "page" : undefined
-                  }
-                  className={`flex min-w-0 flex-1 flex-col items-center gap-1 border-b px-1 py-3 text-xs ${!contextPanel && panel === id ? "border-foreground text-foreground" : "border-border text-muted-foreground"}`}
-                  onClick={() => {
-                    setContextPanel("");
-                    setPanel(id);
-                  }}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
-                  {label}
-                </button>
-              ))}
-            </nav>
+            {contextPanel !== "project" && (
+              <nav aria-label="Agent panels" className="flex shrink-0">
+                {inspectorTabs.map(({ id, label, icon: Icon }) => (
+                  <button
+                    type="button"
+                    key={id}
+                    aria-current={
+                      !contextPanel && panel === id ? "page" : undefined
+                    }
+                    className={`flex min-w-0 flex-1 flex-col items-center gap-1 border-b px-1 py-3 text-xs ${!contextPanel && panel === id ? "border-foreground text-foreground" : "border-border text-muted-foreground"}`}
+                    onClick={() => {
+                      setContextPanel("");
+                      setPanel(id);
+                    }}
+                  >
+                    <Icon className="size-4" aria-hidden="true" />
+                    {label}
+                  </button>
+                ))}
+              </nav>
+            )}
             <div className="min-h-0 flex-1 overflow-y-auto">
               {contextPanel === "project" ? (
                 <ProjectInspector
@@ -774,6 +865,10 @@ export default function Home() {
                         session.status !== "idle"
                       }
                       onDirtyChange={setDirty}
+                      onResourcePrompt={(text) => {
+                        setDrafts((items) => ({ ...items, [draftKey]: text }));
+                        document.getElementById("message")?.focus();
+                      }}
                       onSandboxDirtyChange={setSandboxDirty}
                       onSandboxSave={(input) =>
                         operate(session.id, async () => {
@@ -810,6 +905,7 @@ export default function Home() {
                         !working
                       }
                       onConfigure={() => {
+                        setContextPanel("");
                         setPanel("session");
                         setInspectorOpen(true);
                       }}
@@ -826,38 +922,6 @@ export default function Home() {
           </div>
         </aside>
       </main>
-      <NewSessionDialog
-        open={creating}
-        working={working}
-        error={error}
-        onClose={() => setCreating(false)}
-        workspaces={workspaces}
-        defaultWorkspace={workspaceId}
-        onCreate={async (name, requestId, workspaceId, access) => {
-          setWorking(true);
-          setError("");
-          try {
-            const created = await api<Conversation>("/sessions", "POST", {
-              ...(name ? { name } : {}),
-              requestId,
-              workspaceId,
-              access: workspaceId ? access : "none",
-            });
-            select(created.id);
-            setCreating(false);
-            setPanel("session");
-            setSnapshot(created);
-            setDetailOnline(true);
-            setDetailError("");
-            return true;
-          } catch (cause) {
-            setError((cause as Error).message);
-            return false;
-          } finally {
-            setWorking(false);
-          }
-        }}
-      />
     </div>
   );
 }

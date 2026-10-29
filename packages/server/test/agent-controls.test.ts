@@ -68,7 +68,7 @@ test("numbered agents, real tool controls, native forks and task-owned subagents
     payload: { requestId: "numbered" },
   });
   assert.equal(created.statusCode, 201, created.body);
-  assert.equal(created.json().name, "Session #1");
+  assert.equal(created.json().name, "Conversation #1");
   const base = `/v1/sessions/${created.json().id}`;
   const next = await app.inject({
     method: "POST",
@@ -76,7 +76,7 @@ test("numbered agents, real tool controls, native forks and task-owned subagents
     headers,
     payload: { requestId: "numbered-2" },
   });
-  assert.equal(next.json().name, "Session #2");
+  assert.equal(next.json().name, "Conversation #2");
   const unnamed = {
     method: "POST" as const,
     url: `${base}/conversations`,

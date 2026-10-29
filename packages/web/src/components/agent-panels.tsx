@@ -204,6 +204,38 @@ export function AgentPanels({
                   <span>{task.state}</span>
                 </div>
               ))}
+              {!!inspection.taskGraph?.length && (
+                <details className="space-y-2 text-xs">
+                  <summary>Session task ownership and dependencies</summary>
+                  {inspection.taskGraph.map((task) => (
+                    <div key={task.id} className="mt-2 space-y-1 border p-2">
+                      <p>
+                        #{task.id} {task.name} · {task.state}
+                      </p>
+                      <p>
+                        Conversation #{task.conversationId} ·{" "}
+                        {task.owner
+                          ? `owned by task #${task.owner}`
+                          : "conversation-owned"}
+                        {task.background ? " · background" : ""}
+                        {task.abortRequested ? " · cancellation requested" : ""}
+                      </p>
+                      {!!task.waitingOn.length && (
+                        <p>
+                          Waiting on:{" "}
+                          {task.waitingOn.map((id) => `#${id}`).join(", ")}
+                        </p>
+                      )}
+                      {task.wakeAt && (
+                        <p>Wake: {new Date(task.wakeAt).toLocaleString()}</p>
+                      )}
+                      {task.blockedReason && (
+                        <p>Blocked: {task.blockedReason}</p>
+                      )}
+                    </div>
+                  ))}
+                </details>
+              )}
             </>
           )}
           {panel === "extend" && (

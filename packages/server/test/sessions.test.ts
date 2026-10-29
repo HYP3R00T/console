@@ -380,7 +380,10 @@ test("active work blocks configuration changes without blocking another session"
         method: "PATCH",
         url: `${endpoints[1]}/sandbox`,
         headers,
-        payload: defaultSandbox(),
+        payload: {
+          ...defaultSandbox(),
+          workspace: (await app.inject(endpoints[1])).json().sandbox.workspace,
+        },
       })
     ).statusCode,
     409,

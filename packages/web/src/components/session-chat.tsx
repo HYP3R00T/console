@@ -13,10 +13,12 @@ import type { ReactNode } from "react";
 import { ChatComposer } from "@/components/chat-composer";
 import { MessageReasoning } from "@/components/message-reasoning";
 import { Button } from "@/components/ui/button";
-import type { Conversation } from "@/lib/console-api";
+import { useChatHistory } from "@/components/use-chat-history";
+import type { Conversation, MessageMode } from "@/lib/console-api";
 
 export function SessionChat({
   session,
+  historyPath,
   machineName,
   projectName,
   agentName,
@@ -33,8 +35,12 @@ export function SessionChat({
   onControl,
   onConfigure,
   modelPicker,
+  mode,
+  onMode,
+  onWithdraw,
 }: {
   session: Conversation;
+  historyPath: string;
   machineName?: string;
   projectName?: string;
   agentName?: string;
@@ -47,11 +53,15 @@ export function SessionChat({
   text: string;
   uncertain: boolean;
   onText: (text: string) => void;
-  onSend: () => void;
+  onSend: (mode?: MessageMode) => void;
+  mode: MessageMode;
+  onMode: (mode: MessageMode) => void;
+  onWithdraw: (id: string) => void;
   onConfigure: () => void;
   modelPicker: ReactNode;
   onControl: (action: "cancel" | "resume") => void;
 }) {
+  const history = useChatHistory(session, historyPath);
   const busy = session.status !== "idle";
   return (
     <section
@@ -90,7 +100,7 @@ export function SessionChat({
             onClick={onConfigure}
             title={session.name}
           >
-            {agentName ?? session.name} · #{session.conversationId}
+            {agentName ?? session.name}
           </button>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -122,94 +132,182 @@ export function SessionChat({
         </div>
       </header>
       <section
-        className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-8 sm:px-6"
+        ref={history.viewport}
+        style={{ overflowAnchor: "none" }}
+        onScroll={history.onScroll}
+        onWheel={(event) => history.onWheel(event.deltaY)}
+        className="min-h-0 flex-1 overflow-y-auto"
         aria-label="Conversation history"
       >
-        {!session.messages.length && (
-          <div className="mx-auto flex min-h-64 max-w-lg flex-col items-center justify-center gap-4 py-12 text-center">
-            <div className="rounded-none border bg-muted/30 p-4">
-              <TerminalSquareIcon className="size-7" aria-hidden="true" />
-            </div>
-            <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-              Your session is ready
-            </p>
-            <h3 className="text-2xl font-semibold tracking-tight">
-              A conversation with continuity.
-            </h3>
-            <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-              Messages and execution stay on this machine, beyond this window.
-              Choose a model, then start with a clear task.
-            </p>
-            <Button variant="outline" size="sm" onClick={onConfigure}>
-              Configure this session
-            </Button>
-          </div>
-        )}
-        {session.hasOlder && (
-          <p className="text-xs text-muted-foreground">
-            Showing the most recent 100 entries. Older history remains saved.
-          </p>
-        )}
-        {session.messages.map(
-          (message) =>
-            Boolean(message.text || message.reasoning?.length) && (
-              <article
-                key={message.id}
-                className={`mx-auto max-w-3xl space-y-3 ${message.role === "user" ? "flex flex-col items-end py-2" : "py-4"}`}
+        <div ref={history.content} className="space-y-6 px-4 py-8 sm:px-6">
+          {history.hasOlder && (
+            <div className="mx-auto flex max-w-3xl justify-center">
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={history.loading}
+                onClick={() => void history.loadOlder()}
               >
-                <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {message.role === "user"
-                    ? "You"
-                    : message.role === "toolResult"
-                      ? `Tool · ${message.toolName}`
-                      : "Assistant"}
-                </h2>
-                <MessageReasoning parts={message.reasoning} />
-                {message.text && (
-                  <p
-                    className={`whitespace-pre-wrap wrap-break-word text-sm leading-7 ${message.role === "user" ? "max-w-[90%] rounded-none bg-muted/60 px-4 py-3" : ""}`}
-                  >
-                    {message.text}
-                  </p>
-                )}
-                {message.entryId && message.role === "assistant" && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-xs text-muted-foreground"
-                    disabled={!online || working || busy}
-                    onClick={() => onFork(message.entryId ?? "")}
-                  >
-                    Fork from here
-                  </Button>
-                )}
-              </article>
-            ),
-        )}
-        {(session.partial || !!session.partialReasoning?.length) && (
-          <article
-            key={session.partialId}
-            className="mx-auto max-w-3xl space-y-2 p-4"
-          >
-            <h2 className="text-xs font-medium text-muted-foreground">
-              Assistant · generating
-            </h2>
-            <MessageReasoning parts={session.partialReasoning} />
-            {session.partial && (
-              <p className="whitespace-pre-wrap wrap-break-word text-sm leading-7">
-                {session.partial}
-              </p>
-            )}
-          </article>
-        )}
-        {session.outcome &&
-          !["done", "placed", "queued"].includes(session.outcome) && (
-            <p role="status" className="text-sm text-muted-foreground">
-              Last input ended: {session.outcome}
+                {history.loading
+                  ? "Loading earlier messages…"
+                  : "Load earlier messages"}
+              </Button>
+            </div>
+          )}
+          {history.error && (
+            <p
+              role="alert"
+              className="mx-auto max-w-3xl text-xs text-destructive"
+            >
+              {history.error}
             </p>
           )}
+          {!history.messages.length && (
+            <div className="mx-auto flex min-h-64 max-w-lg flex-col items-center justify-center gap-4 py-12 text-center">
+              <div className="rounded-none border bg-muted/30 p-4">
+                <TerminalSquareIcon className="size-7" aria-hidden="true" />
+              </div>
+              <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                Your conversation is ready
+              </p>
+              <h3 className="text-2xl font-semibold tracking-tight">
+                A conversation with continuity.
+              </h3>
+              <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+                {configured && session.model
+                  ? "Send a message to get started."
+                  : "Choose a connected model to get started."}
+              </p>
+              {(!configured || !session.model) && (
+                <Button variant="outline" size="sm" onClick={onConfigure}>
+                  Choose a model
+                </Button>
+              )}
+            </div>
+          )}
+          {history.messages.map(
+            (message) =>
+              Boolean(
+                message.text ||
+                  message.reasoning?.length ||
+                  message.toolCalls?.length,
+              ) && (
+                <article
+                  key={message.id}
+                  data-message-id={message.id}
+                  className={`mx-auto max-w-3xl space-y-3 ${message.role === "user" ? "flex flex-col items-end py-2" : "py-4"}`}
+                >
+                  <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {message.kind === "pi.compaction"
+                      ? "Context summary"
+                      : message.kind === "pi.reset"
+                        ? "Context handoff"
+                        : message.role === "user"
+                          ? "You"
+                          : message.role === "toolResult"
+                            ? `Tool · ${message.toolName}`
+                            : "Assistant"}
+                  </h2>
+                  <MessageReasoning parts={message.reasoning} />
+                  {message.toolCalls?.map((call) => (
+                    <details key={call.id} className="border p-3 text-xs">
+                      <summary>Call · {call.name}</summary>
+                      <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap wrap-break-word">
+                        {JSON.stringify(call.arguments, null, 2)}
+                      </pre>
+                    </details>
+                  ))}
+                  {message.text && (
+                    <p
+                      className={`whitespace-pre-wrap wrap-break-word text-sm leading-7 ${message.role === "user" ? "max-w-[90%] rounded-none bg-muted/60 px-4 py-3" : ""}`}
+                    >
+                      {message.text}
+                    </p>
+                  )}
+                  {message.entryId && message.role === "assistant" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs text-muted-foreground"
+                      disabled={!online || working || busy}
+                      onClick={() => onFork(message.entryId ?? "")}
+                    >
+                      Fork from here
+                    </Button>
+                  )}
+                </article>
+              ),
+          )}
+          {(session.liveTools ?? []).map((tool) => (
+            <details
+              key={tool.id}
+              className="mx-auto max-w-3xl border p-3 text-xs"
+              open={tool.status === "running"}
+            >
+              <summary>
+                {tool.name} · {tool.status}
+              </summary>
+              {tool.output && (
+                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap wrap-break-word">
+                  {tool.output}
+                </pre>
+              )}
+            </details>
+          ))}
+          {(session.partial || !!session.partialReasoning?.length) && (
+            <article
+              key={session.partialId}
+              className="mx-auto max-w-3xl space-y-2 p-4"
+            >
+              <h2 className="text-xs font-medium text-muted-foreground">
+                Assistant · generating
+              </h2>
+              <MessageReasoning parts={session.partialReasoning} />
+              {session.partial && (
+                <p className="whitespace-pre-wrap wrap-break-word text-sm leading-7">
+                  {session.partial}
+                </p>
+              )}
+            </article>
+          )}
+          {session.outcome &&
+            !["done", "placed", "queued"].includes(session.outcome) && (
+              <p role="status" className="text-sm text-muted-foreground">
+                Last input ended: {session.outcome}
+              </p>
+            )}
+        </div>
       </section>
+      {!!session.queue?.length && (
+        <section
+          aria-label="Queued messages"
+          className="max-h-48 shrink-0 overflow-auto border-t px-4 py-2 text-xs"
+        >
+          {session.queue.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-start justify-between gap-3 py-1"
+            >
+              <p className="whitespace-pre-wrap wrap-break-word">
+                <strong>{item.mode === "steer" ? "Steer" : "Follow-up"}</strong>{" "}
+                · {item.text}
+              </p>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={!online || working}
+                onClick={() => onWithdraw(item.id)}
+              >
+                Withdraw
+              </Button>
+            </div>
+          ))}
+        </section>
+      )}
       <ChatComposer
+        modesAvailable={session.queue !== undefined}
+        mode={mode}
+        onMode={onMode}
         text={text}
         disabled={working || uncertain}
         busy={busy}
@@ -217,7 +315,13 @@ export function SessionChat({
           working ||
           !online ||
           (!uncertain &&
-            (busy || dirty || !configured || !session.model || !text.trim()))
+            ((busy && (mode === "reject" || session.queue === undefined)) ||
+              session.status === "interrupted" ||
+              session.status === "unavailable" ||
+              dirty ||
+              !configured ||
+              !session.model ||
+              !text.trim()))
         }
         canCancel={online && !working}
         uncertain={uncertain}

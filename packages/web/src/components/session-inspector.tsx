@@ -4,7 +4,9 @@ import { SlidersHorizontalIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ChoiceSelect } from "@/components/choice-select";
+import { ConversationRuntime } from "@/components/conversation-runtime";
 import { useModelPreferences } from "@/components/model-preferences";
+import { ProjectResources } from "@/components/project-resources";
 import { SandboxSettings } from "@/components/sandbox-settings";
 import { Button } from "@/components/ui/button";
 import type {
@@ -22,6 +24,7 @@ export function SessionInspector({
   onDirtyChange,
   onSandboxSave,
   onSandboxDirtyChange,
+  onResourcePrompt,
 }: {
   session: Conversation;
   providers: Provider[];
@@ -30,6 +33,7 @@ export function SessionInspector({
   onDirtyChange: (dirty: boolean) => void;
   onSandboxSave: (policy: SandboxPolicy) => Promise<void>;
   onSandboxDirtyChange: (dirty: boolean) => void;
+  onResourcePrompt: (text: string) => void;
 }) {
   const router = useRouter();
   const preferences = useModelPreferences();
@@ -82,7 +86,7 @@ export function SessionInspector({
           className="size-4 text-muted-foreground"
           aria-hidden="true"
         />
-        <h2 className="font-semibold">Session configuration</h2>
+        <h2 className="font-semibold">Conversation configuration</h2>
       </header>
       {!providers.some((item) => item.configured) && (
         <p className="text-sm text-muted-foreground">
@@ -201,10 +205,20 @@ export function SessionInspector({
         <p className="text-xs text-muted-foreground">
           {dirty
             ? "Unsaved settings. Save before sending."
-            : "Settings are saved with this session."}{" "}
+            : "Settings are saved with this conversation."}{" "}
           Finish or cancel active work before changing them.
         </p>
       </form>
+      <ConversationRuntime
+        session={session}
+        path={`/sessions/${session.id}${session.conversationId ? `/conversations/${session.conversationId}` : ""}`}
+        disabled={disabled || dirty}
+      />
+      <ProjectResources
+        session={session}
+        path={`/sessions/${session.id}${session.conversationId ? `/conversations/${session.conversationId}` : ""}`}
+        onUse={onResourcePrompt}
+      />
       <section className="space-y-2 border-t pt-4">
         <h3 className="text-sm font-medium">Enabled tools</h3>
         <p className="wrap-break-word text-xs leading-relaxed text-muted-foreground">

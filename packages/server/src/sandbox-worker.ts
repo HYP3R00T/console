@@ -25,7 +25,14 @@ type Request = {
     | "list"
     | "mkdir"
     | "probe-network"
-    | "command";
+    | "command"
+    | "pi"
+    | "resources";
+  resourceKind?: "skill" | "prompt";
+  resourceName?: string;
+  directory?: string;
+  tool?: string;
+  args?: Record<string, unknown>;
   home?: string;
   command?: string;
   cwd?: string;
@@ -36,6 +43,38 @@ type Request = {
   protocol?: "tcp" | "udp";
 };
 async function execute(request: Request) {
+  if (request.operation === "resources") {
+    const { loadProjectResource, projectResources } = await import(
+      "./project-resources.ts"
+    );
+    return JSON.stringify(
+      request.resourceKind && request.resourceName
+        ? loadProjectResource(
+            process.cwd(),
+            request.resourceKind,
+            request.resourceName,
+          )
+        : projectResources(process.cwd(), request.directory),
+    );
+  }
+  if (request.operation === "pi") {
+    for (const key of [
+      "HOME",
+      "XDG_CONFIG_HOME",
+      "XDG_STATE_HOME",
+      "XDG_CACHE_HOME",
+      "XDG_DATA_HOME",
+      "XDG_RUNTIME_DIR",
+      "TMPDIR",
+      "TMP",
+      "TEMP",
+    ])
+      process.env[key] = request.home;
+    const { executePiTool } = await import("./sandbox-pi.ts");
+    return JSON.stringify(
+      await executePiTool(request.tool ?? "", request.args ?? {}),
+    );
+  }
   if (request.operation === "command") {
     const cwd = resolve(process.cwd(), request.cwd || ".");
     const relation = relative(process.cwd(), cwd);

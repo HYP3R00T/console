@@ -5,13 +5,13 @@ import {
   FolderIcon,
   FolderPlusIcon,
   MessageSquareIcon,
-  MessagesSquareIcon,
   MonitorIcon,
   PencilIcon,
   PlusIcon,
   SettingsIcon,
+  TrashIcon,
 } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   type ReactNode,
   useCallback,
@@ -19,9 +19,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { ConfirmDelete } from "@/components/confirm-delete";
 import { useBackend } from "@/components/console-shell";
-import { Button } from "@/components/ui/button";
+import { ProjectDialog } from "@/components/project-dialog";
+import { type TreeAction, TreeRow } from "@/components/tree-row";
 import {
   Collapsible,
   CollapsibleContent,
@@ -35,32 +35,41 @@ import {
   type Workspace,
 } from "@/lib/console-api";
 
-function ActionOverlay({ children }: { children: ReactNode }) {
-  return (
-    <span className="pointer-events-none absolute top-1/2 right-0 z-10 flex h-6 -translate-y-1/2 items-center bg-background opacity-0 group-hover:pointer-events-auto group-hover:bg-accent group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:bg-accent group-focus-within:opacity-100">
-      {children}
-    </span>
-  );
-}
-
 function Branch({
   label,
+  name,
   children,
   actions,
   initial = false,
   onActivate,
   editing,
+  quickAction,
+  selected = false,
+  revealKey,
 }: {
   label: ReactNode;
+  name: string;
   children: ReactNode;
-  actions?: ReactNode;
+  actions?: TreeAction[];
   initial?: boolean;
   onActivate?: () => void;
   editing?: boolean;
+  quickAction?: TreeAction;
+  selected?: boolean;
+  revealKey?: string;
 }) {
+  const [open, setOpen] = useState(initial);
+  useEffect(() => {
+    if (revealKey) setOpen(true);
+  }, [revealKey]);
   return (
-    <Collapsible defaultOpen={initial} className="min-w-0">
-      <div className="group relative flex items-center gap-1 py-1">
+    <Collapsible open={open} onOpenChange={setOpen} className="min-w-0">
+      <TreeRow
+        name={name}
+        actions={editing ? [] : actions}
+        quickAction={quickAction}
+        className={selected ? "bg-accent" : ""}
+      >
         {editing ? (
           <div className="flex min-w-0 flex-1 items-center gap-1.5 p-1">
             <ChevronRightIcon
@@ -72,103 +81,28 @@ function Branch({
         ) : (
           <CollapsibleTrigger
             onClick={onActivate}
-            className="group flex min-w-0 flex-1 items-center gap-1.5 p-1 text-left text-xs hover:bg-accent"
+            className="group flex min-w-0 flex-1 items-center gap-1.5 p-1 text-left text-xs"
           >
             <ChevronRightIcon className="size-3 shrink-0 group-data-[panel-open]:rotate-90" />
             {label}
           </CollapsibleTrigger>
         )}
-        {actions && !editing && <ActionOverlay>{actions}</ActionOverlay>}
-      </div>
+      </TreeRow>
       <CollapsibleContent>
         <div className="ml-2 border-l pl-1">{children}</div>
       </CollapsibleContent>
     </Collapsible>
   );
 }
-function RowActions({
-  name,
-  path,
-  machineId,
-  refresh,
-  create,
-  onRename,
-}: {
-  name: string;
-  path: string;
-  machineId: string;
-  refresh: () => void;
-  create?: () => void;
-  onRename: () => void;
-}) {
-  const [error, setError] = useState("");
-  const [working, setWorking] = useState(false);
-  async function mutate(method: string, body?: unknown) {
-    setWorking(true);
-    setError("");
-    try {
-      await api(path, method, body, undefined, machineId);
-      if (method === "DELETE")
-        window.dispatchEvent(
-          new CustomEvent("console:tree-deleted", {
-            detail: { machineId, path },
-          }),
-        );
-      refresh();
-    } catch (cause) {
-      setError((cause as Error).message);
-    } finally {
-      setWorking(false);
-    }
-  }
-  return (
-    <span className="flex shrink-0 items-center">
-      {create && (
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label={`New conversation in ${name}`}
-          onClick={create}
-        >
-          <PlusIcon className="size-3" />
-        </Button>
-      )}
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label={`Rename ${name}`}
-        onClick={onRename}
-      >
-        <PencilIcon className="size-3" />
-      </Button>
-      <ConfirmDelete
-        compact
-        label={`Move ${name} to Trash`}
-        disabled={working}
-        onConfirm={() => void mutate("DELETE")}
-      />
-      {error && (
-        <span
-          role="alert"
-          className="absolute top-full left-0 z-20 border bg-popover p-2 text-xs text-destructive"
-        >
-          {error}
-          <button type="button" onClick={() => setError("")}>
-            Dismiss
-          </button>
-        </span>
-      )}
-    </span>
-  );
-}
-
 export function NetworkSidebar({
   selected,
+  creating,
   conversationId,
   onSelect,
   onNew,
 }: {
   selected: string;
+  creating?: boolean;
   conversationId?: string;
   onSelect: (sessionId: string, conversationId?: string) => void;
   onNew: (projectId: string) => void;
@@ -182,6 +116,7 @@ export function NetworkSidebar({
           machine={machine}
           active={machine.id === id}
           selected={selected}
+          creating={creating}
           conversationId={conversationId}
           onSelect={onSelect}
           onNew={onNew}
@@ -192,6 +127,7 @@ export function NetworkSidebar({
 }
 function MachineBranch({
   machine,
+  creating,
   active,
   selected,
   conversationId,
@@ -199,6 +135,7 @@ function MachineBranch({
   onNew,
 }: {
   machine: BackendConnection;
+  creating?: boolean;
   active: boolean;
   selected: string;
   conversationId?: string;
@@ -206,6 +143,7 @@ function MachineBranch({
   onNew: (id: string) => void;
 }) {
   const { select: selectMachine } = useBackend();
+  const router = useRouter();
   const [data, setData] = useState<{
     projects: Workspace[];
     sessions: SessionSummary[];
@@ -214,7 +152,7 @@ function MachineBranch({
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const [actionError, setActionError] = useState("");
-  const attempts = useRef<Record<string, string>>({});
+  const [addingProject, setAddingProject] = useState(false);
   const [edit, setEdit] = useState<{ path: string; value: string }>();
   const editRef = useRef<typeof edit>(undefined);
   const focusName = useCallback((node: HTMLInputElement | null) => {
@@ -349,24 +287,37 @@ function MachineBranch({
         `/chat?backend=${encodeURIComponent(machine.id)}&session=${encodeURIComponent(sid)}${cid ? `&conversation=${encodeURIComponent(cid)}` : ""}`,
       );
   }
-  async function create(sid: string) {
-    try {
-      setActionError("");
-      const requestId = attempts.current[sid] ?? crypto.randomUUID();
-      attempts.current[sid] = requestId;
-      const row = await api<ConversationSummary>(
-        `/sessions/${sid}/conversations`,
-        "POST",
-        { requestId },
-        undefined,
-        machine.id,
-      );
-      delete attempts.current[sid];
-      refresh();
-      open(sid, row.id);
-    } catch (cause) {
-      setActionError((cause as Error).message);
-    }
+  function rowActions(
+    name: string,
+    path: string,
+    trashPath = path,
+  ): TreeAction[] {
+    return [
+      { label: "Rename", icon: PencilIcon, run: () => startRename(path, name) },
+      {
+        label: "Move to Trash",
+        icon: TrashIcon,
+        destructive: true,
+        run: async () => {
+          try {
+            setActionError("");
+            await api(trashPath, "DELETE", undefined, undefined, machine.id);
+            window.dispatchEvent(
+              new CustomEvent("console:tree-deleted", {
+                detail: { machineId: machine.id, path: trashPath },
+              }),
+            );
+            refresh();
+          } catch (cause) {
+            setActionError((cause as Error).message);
+          }
+        },
+      },
+    ];
+  }
+  function navigate(path: string) {
+    selectMachine(machine.id);
+    router.push(path);
   }
   function agents(sid: string, parentId?: string): ReactNode {
     const all = data?.conversations[sid] ?? [];
@@ -382,36 +333,38 @@ function MachineBranch({
         const chosen =
           active &&
           selected === sid &&
-          (conversationId ? conversationId === item.id : item.name === "Main");
+          (conversationId
+            ? conversationId === item.id
+            : item.isMain || item.name === "Main");
+        const name =
+          (item.isMain || item.name === "Main") && item.name === "Main"
+            ? (data?.sessions.find((session) => session.id === sid)?.name ??
+              item.name)
+            : item.name;
         const label = (
           <>
             <MessageSquareIcon className="size-3 shrink-0" />
-            {nameLabel(item.name, `/sessions/${sid}/conversations/${item.id}`)}
-            {!item.name.endsWith(`#${item.id}`) && (
-              <span className="ml-auto shrink-0 pr-1 text-[10px] text-muted-foreground">
+            {nameLabel(name, `/sessions/${sid}/conversations/${item.id}`)}
+            {!item.isMain && !item.name.endsWith(`#${item.id}`) && (
+              <span className="ml-auto shrink-0 pr-1 text-[10px] text-muted-foreground group-hover/row:hidden group-focus-within/row:hidden [@media(hover:none)]:hidden">
                 #{item.id}
               </span>
             )}
           </>
         );
-        const actions = (
-          <RowActions
-            name={item.name}
-            onRename={() =>
-              startRename(
-                `/sessions/${sid}/conversations/${item.id}`,
-                item.name,
-              )
-            }
-            path={`/sessions/${sid}/conversations/${item.id}`}
-            machineId={machine.id}
-            refresh={refresh}
-          />
+        const actions = rowActions(
+          name,
+          `/sessions/${sid}/conversations/${item.id}`,
+          all.length === 1
+            ? `/sessions/${sid}`
+            : `/sessions/${sid}/conversations/${item.id}`,
         );
         return (
-          <div key={item.id} className={chosen ? "bg-accent" : ""}>
+          <div key={item.id}>
             {all.some((child) => child.parentId === item.id) ? (
               <Branch
+                name={name}
+                selected={Boolean(chosen)}
                 initial
                 editing={
                   edit?.path === `/sessions/${sid}/conversations/${item.id}`
@@ -423,7 +376,15 @@ function MachineBranch({
                 {agents(sid, item.id)}
               </Branch>
             ) : (
-              <div className="group relative flex items-center">
+              <TreeRow
+                className={chosen ? "bg-accent" : ""}
+                name={name}
+                actions={
+                  edit?.path === `/sessions/${sid}/conversations/${item.id}`
+                    ? []
+                    : actions
+                }
+              >
                 {edit?.path === `/sessions/${sid}/conversations/${item.id}` ? (
                   <div className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-2">
                     {label}
@@ -432,173 +393,169 @@ function MachineBranch({
                   <button
                     type="button"
                     aria-current={chosen ? "page" : undefined}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-2 text-left text-xs hover:bg-accent"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-2 text-left text-xs"
                     onClick={() => open(sid, item.id)}
                   >
                     {label}
                   </button>
                 )}
-                {edit?.path !== `/sessions/${sid}/conversations/${item.id}` && (
-                  <ActionOverlay>{actions}</ActionOverlay>
-                )}
-              </div>
+              </TreeRow>
             )}
           </div>
         );
       });
   }
-  const projects = [
-    ...(data?.projects ?? []),
-    ...(data?.sessions.some((item) => !item.workspaceId)
-      ? [{ id: "", name: "No project", path: "" }]
-      : []),
-  ];
+  function newConversation(project: Workspace) {
+    if (creating || error || (project.state && project.state !== "ready"))
+      return;
+    if (active) onNew(project.id);
+    else
+      navigate(
+        `/chat?backend=${encodeURIComponent(machine.id)}&workspace=${encodeURIComponent(project.id)}&new=1`,
+      );
+  }
+  const projects = data?.projects ?? [];
   return (
-    <Branch
-      initial={active}
-      label={
-        <>
-          <MonitorIcon className="size-3.5 shrink-0" />
-          <span className="min-w-0 flex-1 truncate font-medium">
-            {machine.name}
-          </span>
-          <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
-            {machine.local ? "local" : "remote"} ·{" "}
-            {error
-              ? "offline"
-              : data
-                ? `${data.sessions.length} sessions`
-                : "connecting"}
-          </span>
-        </>
-      }
-      actions={
-        <Link
-          className="flex size-6 items-center justify-center"
-          href={`/settings?section=machine&backend=${encodeURIComponent(machine.id)}`}
-          onClick={() => selectMachine(machine.id)}
-          aria-label={`Configure ${machine.name}`}
-        >
-          <SettingsIcon className="size-3" />
-        </Link>
-      }
-    >
-      {error && (
-        <p role="status" className="p-2 text-xs text-muted-foreground">
-          {error}
-        </p>
-      )}
-      {actionError && (
-        <p role="alert" className="p-2 text-xs text-destructive">
-          {actionError}
-        </p>
-      )}
-      {!error && (
-        <Link
-          href={`/workspaces?backend=${encodeURIComponent(machine.id)}`}
-          onClick={() => selectMachine(machine.id)}
-          className="flex items-center gap-1.5 p-2 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <FolderPlusIcon className="size-3 shrink-0" aria-hidden="true" />
-          Add project
-        </Link>
-      )}
-      {projects.map((project) => (
+    <>
+      <Branch
+        name={machine.name}
+        initial={active}
+        label={
+          <>
+            <MonitorIcon className="size-3.5 shrink-0" />
+            <span className="min-w-0 flex-1 truncate font-medium">
+              {machine.name}
+            </span>
+            <span className="ml-auto shrink-0 text-[10px] text-muted-foreground group-hover/row:hidden group-focus-within/row:hidden [@media(hover:none)]:hidden">
+              {machine.local ? "local" : "remote"} ·{" "}
+              {error
+                ? "offline"
+                : data
+                  ? `${data.sessions.length} conversations`
+                  : "connecting"}
+            </span>
+          </>
+        }
+        actions={[
+          {
+            label: "Machine settings",
+            icon: SettingsIcon,
+            run: () =>
+              navigate(
+                `/settings?section=machine&backend=${encodeURIComponent(machine.id)}`,
+              ),
+          },
+          {
+            label: "Add project",
+            icon: FolderPlusIcon,
+            run: () => setAddingProject(true),
+          },
+        ]}
+      >
+        {error && (
+          <p role="status" className="p-2 text-xs text-muted-foreground">
+            {error}
+          </p>
+        )}
+        {actionError && (
+          <p role="alert" className="p-2 text-xs text-destructive">
+            {actionError}
+          </p>
+        )}
         <Branch
-          key={project.id}
-          initial={active}
-          editing={edit?.path === `/workspaces/${project.id}`}
+          name="Projects"
+          initial
           label={
-            <>
-              <FolderIcon className="size-3 shrink-0" />
-              {nameLabel(project.name, `/workspaces/${project.id}`)}
-            </>
+            <span className="min-w-0 flex-1 text-muted-foreground">
+              Projects
+            </span>
           }
-          actions={
-            <>
-              {
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label={`New session in ${project.name}`}
-                  onClick={() =>
-                    active
-                      ? onNew(project.id)
-                      : window.location.assign(
-                          `/chat?backend=${encodeURIComponent(machine.id)}&workspace=${encodeURIComponent(project.id)}&new=1`,
-                        )
-                  }
-                >
-                  <PlusIcon className="size-3" />
-                </Button>
-              }
-              {project.id && (
-                <Link
-                  className="flex size-6 items-center justify-center"
-                  aria-label={`Configure project ${project.name}`}
-                  href={`/chat?backend=${encodeURIComponent(machine.id)}&inspect=project&workspace=${encodeURIComponent(project.id)}`}
-                  onClick={(event) => {
-                    if (active) {
-                      event.preventDefault();
-                      window.dispatchEvent(
-                        new CustomEvent("console:inspect-project", {
-                          detail: project.id,
-                        }),
-                      );
-                    } else selectMachine(machine.id);
-                  }}
-                >
-                  <SettingsIcon className="size-3" />
-                </Link>
-              )}
-              {project.id && (
-                <RowActions
-                  name={project.name}
-                  onRename={() =>
-                    startRename(`/workspaces/${project.id}`, project.name)
-                  }
-                  path={`/workspaces/${project.id}`}
-                  machineId={machine.id}
-                  refresh={refresh}
-                />
-              )}
-            </>
-          }
+          quickAction={{
+            label: `Add project on ${machine.name}`,
+            icon: PlusIcon,
+            run: () => setAddingProject(true),
+          }}
         >
-          {data?.sessions
-            .filter((item) => (item.workspaceId ?? "") === project.id)
-            .map((item) => (
-              <Branch
-                key={item.id}
-                initial={active && item.id === selected}
-                editing={edit?.path === `/sessions/${item.id}`}
-                label={
-                  <>
-                    <MessagesSquareIcon
-                      className="size-3 shrink-0"
-                      aria-hidden="true"
-                    />
-                    {nameLabel(item.name, `/sessions/${item.id}`)}
-                  </>
-                }
-                actions={
-                  <RowActions
-                    name={item.name}
-                    onRename={() =>
-                      startRename(`/sessions/${item.id}`, item.name)
-                    }
-                    path={`/sessions/${item.id}`}
-                    machineId={machine.id}
-                    refresh={refresh}
-                    create={() => void create(item.id)}
-                  />
-                }
-              >
-                {agents(item.id)}
-              </Branch>
-            ))}
+          {projects.map((project) => (
+            <Branch
+              key={project.id}
+              name={project.name}
+              initial={active}
+              revealKey={
+                data?.sessions.some(
+                  (item) =>
+                    item.id === selected && item.workspaceId === project.id,
+                )
+                  ? `${selected}:${conversationId ?? ""}`
+                  : undefined
+              }
+              quickAction={{
+                label: `New conversation in ${project.name}`,
+                icon: PlusIcon,
+                disabled:
+                  creating ||
+                  Boolean(error) ||
+                  Boolean(project.state && project.state !== "ready"),
+                run: () => newConversation(project),
+              }}
+              editing={edit?.path === `/workspaces/${project.id}`}
+              label={
+                <>
+                  <FolderIcon className="size-3 shrink-0" />
+                  {nameLabel(project.name, `/workspaces/${project.id}`)}
+                </>
+              }
+              actions={[
+                {
+                  label: "New conversation",
+                  icon: PlusIcon,
+                  disabled:
+                    creating ||
+                    Boolean(error) ||
+                    Boolean(project.state && project.state !== "ready"),
+                  run: () => newConversation(project),
+                },
+                ...(project.id
+                  ? [
+                      {
+                        label: "Project settings",
+                        icon: SettingsIcon,
+                        run: () => {
+                          if (active)
+                            window.dispatchEvent(
+                              new CustomEvent("console:inspect-project", {
+                                detail: project.id,
+                              }),
+                            );
+                          else
+                            navigate(
+                              `/chat?backend=${encodeURIComponent(machine.id)}&inspect=project&workspace=${encodeURIComponent(project.id)}`,
+                            );
+                        },
+                      },
+                      ...(!project.isDefault
+                        ? rowActions(project.name, `/workspaces/${project.id}`)
+                        : []),
+                    ]
+                  : []),
+              ]}
+            >
+              {data?.sessions
+                .filter((item) => (item.workspaceId ?? "") === project.id)
+                .map((item) => (
+                  <div key={item.id}>{agents(item.id)}</div>
+                ))}
+            </Branch>
+          ))}
         </Branch>
-      ))}
-    </Branch>
+      </Branch>
+      <ProjectDialog
+        open={addingProject}
+        machineId={machine.id}
+        machineName={machine.name}
+        onClose={() => setAddingProject(false)}
+        onCreated={refresh}
+      />
+    </>
   );
 }

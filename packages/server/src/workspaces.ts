@@ -16,6 +16,7 @@ export type Workspace = {
   state: string;
   deleted: number;
   lastConfiguration: string | null;
+  isDefault: number;
   error?: string | null;
 };
 export function cloneRepository(
@@ -85,6 +86,7 @@ export function openWorkspaces(
     ["state", "TEXT NOT NULL DEFAULT 'ready'"],
     ["deleted", "INTEGER NOT NULL DEFAULT 0"],
     ["lastConfiguration", "TEXT"],
+    ["isDefault", "INTEGER NOT NULL DEFAULT 0"],
   ])
     if (!columns.includes(name))
       db.exec(`ALTER TABLE workspaces ADD COLUMN ${name} ${type}`);
@@ -151,7 +153,21 @@ export function openWorkspaces(
     })();
     jobs.set(item.id, { controller, done });
   }
-  return {
+  const catalog = {
+    async ensureDefault(): Promise<Workspace> {
+      const existing = db
+        .prepare("SELECT * FROM workspaces WHERE isDefault=1")
+        .get() as Workspace | undefined;
+      if (existing) return existing;
+      const item = await catalog.create({
+        name: "Default",
+        path: join(`${directory}-projects`, "default"),
+        createDirectory: true,
+        requestId: "console:default-project",
+      });
+      db.prepare("UPDATE workspaces SET isDefault=1 WHERE id=?").run(item.id);
+      return get(item.id);
+    },
     list: (trash = false) =>
       db
         .prepare("SELECT * FROM workspaces WHERE deleted=? ORDER BY name")
@@ -273,7 +289,8 @@ export function openWorkspaces(
           );
         } else {
           try {
-            if (input.createDirectory) await mkdir(path, { recursive: true });
+            if (input.createDirectory)
+              await mkdir(path, { recursive: true, mode: 0o700 });
             path = await realpath(path);
             if (!(await stat(path)).isDirectory()) throw new Error();
           } catch {
@@ -342,7 +359,8 @@ export function openWorkspaces(
       return get(id);
     },
     async trash(id: string) {
-      get(id);
+      if (get(id).isDefault)
+        throw httpError(409, "The Default project cannot be deleted.");
       const job = jobs.get(id);
       job?.controller.abort();
       await job?.done;
@@ -365,6 +383,7 @@ export function openWorkspaces(
       db.close();
     },
   };
+  return catalog;
 }
 export function registerWorkspaces(
   app: FastifyInstance,
@@ -394,7 +413,12 @@ export function registerWorkspaces(
             name,
             path: { type: "string", maxLength: 2000 },
             repository: { type: "string", maxLength: 2000 },
-            requestId: { type: "string", minLength: 1, maxLength: 200 },
+            requestId: {
+              type: "string",
+              minLength: 1,
+              maxLength: 200,
+              pattern: "^(?!console:).+",
+            },
             createDirectory: { type: "boolean" },
           },
         },

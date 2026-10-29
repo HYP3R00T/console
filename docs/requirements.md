@@ -31,9 +31,9 @@ the conversation model later. Separate conversations do not automatically isolat
 
 Begin with one user, one local backend, a web client, and manually submitted work in an existing
 workspace. Prove this path before adding remote hosts, additional clients, or automatic triggers.
-The current integration proves isolated, named sessions and configurable model conversations. Users can create, select, and reopen sessions and save model/thinking settings. An optional sandbox policy selects a readable workspace, explicit read/write directories, and blocked/unrestricted network access. Sandboxed shell execution is available only with explicit command permission; native history forks and task-owned subagents are implemented.
+The current integration proves isolated, named sessions and configurable model conversations. Users can create, select, and reopen sessions and save model/thinking settings. A sandbox policy selects a readable workspace, explicit read/write directories, and blocked/unrestricted network access. New project conversations use project-confined coding tools and commands with network blocked; users can narrow or disable that policy. Sandboxed shell execution is available only with explicit command permission; native history forks and task-owned subagents are implemented.
 
-Machine settings persist a readable name, default project directory, and model defaults. Projects can register directories or clone public GitHub repositories. Sessions receive automatic numbers; additional agents use Pi conversation IDs and can be renamed. Native forks and delegated child agents appear beneath their parent. Shared machine state, active-task inspection, tool selection, and installed extension controls are available. Sessions and conversations have recoverable deletion; project files and databases are retained. Home shows an overview; Chat provides a resizable machine/project/session tree and conversation. Agent controls open on demand; Settings is a full page for machine defaults, providers, and model preferences.
+Machine settings persist a readable name, default project directory, and model defaults. Projects can register directories or clone public GitHub repositories. Sessions receive automatic numbers; additional agents use Pi conversation IDs and can be renamed. Native forks and delegated child agents appear beneath their parent. Shared machine state, active-task inspection, tool selection, and installed extension controls are available. Sessions and conversations have recoverable deletion; project files and databases are retained. Home shows an overview; Chat provides a resizable machine/project/conversation tree. Session containers remain internal. Each machine has a persistent Default project for unassigned conversations, with an independent working directory; existing saved grants are preserved during association. Agent controls open on demand; Settings is a full page for machine defaults, providers, and model preferences.
 
 Connection onboarding is explicit: the web app can start with no machine, validates a server's
 identity/API before saving a connection, and supports disconnect/reconnect without stopping work
@@ -73,6 +73,15 @@ actual installed Pi extensions, including prompt sections/hooks, within existing
 - Meaningful success means correct task outcomes and reliable lifecycle behavior, not the number of agents running.
 
 ## Later capabilities
+
+The [Pi capability delivery record](pi-capabilities.md) tracks the requested expansion across Pi,
+Pi Durable, and the reference Durable Pi application. Checked items describe delivered behavior;
+unchecked items are requested work, not implementation claims. Steering and queued follow-ups,
+withdrawal, usage/context inspection, manual compaction, and reset with an optional handoff are
+implemented. Restart still requires explicit Resume; new input must not implicitly resume saved work.
+Project Markdown instructions, discoverable skills and parameterized templates are also integrated
+inside the saved workspace policy. Existing Pi CLI plugins/config files need not load unchanged;
+Console provides equivalent features on its Durable runtime.
 
 Code-change review and durable approvals,
 schedules, authenticated event triggers, CLI/TUI clients, and collaboration have been discussed.

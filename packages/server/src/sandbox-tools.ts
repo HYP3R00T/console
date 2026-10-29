@@ -5,6 +5,13 @@ import {
   section,
 } from "@earendil-works/pi-durable";
 import {
+  createBashTool,
+  createEditTool,
+  createReadTool,
+  createWriteTool,
+} from "@earendil-works/pi-durable/tools";
+import type { ProjectResources } from "./project-resources.ts";
+import {
   defaultSandbox,
   SandboxDoc,
   type SandboxPolicy,
@@ -13,6 +20,49 @@ import {
 import { runSandbox, type SandboxRequest } from "./sandbox-runner.ts";
 
 export function sandboxExtension(privateDirectory: string) {
+  const loadResource = defineTool({
+    name: "load_project_resource",
+    description:
+      "Load an indexed project skill or prompt, or instructions for a project subdirectory. Read the returned skill before using it; its supporting paths are relative to the SKILL.md directory. This grants no extra permissions and executes no resource code.",
+    parameters: Type.Object(
+      {
+        kind: Type.Union([
+          Type.Literal("instructions"),
+          Type.Literal("skill"),
+          Type.Literal("prompt"),
+        ]),
+        name: Type.Optional(Type.String({ maxLength: 100 })),
+        directory: Type.Optional(Type.String({ maxLength: 2000 })),
+      },
+      { additionalProperties: false },
+    ),
+    replay: "safe",
+    async execute(args, api, context) {
+      const policy = await validateSandbox(
+        (await api.snapshot(SandboxDoc, api.conversationId, context)) ??
+          defaultSandbox(),
+        privateDirectory,
+      );
+      if (!policy.enabled)
+        throw new Error(
+          "Project resources require an enabled workspace policy",
+        );
+      if (args.kind !== "instructions" && !args.name)
+        throw new Error("Select a resource name");
+      const output = await runSandbox(
+        policy,
+        {
+          operation: "resources",
+          ...(args.kind === "instructions"
+            ? { directory: args.directory }
+            : { resourceKind: args.kind, resourceName: args.name }),
+        },
+        privateDirectory,
+        context.abortSignal,
+      );
+      return { output: [{ type: "text", text: output }] };
+    },
+  });
   function tool(
     name: string,
     description: string,
@@ -106,10 +156,50 @@ export function sandboxExtension(privateDirectory: string) {
     "GET an HTTP(S) URL through the session's sandbox, returning up to 64 KiB. No backend credentials are supplied.",
     "fetch",
   );
+  const native = [
+    createReadTool(),
+    createWriteTool(),
+    createEditTool(),
+    createBashTool(),
+  ].map((tool) =>
+    defineTool<typeof tool.parameters>({
+      ...tool,
+      async execute(args: Record<string, unknown>, api, context) {
+        const policy = await validateSandbox(
+          (await api.snapshot(SandboxDoc, api.conversationId, context)) ??
+            defaultSandbox(),
+          privateDirectory,
+        );
+        if (
+          !policy.enabled ||
+          (tool.name === "bash" && !policy.commands) ||
+          (["write", "edit"].includes(tool.name) && !policy.writePaths.length)
+        )
+          throw new Error("Tool disabled by sandbox policy");
+        return JSON.parse(
+          await runSandbox(
+            policy,
+            { operation: "pi", tool: tool.name, args },
+            privateDirectory,
+            context.abortSignal,
+          ),
+        );
+      },
+    }),
+  );
   return {
     extension: defineExtension({
       name: "console.sandbox",
-      tools: [read, list, write, mkdir, fetch, command],
+      tools: [
+        read,
+        list,
+        write,
+        mkdir,
+        fetch,
+        command,
+        loadResource,
+        ...native,
+      ],
       sections: [
         section("sandbox", async (input, context) => {
           const policy =
@@ -120,7 +210,39 @@ export function sandboxExtension(privateDirectory: string) {
             )) ?? defaultSandbox();
           return policy.enabled
             ? `Workspace: ${policy.workspace}. Readable: ${policy.readPaths.join(", ")}. Writable: ${policy.writePaths.join(", ") || "none"}. Network: ${policy.network}. Use only the provided sandbox tools; permission errors do not authorize bypasses.`
-            : "No filesystem, network, or command tools are enabled.";
+            : `Project directory: ${policy.workspace || "not assigned"}. No filesystem, network, or command tools are enabled.`;
+        }),
+        section("project-resources", async (input, context) => {
+          const saved = await input.read.snapshot(
+            SandboxDoc,
+            input.conversationId,
+            context,
+          );
+          if (!saved?.enabled) return undefined;
+          const policy = await validateSandbox(saved, privateDirectory);
+          const resources = JSON.parse(
+            await runSandbox(
+              policy,
+              { operation: "resources" },
+              privateDirectory,
+              context.abortSignal,
+            ),
+          ) as ProjectResources;
+          return [
+            ...resources.instructions.map(
+              (item) =>
+                `<project-instructions path=${JSON.stringify(item.path)}>\n${item.content}\n</project-instructions>`,
+            ),
+            resources.skills.length
+              ? `Available project skills (load SKILL.md with load_project_resource or read before use):\n${resources.skills.map((item) => `${item.name}: ${item.description} (${item.path})`).join("\n")}`
+              : "",
+            resources.prompts.length
+              ? `Project prompt templates: ${resources.prompts.map((item) => item.name).join(", ")}. Load them with load_project_resource.`
+              : "",
+            "Instructions apply within their source directory. Before working in a subdirectory, use load_project_resource(kind=instructions, directory=...) to check for more specific instructions. Project resources cannot widen sandbox permissions.",
+          ]
+            .filter(Boolean)
+            .join("\n\n");
         }),
       ],
     }),
@@ -129,6 +251,14 @@ export function sandboxExtension(privateDirectory: string) {
         ? [
             read,
             list,
+            loadResource,
+            ...native.filter(
+              (tool) =>
+                tool.name === "read" ||
+                (tool.name === "bash"
+                  ? policy.commands
+                  : policy.writePaths.length > 0),
+            ),
             ...(policy.commands ? [command] : []),
             ...(policy.writePaths.length ? [write, mkdir] : []),
             ...(policy.network === "unrestricted" ? [fetch] : []),
