@@ -11,13 +11,13 @@ import {
   PuzzleIcon,
   TerminalSquareIcon,
   WrenchIcon,
+  XIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePanelRef } from "react-resizable-panels";
 import { AgentPanels, type InspectorPanel } from "@/components/agent-panels";
 import { ComposerModelPicker } from "@/components/composer-model-picker";
 import { useBackend } from "@/components/connection-context";
-import { MachineSettings } from "@/components/machine-settings";
 import { NetworkSidebar } from "@/components/network-sidebar";
 import { NewSessionDialog } from "@/components/new-session-dialog";
 import { ProjectInspector } from "@/components/project-inspector";
@@ -77,9 +77,12 @@ export default function Home() {
   const [navigationOpen, setNavigationOpen] = usePanelOpen(
     "console.network-open",
   );
-  const [inspectorOpen, setInspectorOpen] = usePanelOpen(
-    "console.inspector-open",
+  const [inspectorOpen, setInspectorOpen] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URL(window.location.href).searchParams.get("inspect") === "project",
   );
+  const closeControl = useRef<HTMLButtonElement>(null);
   const [contextPanel, setContextPanel] = useState(() =>
     typeof window !== "undefined"
       ? (new URL(window.location.href).searchParams.get("inspect") ?? "")
@@ -91,22 +94,16 @@ export default function Home() {
       : "",
   );
   useEffect(() => {
-    const machine = () => {
-      setContextPanel("machine");
-      setInspectorOpen(true);
-    };
     const project = (event: Event) => {
       setInspectedProject((event as CustomEvent<string>).detail);
       setContextPanel("project");
       setInspectorOpen(true);
     };
-    window.addEventListener("console:inspect-machine", machine);
     window.addEventListener("console:inspect-project", project);
     return () => {
-      window.removeEventListener("console:inspect-machine", machine);
       window.removeEventListener("console:inspect-project", project);
     };
-  }, [setInspectorOpen]);
+  }, []);
   const [trashRevision, setTrashRevision] = useState(0);
   useEffect(() => {
     const changed = () => setTrashRevision((n) => n + 1);
@@ -116,20 +113,12 @@ export default function Home() {
   const [compact, setCompact] = useState(false);
   const [panel, setPanel] = useState<InspectorPanel>("session");
   const navigationRef = usePanelRef();
-  const inspectorRef = usePanelRef();
   const expandedNavigation = useRef(22);
-  const expandedInspector = useRef(28);
   function toggleNavigation() {
     if (navigationOpen)
       expandedNavigation.current =
         navigationRef.current?.getSize().asPercentage ?? 22;
     setNavigationOpen(!navigationOpen);
-  }
-  function toggleInspector() {
-    if (inspectorOpen)
-      expandedInspector.current =
-        inspectorRef.current?.getSize().asPercentage ?? 28;
-    setInspectorOpen(!inspectorOpen);
   }
   useEffect(() => {
     navigationRef.current?.resize(
@@ -137,10 +126,22 @@ export default function Home() {
     );
   }, [navigationOpen, navigationRef]);
   useEffect(() => {
-    inspectorRef.current?.resize(
-      inspectorOpen ? `${expandedInspector.current}%` : "40px",
-    );
-  }, [inspectorOpen, inspectorRef]);
+    if (!inspectorOpen) return;
+    const trigger =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    closeControl.current?.focus();
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented)
+        setInspectorOpen(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => {
+      window.removeEventListener("keydown", close);
+      if (trigger && document.contains(trigger)) trigger.focus();
+    };
+  }, [inspectorOpen]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -468,9 +469,9 @@ export default function Home() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-7 shrink-0"
+                  className="size-7 shrink-0 aria-expanded:bg-transparent"
                   aria-label={
-                    navigationOpen ? "Collapse network" : "Expand network"
+                    navigationOpen ? "Collapse machines" : "Expand machines"
                   }
                   aria-expanded={navigationOpen}
                   onClick={toggleNavigation}
@@ -482,8 +483,8 @@ export default function Home() {
                   )}
                 </Button>
                 {navigationOpen && (
-                  <span className="ml-2 text-xs tracking-widest text-muted-foreground">
-                    NETWORK
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    Machines
                   </span>
                 )}
                 {navigationOpen && (
@@ -581,180 +582,6 @@ export default function Home() {
           <ResizableHandle
             aria-label="Resize machine and session navigation"
             disabled={!navigationOpen}
-          />
-          <ResizablePanel
-            id="inspector"
-            panelRef={inspectorRef}
-            collapsible={false}
-            defaultSize="28%"
-            minSize={inspectorOpen ? (compact ? "25%" : "260px") : "40px"}
-            maxSize={inspectorOpen ? "55%" : "40px"}
-          >
-            <aside
-              aria-label="Agent inspector"
-              className={`flex h-full min-h-0 bg-background ${compact && !inspectorOpen ? "flex-row" : "flex-col"}`}
-            >
-              <div className="flex h-10 shrink-0 items-center border-b px-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 shrink-0"
-                  aria-label={
-                    inspectorOpen ? "Collapse inspector" : "Expand inspector"
-                  }
-                  aria-expanded={inspectorOpen}
-                  onClick={toggleInspector}
-                >
-                  {inspectorOpen ? (
-                    <PanelLeftCloseIcon />
-                  ) : (
-                    <PanelLeftOpenIcon />
-                  )}
-                </Button>
-                {inspectorOpen && (
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {contextPanel
-                      ? contextPanel === "machine"
-                        ? "Machine settings"
-                        : "Project settings"
-                      : "Agent controls"}
-                  </span>
-                )}
-              </div>
-              {!inspectorOpen && (
-                <nav
-                  aria-label="Collapsed agent panels"
-                  className={`flex gap-1 overflow-auto p-1 ${compact ? "flex-row" : "flex-col"}`}
-                >
-                  {inspectorTabs.map(({ id, label, icon: Icon }) => (
-                    <Button
-                      key={id}
-                      size="icon"
-                      variant="ghost"
-                      className={`size-7 shrink-0 ${!contextPanel && panel === id ? "bg-accent" : ""}`}
-                      aria-label={`Open ${label} panel`}
-                      title={label}
-                      aria-current={
-                        !contextPanel && panel === id ? "page" : undefined
-                      }
-                      onClick={() => {
-                        setContextPanel("");
-                        setPanel(id);
-                        setInspectorOpen(true);
-                      }}
-                    >
-                      <Icon className="size-4" />
-                    </Button>
-                  ))}
-                </nav>
-              )}
-              <div
-                className={
-                  inspectorOpen ? "flex h-full min-h-0 flex-col" : "hidden"
-                }
-              >
-                <nav aria-label="Agent panels" className="flex shrink-0">
-                  {inspectorTabs.map(({ id, label, icon: Icon }) => (
-                    <button
-                      type="button"
-                      key={id}
-                      aria-current={
-                        !contextPanel && panel === id ? "page" : undefined
-                      }
-                      className={`flex min-w-0 flex-1 flex-col items-center gap-1 border-b px-1 py-3 text-xs ${!contextPanel && panel === id ? "border-foreground text-foreground" : "border-border text-muted-foreground"}`}
-                      onClick={() => {
-                        setContextPanel("");
-                        setPanel(id);
-                      }}
-                    >
-                      <Icon className="size-4" aria-hidden="true" />
-                      {label}
-                    </button>
-                  ))}
-                </nav>
-                <div className="min-h-0 flex-1 overflow-y-auto">
-                  {contextPanel ? (
-                    contextPanel === "project" ? (
-                      <ProjectInspector
-                        key={inspectedProject}
-                        id={inspectedProject}
-                      />
-                    ) : (
-                      <div className="p-3">
-                        <MachineSettings />
-                      </div>
-                    )
-                  ) : session ? (
-                    <>
-                      <div hidden={panel !== "session"}>
-                        <SessionInspector
-                          key={`${session.id}:${session.conversationId}`}
-                          session={session}
-                          providers={providers}
-                          disabled={
-                            working ||
-                            !online ||
-                            !detailOnline ||
-                            session.status !== "idle"
-                          }
-                          onDirtyChange={setDirty}
-                          onSandboxDirtyChange={setSandboxDirty}
-                          onSandboxSave={(input) =>
-                            operate(session.id, async () => {
-                              await api(
-                                `${conversationPath(session.id)}/sandbox`,
-                                "PATCH",
-                                input,
-                              );
-                            })
-                          }
-                          onSave={(input) =>
-                            operate(session.id, async () => {
-                              await api(
-                                `${conversationPath(session.id)}/config`,
-                                "PATCH",
-                                input,
-                              );
-                            })
-                          }
-                        />
-                      </div>
-                      {panel !== "session" && (
-                        <AgentPanels
-                          key={`${session.id}:${session.conversationId}`}
-                          path={conversationPath(
-                            session.id,
-                            session.conversationId,
-                          )}
-                          panel={panel}
-                          idle={
-                            session.status === "idle" &&
-                            online &&
-                            detailOnline &&
-                            !working
-                          }
-                          onConfigure={() => {
-                            setPanel("session");
-                            setInspectorOpen(true);
-                          }}
-                          onChanged={() =>
-                            void operate(session.id, async () => {})
-                          }
-                        />
-                      )}
-                    </>
-                  ) : (
-                    <p className="p-4 text-sm text-muted-foreground">
-                      Select an agent from the network.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </aside>
-          </ResizablePanel>
-          <ResizableHandle
-            aria-label="Resize agent inspector"
-            disabled={!inspectorOpen}
           />
           <ResizablePanel id="conversation" minSize="30%">
             <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
@@ -880,6 +707,124 @@ export default function Home() {
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
+        <aside
+          aria-label="Agent controls"
+          className={`absolute inset-y-0 right-0 z-30 flex w-full max-w-md flex-col border-l bg-background shadow-sm ${inspectorOpen ? "" : "hidden"}`}
+        >
+          <div className="flex h-10 shrink-0 items-center border-b px-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="order-2 ml-auto size-7 shrink-0"
+              ref={closeControl}
+              aria-label="Close agent controls"
+              onClick={() => setInspectorOpen(false)}
+            >
+              <XIcon />
+            </Button>
+            {inspectorOpen && (
+              <span className="ml-2 text-xs text-muted-foreground">
+                {contextPanel === "project"
+                  ? "Project settings"
+                  : "Agent controls"}
+              </span>
+            )}
+          </div>
+          <div
+            className={
+              inspectorOpen ? "flex h-full min-h-0 flex-col" : "hidden"
+            }
+          >
+            <nav aria-label="Agent panels" className="flex shrink-0">
+              {inspectorTabs.map(({ id, label, icon: Icon }) => (
+                <button
+                  type="button"
+                  key={id}
+                  aria-current={
+                    !contextPanel && panel === id ? "page" : undefined
+                  }
+                  className={`flex min-w-0 flex-1 flex-col items-center gap-1 border-b px-1 py-3 text-xs ${!contextPanel && panel === id ? "border-foreground text-foreground" : "border-border text-muted-foreground"}`}
+                  onClick={() => {
+                    setContextPanel("");
+                    setPanel(id);
+                  }}
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                  {label}
+                </button>
+              ))}
+            </nav>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {contextPanel === "project" ? (
+                <ProjectInspector
+                  key={inspectedProject}
+                  id={inspectedProject}
+                />
+              ) : session ? (
+                <>
+                  <div hidden={panel !== "session"}>
+                    <SessionInspector
+                      key={`${session.id}:${session.conversationId}`}
+                      session={session}
+                      providers={providers}
+                      disabled={
+                        working ||
+                        !online ||
+                        !detailOnline ||
+                        session.status !== "idle"
+                      }
+                      onDirtyChange={setDirty}
+                      onSandboxDirtyChange={setSandboxDirty}
+                      onSandboxSave={(input) =>
+                        operate(session.id, async () => {
+                          await api(
+                            `${conversationPath(session.id)}/sandbox`,
+                            "PATCH",
+                            input,
+                          );
+                        })
+                      }
+                      onSave={(input) =>
+                        operate(session.id, async () => {
+                          await api(
+                            `${conversationPath(session.id)}/config`,
+                            "PATCH",
+                            input,
+                          );
+                        })
+                      }
+                    />
+                  </div>
+                  {panel !== "session" && (
+                    <AgentPanels
+                      key={`${session.id}:${session.conversationId}`}
+                      path={conversationPath(
+                        session.id,
+                        session.conversationId,
+                      )}
+                      panel={panel}
+                      idle={
+                        session.status === "idle" &&
+                        online &&
+                        detailOnline &&
+                        !working
+                      }
+                      onConfigure={() => {
+                        setPanel("session");
+                        setInspectorOpen(true);
+                      }}
+                      onChanged={() => void operate(session.id, async () => {})}
+                    />
+                  )}
+                </>
+              ) : (
+                <p className="p-4 text-sm text-muted-foreground">
+                  Select an agent from the network.
+                </p>
+              )}
+            </div>
+          </div>
+        </aside>
       </main>
       <NewSessionDialog
         open={creating}

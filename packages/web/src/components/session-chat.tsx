@@ -5,6 +5,7 @@ import {
   FolderIcon,
   MessageSquareIcon,
   MonitorIcon,
+  SlidersHorizontalIcon,
   TerminalSquareIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -93,6 +94,15 @@ export function SessionChat({
           </button>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-label="Open agent controls"
+            title="Agent controls"
+            onClick={onConfigure}
+          >
+            <SlidersHorizontalIcon />
+          </Button>
           <span
             role="status"
             className="rounded-none border bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground"

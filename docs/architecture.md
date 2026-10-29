@@ -236,8 +236,8 @@ share the application header. Machine selection remains scoped to the browser ta
 
 ## Network and agent inspection
 
-The conversation surface has independently collapsible/resizable network and inspector panels.
-The network loads registered machines through their existing authenticated hub routes, grouping
+The conversation surface has one collapsible/resizable Machines tree and on-demand agent controls.
+The tree loads registered machines through the web-owned registry and scoped proxy, grouping
 projects, sessions, root conversations, forks, and task-owned children. Pi's immutable conversation
 IDs supply agent numbers; session numbers use catalog row identities. Naming is optional on
 creation and editable afterward. Trash does not recycle these identities.
@@ -284,9 +284,9 @@ preventing dangling runtime ownership. This is logical application deletion, not
 backups or every physical storage copy are erased. Project registration can be purged after its
 sessions are permanently deleted; project source directories remain untouched.
 
-The network row reserves action space to prevent hover layout shifts. Rename edits its label;
-Enter/blur saves and Escape cancels. The former status/toggle bar is removed. Each column owns a
-collapse button and a collapsed rail with a distinct expansion icon, retaining mounted drafts.
+The machine-tree row uses trailing action overlays to preserve label space without hover layout
+shifts. Rename edits its label; Enter/blur saves and Escape cancels. The remembered machine tree
+is the sole permanent side column; agent controls open on demand in a nonmodal right-side panel.
 The composer uses shadcn Popover for searchable connected models and supported thinking levels;
 selections update the selected conversation immediately. The Tools panel explains empty selection
 and provides explicit coordination/tool-permission setup actions.
@@ -295,17 +295,19 @@ and provides explicit coordination/tool-permission setup actions.
 
 The header owns Home, Chat, and Settings. Machine selection and session creation are contextual
 workspace actions, not global header controls. Connect a machine opens `/machines` in the main
-display, with connection/disconnection and recent history outside Settings. Settings has separate
-Model choices, Machine, and Providers sections. Credentials and machine
+display, with connection/disconnection and recent history outside Settings. `/settings` is a full
+page with separate Model choices, Machine defaults, and Providers sections. Credentials and machine
 defaults belong to the selected execution machine; model/thinking menu preferences belong to the
 web server. Model preferences filter menus only, never change running or saved agents. Empty
 preferences offer only the current model until the user selects more models in Settings.
 
-The network and inspector have permanently mounted, identically sized toggle slots. Collapsing
-hides their contents without destroying drafts. Machine/project gears select contextual controls
-in the inspector; choosing an agent returns to its controls. Delete actions reserve space for a red
-trash icon followed by confirmation/cancel icons. Trash remains recoverable; permanent deletion
-and forgetting recent connection metadata are explicitly labeled.
+Chat permanently reserves space only for the machine tree and conversation. The tree heading is
+Machines, and every machine has an Add project entry. Machine gears route to machine-scoped
+Settings. Session, State, Tasks, Tools, and Extend remain scoped to the selected agent in an on-demand
+right panel; project controls use that panel as well. Closing it preserves mounted drafts and returns
+focus. The panel does not persist as a second rail or shrink the conversation. Tree collapse is
+explicit, remembered per browser tab, and its button has no persistent selected background.
+Deletion remains recoverable through Trash, with explicit permanent deletion and confirmation.
 
 Managed SSH runs on the web server host using system OpenSSH, existing configuration/keys/agent,
 strict known-host verification, and loopback-only forwarding. It does not install or launch remote

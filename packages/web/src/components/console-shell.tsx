@@ -10,18 +10,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { BackendContext } from "@/components/connection-context";
-import { SettingsWindow } from "@/components/settings-window";
-import { Button } from "@/components/ui/button";
 import { api, type BackendConnection } from "@/lib/console-api";
 
 export { useBackend } from "@/components/connection-context";
 export function ConsoleShell({ children }: { children: ReactNode }) {
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  useEffect(() => {
-    const show = () => setSettingsOpen(true);
-    window.addEventListener("console:open-settings", show);
-    return () => window.removeEventListener("console:open-settings", show);
-  }, []);
   const [id, setId] = useState("");
   const [ready, setReady] = useState(false);
   const [connectionError, setConnectionError] = useState("");
@@ -107,20 +99,24 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
                 <MessageSquareIcon className="size-4" />
               </Link>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
+            <Link
+              href="/settings"
               aria-label="Open settings"
               title="Settings"
-              onClick={() => setSettingsOpen(true)}
+              aria-current={
+                pathname.startsWith("/settings") ? "page" : undefined
+              }
+              className={`inline-flex size-8 items-center justify-center hover:bg-accent ${pathname.startsWith("/settings") ? "bg-accent" : ""}`}
             >
-              <SettingsIcon />
-            </Button>
+              <SettingsIcon className="size-4" />
+            </Link>
           </nav>
         </header>
         <div key={id} className="flex min-h-0 flex-1 flex-col overflow-auto">
           {ready ? (
-            id || pathname === "/machines" ? (
+            id ||
+            pathname === "/machines" ||
+            pathname.startsWith("/settings") ? (
               children
             ) : (
               <main className="mx-auto w-full max-w-3xl space-y-6 p-6 sm:py-12">
@@ -152,10 +148,6 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
             </p>
           )}
         </div>
-        <SettingsWindow
-          open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
-        />
       </div>
     </BackendContext>
   );

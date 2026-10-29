@@ -3,6 +3,7 @@
 import {
   ChevronRightIcon,
   FolderIcon,
+  FolderPlusIcon,
   MessageSquareIcon,
   MessagesSquareIcon,
   MonitorIcon,
@@ -474,13 +475,8 @@ function MachineBranch({
       actions={
         <Link
           className="flex size-6 items-center justify-center"
-          href={`/chat?backend=${encodeURIComponent(machine.id)}&inspect=machine`}
-          onClick={(event) => {
-            if (active) {
-              event.preventDefault();
-              window.dispatchEvent(new Event("console:inspect-machine"));
-            } else selectMachine(machine.id);
-          }}
+          href={`/settings?section=machine&backend=${encodeURIComponent(machine.id)}`}
+          onClick={() => selectMachine(machine.id)}
           aria-label={`Configure ${machine.name}`}
         >
           <SettingsIcon className="size-3" />
@@ -497,12 +493,13 @@ function MachineBranch({
           {actionError}
         </p>
       )}
-      {!projects.length && !error && (
+      {!error && (
         <Link
           href={`/workspaces?backend=${encodeURIComponent(machine.id)}`}
           onClick={() => selectMachine(machine.id)}
-          className="block p-2 text-xs underline"
+          className="flex items-center gap-1.5 p-2 text-xs text-muted-foreground hover:text-foreground"
         >
+          <FolderPlusIcon className="size-3 shrink-0" aria-hidden="true" />
           Add project
         </Link>
       )}

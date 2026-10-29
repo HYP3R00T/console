@@ -1,6 +1,7 @@
 "use client";
 
 import { SlidersHorizontalIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ChoiceSelect } from "@/components/choice-select";
 import { useModelPreferences } from "@/components/model-preferences";
@@ -30,6 +31,7 @@ export function SessionInspector({
   onSandboxSave: (policy: SandboxPolicy) => Promise<void>;
   onSandboxDirtyChange: (dirty: boolean) => void;
 }) {
+  const router = useRouter();
   const preferences = useModelPreferences();
   const providers = catalog.map((provider) => ({
     ...provider,
@@ -89,12 +91,7 @@ export function SessionInspector({
             type="button"
             className="underline"
             onClick={() => {
-              window.dispatchEvent(new Event("console:open-settings"));
-              window.dispatchEvent(
-                new CustomEvent("console:settings-section", {
-                  detail: "providers",
-                }),
-              );
+              router.push("/settings?section=providers");
             }}
           >
             Manage connections
@@ -106,10 +103,7 @@ export function SessionInspector({
         type="button"
         className="text-xs underline"
         onClick={() => {
-          window.dispatchEvent(new Event("console:open-settings"));
-          window.dispatchEvent(
-            new CustomEvent("console:settings-section", { detail: "models" }),
-          );
+          router.push("/settings?section=models");
         }}
       >
         Manage model choices
@@ -189,12 +183,7 @@ export function SessionInspector({
               type="button"
               className="underline"
               onClick={() => {
-                window.dispatchEvent(new Event("console:open-settings"));
-                window.dispatchEvent(
-                  new CustomEvent("console:settings-section", {
-                    detail: "providers",
-                  }),
-                );
+                router.push("/settings?section=providers");
               }}
             >
               Connect this provider
