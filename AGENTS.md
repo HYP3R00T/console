@@ -5,6 +5,7 @@
 - Work within the requested scope. Clarify material product choices rather than inventing requirements.
 - Use configured tools and existing conventions; do not weaken checks to make work pass.
 - Keep documentation consistent with concrete decisions and implementation. Distinguish intended behavior from current behavior.
+- Maintain [the feature inventory](docs/features.md) in the same change as feature delivery: preserve stable IDs, update status/limits/evidence, and distinguish implementation from verification. Use it as the single master checklist.
 - For package versioning and changelog updates, read the [release workflow](docs/releases.md).
 - For changes to `packages/server`, read the [server guide](docs/packages/server.md).
 - For changes to `packages/web` or starting both apps, read the [web guide](docs/packages/web.md).

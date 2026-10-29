@@ -1,9 +1,11 @@
 "use client";
 
 import {
+  BotIcon,
   ChevronRightIcon,
   FolderIcon,
   FolderPlusIcon,
+  GitForkIcon,
   MessageSquareIcon,
   MonitorIcon,
   PencilIcon,
@@ -45,7 +47,8 @@ function Branch({
   editing,
   quickAction,
   selected = false,
-  revealKey,
+  storageKey,
+  indentChildren = true,
 }: {
   label: ReactNode;
   name: string;
@@ -56,14 +59,28 @@ function Branch({
   editing?: boolean;
   quickAction?: TreeAction;
   selected?: boolean;
-  revealKey?: string;
+  storageKey: string;
+  indentChildren?: boolean;
 }) {
   const [open, setOpen] = useState(initial);
   useEffect(() => {
-    if (revealKey) setOpen(true);
-  }, [revealKey]);
+    try {
+      const saved = localStorage.getItem(storageKey);
+      setOpen(saved === "true" ? true : saved === "false" ? false : initial);
+    } catch {
+      /* Keep navigation usable when browser storage is unavailable. */
+    }
+  }, [storageKey, initial]);
+  function toggle(next: boolean) {
+    setOpen(next);
+    try {
+      localStorage.setItem(storageKey, String(next));
+    } catch {
+      /* Keep the current in-memory state without persistent storage. */
+    }
+  }
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="min-w-0">
+    <Collapsible open={open} onOpenChange={toggle} className="min-w-0">
       <TreeRow
         name={name}
         actions={editing ? [] : actions}
@@ -71,25 +88,28 @@ function Branch({
         className={selected ? "bg-accent" : ""}
       >
         {editing ? (
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 p-1">
-            <ChevronRightIcon
-              className="size-3 shrink-0 opacity-0"
-              aria-hidden="true"
-            />
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 py-2 pr-1">
+            <span className="size-5 shrink-0" aria-hidden="true" />
             {label}
           </div>
         ) : (
           <CollapsibleTrigger
+            aria-label={name}
+            aria-current={selected ? "page" : undefined}
             onClick={onActivate}
-            className="group flex min-w-0 flex-1 items-center gap-1.5 p-1 text-left text-xs"
+            className="group flex min-w-0 flex-1 items-center gap-1.5 py-2 pr-1 text-left text-xs"
           >
-            <ChevronRightIcon className="size-3 shrink-0 group-data-[panel-open]:rotate-90" />
+            <span className="flex size-5 shrink-0 items-center justify-center">
+              <ChevronRightIcon className="size-3 transition-transform group-data-[panel-open]:rotate-90" />
+            </span>
             {label}
           </CollapsibleTrigger>
         )}
       </TreeRow>
       <CollapsibleContent>
-        <div className="ml-2 border-l pl-1">{children}</div>
+        <div className={indentChildren ? "ml-2.5 border-l pl-2" : ""}>
+          {children}
+        </div>
       </CollapsibleContent>
     </Collapsible>
   );
@@ -343,7 +363,22 @@ function MachineBranch({
             : item.name;
         const label = (
           <>
-            <MessageSquareIcon className="size-3 shrink-0" />
+            {item.kind === "fork" ? (
+              <GitForkIcon
+                className="size-3.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+            ) : item.kind === "subagent" ? (
+              <BotIcon
+                className="size-3.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+            ) : (
+              <MessageSquareIcon
+                className="size-3.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+            )}
             {nameLabel(name, `/sessions/${sid}/conversations/${item.id}`)}
             {!item.isMain && !item.name.endsWith(`#${item.id}`) && (
               <span className="ml-auto shrink-0 pr-1 text-[10px] text-muted-foreground group-hover/row:hidden group-focus-within/row:hidden [@media(hover:none)]:hidden">
@@ -363,6 +398,7 @@ function MachineBranch({
           <div key={item.id}>
             {all.some((child) => child.parentId === item.id) ? (
               <Branch
+                storageKey={`console.tree:${JSON.stringify([machine.id, "conversation", sid, item.id])}`}
                 name={name}
                 selected={Boolean(chosen)}
                 initial
@@ -386,16 +422,18 @@ function MachineBranch({
                 }
               >
                 {edit?.path === `/sessions/${sid}/conversations/${item.id}` ? (
-                  <div className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5 py-2 pr-1">
+                    <span className="size-5 shrink-0" aria-hidden="true" />
                     {label}
                   </div>
                 ) : (
                   <button
                     type="button"
                     aria-current={chosen ? "page" : undefined}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-2 text-left text-xs"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 py-2 pr-1 text-left text-xs"
                     onClick={() => open(sid, item.id)}
                   >
+                    <span className="size-5 shrink-0" aria-hidden="true" />
                     {label}
                   </button>
                 )}
@@ -418,6 +456,7 @@ function MachineBranch({
   return (
     <>
       <Branch
+        storageKey={`console.tree:${JSON.stringify([machine.id, "machine"])}`}
         name={machine.name}
         initial={active}
         label={
@@ -431,7 +470,7 @@ function MachineBranch({
               {error
                 ? "offline"
                 : data
-                  ? `${data.sessions.length} conversations`
+                  ? `${Object.values(data.conversations).reduce((total, rows) => total + rows.length, 0)} chats`
                   : "connecting"}
             </span>
           </>
@@ -464,9 +503,11 @@ function MachineBranch({
         )}
         <Branch
           name="Projects"
+          storageKey={`console.tree:${JSON.stringify([machine.id, "projects"])}`}
           initial
+          indentChildren={false}
           label={
-            <span className="min-w-0 flex-1 text-muted-foreground">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               Projects
             </span>
           }
@@ -480,15 +521,8 @@ function MachineBranch({
             <Branch
               key={project.id}
               name={project.name}
+              storageKey={`console.tree:${JSON.stringify([machine.id, "project", project.id])}`}
               initial={active}
-              revealKey={
-                data?.sessions.some(
-                  (item) =>
-                    item.id === selected && item.workspaceId === project.id,
-                )
-                  ? `${selected}:${conversationId ?? ""}`
-                  : undefined
-              }
               quickAction={{
                 label: `New conversation in ${project.name}`,
                 icon: PlusIcon,
@@ -501,7 +535,10 @@ function MachineBranch({
               editing={edit?.path === `/workspaces/${project.id}`}
               label={
                 <>
-                  <FolderIcon className="size-3 shrink-0" />
+                  <FolderIcon
+                    className="size-3.5 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                   {nameLabel(project.name, `/workspaces/${project.id}`)}
                 </>
               }

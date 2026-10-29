@@ -194,7 +194,7 @@ without exposing task checkpoints or provider request payloads.
 
 `test/runtime-controls.test.ts` covers steering/follow-up boundaries, deduplication and scoped
 withdrawal, queued input across reopen, explicit recovery, long-history compaction, and reset/handoff.
-See [Pi capability delivery](../pi-capabilities.md) for the remaining expansion; runtime availability
+See the [Console feature inventory](../features.md) for remaining implementation; runtime availability
 alone does not establish a completed Console integration.
 
 ## Project Markdown resources

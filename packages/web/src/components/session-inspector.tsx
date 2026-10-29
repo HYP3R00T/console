@@ -1,239 +1,171 @@
 "use client";
 
-import { SlidersHorizontalIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { ChoiceSelect } from "@/components/choice-select";
+import { CheckIcon, CircleIcon, LoaderCircleIcon } from "lucide-react";
+import type { InspectorPanel } from "@/components/agent-panels";
 import { ConversationRuntime } from "@/components/conversation-runtime";
-import { useModelPreferences } from "@/components/model-preferences";
 import { ProjectResources } from "@/components/project-resources";
 import { SandboxSettings } from "@/components/sandbox-settings";
-import { Button } from "@/components/ui/button";
-import type {
-  AgentConfiguration,
-  Conversation,
-  Provider,
-  SandboxPolicy,
-} from "@/lib/console-api";
+import type { Conversation, SandboxPolicy } from "@/lib/console-api";
 
 export function SessionInspector({
   session,
-  providers: catalog,
+  panel,
   disabled,
-  onSave,
-  onDirtyChange,
   onSandboxSave,
   onSandboxDirtyChange,
   onResourcePrompt,
 }: {
   session: Conversation;
-  providers: Provider[];
+  panel: InspectorPanel;
   disabled: boolean;
-  onSave: (input: AgentConfiguration) => Promise<void>;
-  onDirtyChange: (dirty: boolean) => void;
   onSandboxSave: (policy: SandboxPolicy) => Promise<void>;
   onSandboxDirtyChange: (dirty: boolean) => void;
   onResourcePrompt: (text: string) => void;
 }) {
-  const router = useRouter();
-  const preferences = useModelPreferences();
-  const providers = catalog.map((provider) => ({
-    ...provider,
-    models: provider.models
-      .filter(
-        (model) =>
-          preferences.models.includes(`${provider.id}/${model.id}`) ||
-          (session.model?.provider === provider.id &&
-            session.model.modelId === model.id),
-      )
-      .map((model) => ({
-        ...model,
-        thinkingLevels: model.thinkingLevels.filter(
-          (level) =>
-            preferences.thinkingLevels.includes(level) ||
-            level === session.thinkingLevel,
-        ),
-      })),
-  }));
-  const savedProvider = session.model?.provider ?? "";
-  const savedModel = session.model?.modelId ?? "";
-  const savedThinking = session.thinkingLevel;
-  const [draft, setDraft] = useState<AgentConfiguration>({
-    provider: savedProvider,
-    model: savedModel,
-    thinkingLevel: savedThinking,
-  });
-  useEffect(() => {
-    setDraft({
-      provider: savedProvider,
-      model: savedModel,
-      thinkingLevel: savedThinking,
-    });
-  }, [savedProvider, savedModel, savedThinking]);
-  const provider = providers.find((item) => item.id === draft.provider);
-  const model = provider?.models.find((item) => item.id === draft.model);
-  const dirty =
-    draft.provider !== savedProvider ||
-    draft.model !== savedModel ||
-    draft.thinkingLevel !== savedThinking;
-  useEffect(() => {
-    onDirtyChange(dirty);
-  }, [dirty, onDirtyChange]);
+  const path = `/sessions/${session.id}${session.conversationId ? `/conversations/${session.conversationId}` : ""}`;
+  const usage = session.contextUsage;
+  const cost = Object.values(session.usage?.models ?? {}).reduce(
+    (sum, item) => sum + item.cost.total,
+    0,
+  );
   return (
-    <aside className="space-y-6 p-5" aria-label="Session inspector">
-      <header className="flex items-center gap-2">
-        <SlidersHorizontalIcon
-          className="size-4 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <h2 className="font-semibold">Conversation configuration</h2>
-      </header>
-      {!providers.some((item) => item.configured) && (
-        <p className="text-sm text-muted-foreground">
-          No providers connected.{" "}
-          <button
-            type="button"
-            className="underline"
-            onClick={() => {
-              router.push("/settings?section=providers");
-            }}
+    <section className="px-4 text-sm" aria-label="Conversation details">
+      <section hidden={panel !== "session"} className="space-y-4 py-4">
+        <dl className="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <dt className="text-muted-foreground">Status</dt>
+            <dd className="mt-1 capitalize">{session.status}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Recorded cost</dt>
+            <dd className="mt-1">${cost.toFixed(4)}</dd>
+          </div>
+          <div className="col-span-2">
+            <dt className="text-muted-foreground">Model</dt>
+            <dd className="mt-1 break-all">
+              {session.model
+                ? `${session.model.provider}/${session.model.modelId}`
+                : "Not selected"}{" "}
+              · {session.thinkingLevel}
+            </dd>
+          </div>
+          {usage && (
+            <div className="col-span-2">
+              <dt className="text-muted-foreground">Estimated context</dt>
+              <dd className="mt-1">
+                {usage.estimatedTokens.toLocaleString()} /{" "}
+                {usage.capacity.toLocaleString()} tokens
+              </dd>
+            </div>
+          )}
+        </dl>
+        {session.plan?.steps.length ? (
+          <section
+            className="space-y-3 border-t pt-4"
+            aria-label="Conversation plan"
           >
-            Manage connections
-          </button>{" "}
-          on this machine first.
-        </p>
-      )}
-      <button
-        type="button"
-        className="text-xs underline"
-        onClick={() => {
-          router.push("/settings?section=models");
-        }}
-      >
-        Manage model choices
-      </button>
-      <form
-        className="space-y-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void onSave(draft);
-        }}
-      >
-        <div className="block space-y-2 text-sm">
-          Provider
-          <ChoiceSelect
-            label="Provider"
-            value={draft.provider}
+            <h3 className="text-xs font-medium">{session.plan.title}</h3>
+            <ol className="space-y-2">
+              {session.plan.steps.map((step) => {
+                const Icon =
+                  step.status === "completed"
+                    ? CheckIcon
+                    : step.status === "in_progress"
+                      ? LoaderCircleIcon
+                      : CircleIcon;
+                return (
+                  <li
+                    key={step.step}
+                    className="flex items-start gap-2 text-xs"
+                  >
+                    <Icon
+                      className="mt-0.5 size-3 shrink-0 text-muted-foreground"
+                      aria-label={step.status.replaceAll("_", " ")}
+                    />
+                    <span>{step.step}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        ) : (
+          <p className="border-t pt-4 text-xs text-muted-foreground">
+            No recorded plan.
+          </p>
+        )}
+        <details className="border-t pt-3">
+          <summary className="cursor-pointer text-xs font-medium">
+            Usage and context controls
+          </summary>
+          <ConversationRuntime
+            session={session}
+            path={path}
             disabled={disabled}
-            placeholder="Choose a connected provider"
-            items={providers
-              .filter((item) => item.configured)
-              .map((item) => ({ value: item.id, label: item.name }))}
-            onChange={(value) =>
-              setDraft({ provider: value, model: "", thinkingLevel: "off" })
-            }
           />
-        </div>
-        <div className="block space-y-2 text-sm">
-          Model
-          <ChoiceSelect
-            label="Model"
-            value={draft.model}
-            disabled={disabled || !provider?.configured}
-            placeholder="Choose a model"
-            items={
-              provider?.configured
-                ? provider.models.map((item) => ({
-                    value: item.id,
-                    label: item.name,
-                  }))
-                : []
-            }
-            onChange={(value) => {
-              const next = provider?.models.find((item) => item.id === value);
-              setDraft({
-                ...draft,
-                model: value,
-                thinkingLevel: next?.thinkingLevels.includes(
-                  draft.thinkingLevel,
-                )
-                  ? draft.thinkingLevel
-                  : (next?.thinkingLevels[0] ?? "off"),
-              });
-            }}
-          />
-        </div>
-        <div className="block space-y-2 text-sm">
-          Thinking level
-          <ChoiceSelect
-            label="Thinking level"
-            value={draft.thinkingLevel}
-            disabled={disabled || !model || model.thinkingLevels.length < 2}
-            items={(model?.thinkingLevels ?? [draft.thinkingLevel]).map(
-              (level) => ({ value: level, label: level }),
-            )}
-            onChange={(value) => setDraft({ ...draft, thinkingLevel: value })}
-          />
-        </div>
-        {model && (
-          <p className="text-xs text-muted-foreground">
-            Model context capacity: {model.contextWindow.toLocaleString()}{" "}
-            tokens. Thinking choices come from Pi's model catalog.
-          </p>
-        )}
-        {provider && !provider.configured && (
-          <p className="text-xs text-muted-foreground">
-            <button
-              type="button"
-              className="underline"
-              onClick={() => {
-                router.push("/settings?section=providers");
-              }}
-            >
-              Connect this provider
-            </button>{" "}
-            before sending messages.
-          </p>
-        )}
-        <Button
-          className="w-full"
-          type="submit"
-          disabled={disabled || !provider?.configured || !model || !dirty}
-        >
-          Save settings
-        </Button>
-        <p className="text-xs text-muted-foreground">
-          {dirty
-            ? "Unsaved settings. Save before sending."
-            : "Settings are saved with this conversation."}{" "}
-          Finish or cancel active work before changing them.
-        </p>
-      </form>
-      <ConversationRuntime
-        session={session}
-        path={`/sessions/${session.id}${session.conversationId ? `/conversations/${session.conversationId}` : ""}`}
-        disabled={disabled || dirty}
-      />
-      <ProjectResources
-        session={session}
-        path={`/sessions/${session.id}${session.conversationId ? `/conversations/${session.conversationId}` : ""}`}
-        onUse={onResourcePrompt}
-      />
-      <section className="space-y-2 border-t pt-4">
-        <h3 className="text-sm font-medium">Enabled tools</h3>
-        <p className="wrap-break-word text-xs leading-relaxed text-muted-foreground">
-          {session.enabledTools?.length
-            ? session.enabledTools.join(", ")
-            : "None. Configure a workspace and explicit permissions under Sandbox to enable file tools."}
-        </p>
+        </details>
       </section>
-      <SandboxSettings
-        policy={session.sandbox}
-        fixedWorkspace={Boolean(session.workspaceId)}
-        disabled={disabled}
-        onSave={onSandboxSave}
-        onDirtyChange={onSandboxDirtyChange}
-      />
-    </aside>
+      <section hidden={panel !== "tools"} className="space-y-4 py-4">
+        <dl className="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <dt className="text-muted-foreground">Sandbox</dt>
+            <dd className="mt-1">
+              {session.sandbox.enabled ? "Enabled" : "Disabled"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Network</dt>
+            <dd className="mt-1 capitalize">
+              {session.sandbox.enabled
+                ? session.sandbox.network
+                : "No tool access"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Commands</dt>
+            <dd className="mt-1">
+              {session.sandbox.enabled && session.sandbox.commands
+                ? "Allowed"
+                : "Disabled"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">File writes</dt>
+            <dd className="mt-1">
+              {session.sandbox.enabled && session.sandbox.writePaths.length
+                ? "Granted paths"
+                : "Disabled"}
+            </dd>
+          </div>
+          <div className="col-span-2">
+            <dt className="text-muted-foreground">Workspace</dt>
+            <dd className="mt-1 break-all">
+              {session.sandbox.workspace || "Not set"}
+            </dd>
+          </div>
+        </dl>
+        <SandboxSettings
+          policy={session.sandbox}
+          fixedWorkspace={Boolean(session.workspaceId)}
+          disabled={disabled}
+          onSave={onSandboxSave}
+          onDirtyChange={onSandboxDirtyChange}
+        />
+      </section>
+      <section hidden={panel !== "extend"} className="py-4">
+        <details>
+          <summary className="cursor-pointer text-xs font-medium">
+            Project instructions, skills and prompts
+          </summary>
+          <p className="py-2 text-xs text-muted-foreground">
+            Project files available through this conversation’s access policy.
+          </p>
+          <ProjectResources
+            session={session}
+            path={path}
+            onUse={onResourcePrompt}
+          />
+        </details>
+      </section>
+    </section>
   );
 }

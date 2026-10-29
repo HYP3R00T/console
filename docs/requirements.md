@@ -69,6 +69,11 @@ terminal/file output, reasoning and recorded plans remain inspectable through co
 disclosures. Completed activity collapses by default; ongoing activity and failures remain identifiable.
 Presentation must preserve stored records and show unknown/interrupted state without inventing success.
 Inspecting a disclosure must not force the user back to the bottom of the transcript.
+Controls must identify machine, project or conversation scope. Fork/delegation ancestry must be
+readable without shifting same-level labels. Expandable navigation rows toggle when clicked and
+retain their expansion choices across reloads. Conversation details toggle a resizable desktop split;
+long technical controls stay collapsed until requested. Model selection uses a compact list and
+supported discrete thinking levels without a search requirement.
 
 - Start with a dependable single-user path; no supported concurrency or throughput target has been measured.
 - Model access must be supported and verified for the chosen provider and account. Prefer the intended
@@ -80,9 +85,10 @@ Inspecting a disclosure must not force the user back to the bottom of the transc
 
 ## Later capabilities
 
-The [Pi capability delivery record](pi-capabilities.md) tracks the requested expansion across Pi,
-Pi Durable, and the reference Durable Pi application. Checked items describe delivered behavior;
-unchecked items are requested work, not implementation claims. Steering and queued follow-ups,
+The [Console feature inventory](features.md) tracks implemented, partial, missing and deferred
+capabilities across the whole product, including nono and the requested Pi expansion.
+[Pi integration scope](pi-capabilities.md) records the compatibility boundary. Inventory status
+is not complete verification or authorization to implement deferred work. Steering and queued follow-ups,
 withdrawal, usage/context inspection, manual compaction, and reset with an optional handoff are
 implemented. Restart still requires explicit Resume; new input must not implicitly resume saved work.
 Project Markdown instructions, discoverable skills and parameterized templates are also integrated

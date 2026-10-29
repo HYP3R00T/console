@@ -15,13 +15,11 @@ export function AgentPanels({
   panel,
   idle,
   onChanged,
-  onConfigure,
 }: {
   path: string;
   panel: InspectorPanel;
   idle: boolean;
   onChanged: () => void;
-  onConfigure: () => void;
 }) {
   const [inspection, setInspection] = useState<AgentInspection>();
   const [error, setError] = useState("");
@@ -29,6 +27,7 @@ export function AgentPanels({
   const [loadError, setLoadError] = useState("");
   const [instructions, setInstructions] = useState<string>();
   useEffect(() => {
+    if (panel === "state") return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
@@ -53,7 +52,7 @@ export function AgentPanels({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [path]);
+  }, [path, panel]);
   async function save(tools: string[], nextInstructions?: string) {
     setWorking(true);
     setError("");
@@ -134,65 +133,61 @@ export function AgentPanels({
                   </Button>
                 </div>
               )}
-              <Button size="sm" variant="outline" onClick={onConfigure}>
-                Configure workspace & file tools
-              </Button>
-              <h2 className="font-semibold">
-                Tools · {enabled.length}/{inspection.tools.length}
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Definitions come from installed Pi extensions. Sandbox grants
-                control availability. Changes require idle work.
-              </p>
-              {inspection.tools.map((tool) => (
-                <Collapsible key={tool.name} className="border">
-                  <div className="flex items-center gap-2 p-3">
-                    <input
-                      type="checkbox"
-                      aria-label={`Enable ${tool.name}`}
-                      checked={tool.enabled}
-                      disabled={!idle || working || !tool.permitted}
-                      onChange={(event) =>
-                        void save(
-                          event.target.checked
-                            ? [...enabled, tool.name]
-                            : enabled.filter((name) => name !== tool.name),
-                        )
-                      }
-                    />
-                    <CollapsibleTrigger className="flex flex-1 justify-between gap-2 text-left text-xs">
-                      <span className="font-mono">{tool.name}</span>
-                      <span className="text-muted-foreground">
-                        {tool.replay === "safe"
-                          ? "replay safe"
-                          : "interrupt on crash"}
-                      </span>
-                    </CollapsibleTrigger>
-                  </div>
-                  <CollapsibleContent className="space-y-2 border-t p-3 text-xs">
-                    <p>{tool.description}</p>
-                    <p className="text-muted-foreground">
-                      {tool.extension}
-                      {!tool.permitted && " · requires sandbox permission"}
-                    </p>
-                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap">
-                      {JSON.stringify(tool.parameters, null, 2)}
-                    </pre>
-                  </CollapsibleContent>
-                </Collapsible>
-              ))}
+              <details>
+                <summary className="cursor-pointer text-xs font-medium">
+                  Tool selection · {enabled.length}/{inspection.tools.length}
+                </summary>
+                <p className="py-2 text-xs text-muted-foreground">
+                  Enabled for this conversation. Access limits are set above.
+                </p>
+                {inspection.tools.map((tool) => (
+                  <Collapsible key={tool.name} className="border">
+                    <div className="flex items-center gap-2 p-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`Enable ${tool.name}`}
+                        checked={tool.enabled}
+                        disabled={!idle || working || !tool.permitted}
+                        onChange={(event) =>
+                          void save(
+                            event.target.checked
+                              ? [...enabled, tool.name]
+                              : enabled.filter((name) => name !== tool.name),
+                          )
+                        }
+                      />
+                      <CollapsibleTrigger className="flex flex-1 justify-between gap-2 text-left text-xs">
+                        <span className="font-mono">{tool.name}</span>
+                        <span className="text-muted-foreground">
+                          {tool.replay === "safe"
+                            ? "replay safe"
+                            : "interrupt on crash"}
+                        </span>
+                      </CollapsibleTrigger>
+                    </div>
+                    <CollapsibleContent className="space-y-2 border-t p-3 text-xs">
+                      <p>{tool.description}</p>
+                      <p className="text-muted-foreground">
+                        {tool.extension}
+                        {!tool.permitted && " · requires sandbox permission"}
+                      </p>
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap">
+                        {JSON.stringify(tool.parameters, null, 2)}
+                      </pre>
+                    </CollapsibleContent>
+                  </Collapsible>
+                ))}
+              </details>
             </>
           )}
           {panel === "tasks" && (
             <>
-              <h2 className="font-semibold">Runtime tasks</h2>
+              <h2 className="font-semibold">Conversation activity</h2>
               <p className="text-xs text-muted-foreground">
-                Scheduler: {inspection.scheduling}. These are Pi's active
-                model/tool tasks.
+                {inspection.tasks.length
+                  ? `${inspection.tasks.length} active runtime tasks`
+                  : "No active model or tool calls."}
               </p>
-              {!inspection.tasks.length && (
-                <p className="text-muted-foreground">No active tasks.</p>
-              )}
               {inspection.tasks.map((task) => (
                 <div
                   key={task.id}
@@ -206,7 +201,11 @@ export function AgentPanels({
               ))}
               {!!inspection.taskGraph?.length && (
                 <details className="space-y-2 text-xs">
-                  <summary>Session task ownership and dependencies</summary>
+                  <summary>Related conversations and dependencies</summary>
+                  <p className="py-2 text-muted-foreground">
+                    All conversations sharing this runtime session. Scheduler:{" "}
+                    {inspection.scheduling}.
+                  </p>
                   {inspection.taskGraph.map((task) => (
                     <div key={task.id} className="mt-2 space-y-1 border p-2">
                       <p>
@@ -240,40 +239,42 @@ export function AgentPanels({
           )}
           {panel === "extend" && (
             <>
-              <h2 className="font-semibold">Installed extensions</h2>
-              {inspection.extensions.map((extension) => {
-                return (
-                  <div
-                    key={extension.name}
-                    className="space-y-2 border p-3 text-xs"
-                  >
-                    <label className="flex gap-2">
-                      <input
-                        type="checkbox"
-                        aria-label={`Enable ${extension.name} extension`}
-                        checked={extension.enabled}
-                        disabled={!idle || working}
-                        onChange={(event) =>
-                          void toggleExtension(
-                            extension.name,
-                            event.target.checked,
-                          )
-                        }
-                      />
-                      <span className="font-mono">{extension.name}</span>
-                    </label>
-                    <p>
-                      {extension.tools.length} tools · {extension.sections}{" "}
-                      prompt sections · {extension.hooks} hooks
-                    </p>
-                    <p className="text-muted-foreground">
-                      Select this extension’s tools, prompt sections and hooks.
-                      Tools still require the saved sandbox grants. Only
-                      server-installed extensions can be enabled.
-                    </p>
-                  </div>
-                );
-              })}
+              <details className="border-b pb-3">
+                <summary className="cursor-pointer text-xs font-medium">
+                  Installed extensions · {inspection.extensions.length}
+                </summary>
+                {inspection.extensions.map((extension) => {
+                  return (
+                    <div
+                      key={extension.name}
+                      className="space-y-2 border p-3 text-xs"
+                    >
+                      <label className="flex gap-2">
+                        <input
+                          type="checkbox"
+                          aria-label={`Enable ${extension.name} extension`}
+                          checked={extension.enabled}
+                          disabled={!idle || working}
+                          onChange={(event) =>
+                            void toggleExtension(
+                              extension.name,
+                              event.target.checked,
+                            )
+                          }
+                        />
+                        <span className="font-mono">{extension.name}</span>
+                      </label>
+                      <p>
+                        {extension.tools.length} tools · {extension.sections}{" "}
+                        prompt sections · {extension.hooks} hooks
+                      </p>
+                      <p className="text-muted-foreground">
+                        Applies to this conversation; access grants still apply.
+                      </p>
+                    </div>
+                  );
+                })}
+              </details>
               <form
                 className="space-y-3"
                 onSubmit={(event) => {
@@ -363,39 +364,56 @@ function SharedState() {
     >
       <h2 className="font-semibold">Machine shared state</h2>
       <p className="text-xs text-muted-foreground">
-        Shared by all projects and agents on this machine. Revision{" "}
-        {snapshot?.revision ?? "…"}. Store facts, never credentials. Reload
-        before editing stale state.
+        All projects on this machine · revision {snapshot?.revision ?? "…"}.
+        Never store credentials.
       </p>
       {error && (
         <p role="alert" className="text-xs text-destructive">
           {error}
         </p>
       )}
-      <textarea
-        aria-label="Shared state JSON"
-        className="min-h-64 w-full border bg-background p-3 font-mono text-xs"
-        disabled={!snapshot || working}
-        maxLength={65536}
-        value={draft ?? JSON.stringify(snapshot?.value ?? {}, null, 2)}
-        onChange={(event) => {
-          if (draft === undefined) setRevision(snapshot?.revision ?? 0);
-          setDraft(event.target.value);
-        }}
-      />
-      <div className="flex gap-2">
-        <Button disabled={working || draft === undefined}>Save JSON</Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={working}
-          onClick={() =>
-            void reload().catch((cause) => setError(cause.message))
-          }
-        >
-          Reload
-        </Button>
-      </div>
+      <dl className="divide-y text-xs">
+        {Object.entries(snapshot?.value ?? {}).map(([key, value]) => (
+          <div key={key} className="py-2">
+            <dt className="font-medium">{key}</dt>
+            <dd className="mt-1 truncate font-mono text-muted-foreground">
+              {JSON.stringify(value)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {snapshot && !Object.keys(snapshot.value).length && (
+        <p className="text-xs text-muted-foreground">No shared data yet.</p>
+      )}
+      <details>
+        <summary className="cursor-pointer text-xs font-medium">
+          Edit shared JSON
+        </summary>
+        <textarea
+          aria-label="Shared state JSON"
+          className="min-h-64 w-full border bg-background p-3 font-mono text-xs"
+          disabled={!snapshot || working}
+          maxLength={65536}
+          value={draft ?? JSON.stringify(snapshot?.value ?? {}, null, 2)}
+          onChange={(event) => {
+            if (draft === undefined) setRevision(snapshot?.revision ?? 0);
+            setDraft(event.target.value);
+          }}
+        />
+        <div className="flex gap-2">
+          <Button disabled={working || draft === undefined}>Save JSON</Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={working}
+            onClick={() =>
+              void reload().catch((cause) => setError(cause.message))
+            }
+          >
+            Reload
+          </Button>
+        </div>
+      </details>
     </form>
   );
 }
