@@ -124,6 +124,8 @@ export async function registerConsole(
       "conversations",
       "sandbox",
       "shared-state",
+      "runtime-controls",
+      "project-resources",
     ],
   }));
   app.get<{ Querystring: { connected?: boolean } }>(

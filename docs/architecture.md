@@ -144,10 +144,10 @@ The [integration decision](decisions/0001-local-pi-integration.md) records provi
 - `src/providers.ts` adapts Pi's built-in catalog, login prompts, notifications, cancellation, logout, and explicit model-catalog refresh. Environment-only providers show setup guidance. Provider discovery does not prove access to a model.
 - `src/credentials.ts` supplies Pi's credential-store interface. Credentials and installation identity live in `credentials.sqlite`; Pi owns login and token refresh. An exclusive SQLite lock prevents two backend processes from rotating the same credentials.
 - `src/sessions.ts` owns a SQLite catalog and one cached harness per session. New sessions store Pi state under `sessions/<uuid>/conversation.sqlite`; an existing root `conversation.sqlite` is registered as the `default` session without moving it. A session that cannot open is listed as unavailable while other sessions remain usable.
-- `src/conversation.ts` owns each harness and root conversation. The sandbox extension is registered, with tools disabled until explicitly configured. Configuration, submission, cancellation, and resume are serialized within each session. One run is accepted per session; different sessions have independent execution and transcripts.
+- `src/conversation.ts` owns each harness and root conversation. The sandbox extension is registered, with tools disabled until explicitly configured. Configuration, submission, cancellation, and resume are serialized within each session. Conversations run independently; each conversation can accept steering and queued follow-ups during its run.
 - `src/session-routes.ts` exposes session creation, snapshots, saved configuration, and lifecycle commands. Creation request IDs deduplicate retries; message request IDs are scoped to their session.
 - Provider responses include supported thinking levels from Pi's `getSupportedThinkingLevels()` and model context capacity. Saving settings validates the selected model/level against the installed catalog and persists them in Pi's `pi.agent` document. Settings changes during unfinished work return 409. Messages use saved settings instead of carrying a second configuration.
-- Browser polling retrieves up to 100 recent transcript entries, committed partial text, and lifecycle state. The browser never owns the run. Session list polling runs every two seconds; selected transcript polling runs every second. A URL query remembers selection on reload, and in-memory drafts and uncertain submission IDs remain separate per session while the page is open. Repeated submissions with the same request ID return the original admission, including after restart. A request ID identifies its original input and must not be reused for different content.
+- Browser polling retrieves the latest 50 transcript entries, committed partial text, and lifecycle state. The browser never owns the run. Session list polling runs every two seconds; selected transcript polling runs every second. A URL query remembers selection on reload, and in-memory drafts and uncertain submission IDs remain separate per conversation while the page is open. Repeated submissions with the same request ID return the original admission, including after restart. A request ID identifies its original input and must not be reused for different content or delivery mode.
 - Closing the browser leaves execution running. Backend restart opens saved work without scheduling it; Resume explicitly enables scheduling. Cancel aborts the conversation and persists that outcome. Read/list tools may replay; file writes and HTTP GET do not replay automatically after interruption. Other external-effect workflows remain unimplemented.
 
 Storage defaults to `$XDG_DATA_HOME/console` or `~/.local/share/console`. `CONSOLE_DATA_DIR` overrides it. The directory is owner-only and saved credentials are plaintext SQLite with owner-only permissions, not an encrypted vault. Keep it outside source control and run one backend per data directory. No automatic retention, export, or backup mechanism exists yet. Login attempts are ephemeral, expire after ten minutes, and can be reattached after a page reload while the backend remains alive.
@@ -217,7 +217,8 @@ uses Git without user credential helpers, hooks, templates, or file/ext transpor
 a temporary sibling and publishes the directory after success. Failed clones can be retried.
 Registration/cloning never runs repository setup scripts or grants agent tools.
 
-New-session access presets are None, Read, Edit, and Setup. Setup explicitly grants project
+Access presets are None, Read, Edit, Project, and Setup. The web client starts project conversations
+with Project: project reads/writes and commands, with network blocked. Setup explicitly grants project
 writes, shell commands, and unrestricted network; existing policies stay unchanged. Commands
 run Bash without startup profiles inside a fresh nono worker. Their working directory stays
 within the project; saved filesystem/network grants apply to child processes. A disposable home
@@ -231,7 +232,7 @@ Deleting an idle session or conversation marks it as Trash. Deleting a project h
 restore the project before restoring individual sessions. Moving to Trash removes neither project files nor conversation databases. The last active conversation cannot be deleted separately; delete its session instead.
 
 Home (`/`) shows actual machine counts and selected-machine summaries. `/chat` provides machine
-selection, project/session navigation, conversation controls, and shadcn Resizable panels. All routes
+selection, project/conversation navigation, conversation controls, and shadcn Resizable panels. All routes
 share the application header. Machine selection remains scoped to the browser tab.
 
 ## Network and agent inspection
@@ -284,8 +285,9 @@ preventing dangling runtime ownership. This is logical application deletion, not
 backups or every physical storage copy are erased. Project registration can be purged after its
 sessions are permanently deleted; project source directories remain untouched.
 
-The machine-tree row uses trailing action overlays to preserve label space without hover layout
-shifts. Rename edits its label; Enter/blur saves and Escape cancels. The remembered machine tree
+Machine-tree rows use shadcn context menus and trailing ellipsis menus. Hover/focus replaces
+trailing metadata with a square button in normal layout, keeping actions clear of labels.
+Trash actions require inline confirmation. Rename edits its label; Enter/blur saves and Escape cancels. The remembered machine tree
 is the sole permanent side column; agent controls open on demand in a nonmodal right-side panel.
 The composer uses shadcn Popover for searchable connected models and supported thinking levels;
 selections update the selected conversation immediately. The Tools panel explains empty selection
@@ -302,8 +304,12 @@ web server. Model preferences filter menus only, never change running or saved a
 preferences offer only the current model until the user selects more models in Settings.
 
 Chat permanently reserves space only for the machine tree and conversation. The tree heading is
-Machines, and every machine has an Add project entry. Machine gears route to machine-scoped
-Settings. Session, State, Tasks, Tools, and Extend remain scoped to the selected agent in an on-demand
+Machines. Each machine has a Projects section with a plus button opening a shadcn Dialog
+for an existing folder, new folder, or public GitHub clone. Conversation rows sit directly under
+their project; a project-row plus creates and opens one directly, with no access-selection dialog.
+Tool permissions remain conversation controls. Internal session containers and the initial Main label
+are hidden. Forks and children
+stay nested. Machine menus route to machine-scoped Settings. Session, State, Tasks, Tools, and Extend remain scoped to the selected agent in an on-demand
 right panel; project controls use that panel as well. Closing it preserves mounted drafts and returns
 focus. The panel does not persist as a second rail or shrink the conversation. Tree collapse is
 explicit, remembered per browser tab, and its button has no persistent selected background.
@@ -334,3 +340,56 @@ machine discovery, SSH transport, browser settings, or a production sandbox poli
 those layers. Console keeps pinned Pi 1.4.0; newer upstream examples are design references, not
 proof that newer APIs are available. Hot extension replacement, custom durable jobs, and a Chord
 reactive-view migration remain unimplemented. Real remote SSH and macOS isolation are unverified.
+
+## Paged conversation history
+
+Snapshots read the newest 50 entries through Pi's native fork-aware history API. Older pages use
+an exclusive entry-ID bound on a separate history endpoint; they do not expand the snapshot or
+scan the entire transcript. The web client loads earlier pages only on upward scroll or explicit
+request, merges stable message IDs with polling updates, and anchors the visible message during
+prepend. Opening a conversation positions the view at its latest output. Scrolling away from the
+bottom suspends automatic following until the user returns there. History requests are aborted
+when their conversation component unmounts.
+
+## Default project ownership
+
+Each machine persists a protected Default project for conversations created without a project.
+Its directory is `<dataDirectory>-projects/default`, outside private databases and credentials.
+New session records always reference a project and bind sandbox configuration to that directory.
+Filesystem, command, write, and network authority still require the selected access preset; a
+project association alone grants no tools. Existing unassigned records are associated with Default
+without moving databases or changing saved sandbox policies. Legacy grants are preserved, so
+this association does not retroactively confine an existing conversation to the new directory.
+Sessions remain internal Pi persistence/lifecycle boundaries; this change does not merge transcripts,
+introduce OS containers, or change machine-wide shared state into project-private state.
+
+## Pi coding execution boundary
+
+Pi Durable's official coding tools execute inside the existing nono worker, not in the provider-host
+process. The child loads a limited read-only set of runtime packages and receives a sandbox-local
+Node execution environment without provider credentials or Harness authority. File access remains
+kernel-confined. The Bash environment adapter keeps child processes in the worker's process group;
+cancellation and timeouts kill that group. Output is bounded and scratch files expire after a call.
+The assigned directory is included in prompt context independently of tool enablement.
+
+Project settings and conversation inspectors have separate navigation. Project settings contain no
+conversation tabs; the conversation inspector owns Conversation, State, Tasks, Tools, and Extend.
+See [native Pi coding tools](decisions/0009-native-pi-tools-in-nono.md).
+
+## Runtime controls and project resources
+
+Console now admits Pi steers/follow-ups during active work while retaining reject-if-busy for API
+compatibility. It projects the persisted inbox, usage ledger, context estimate, live compactions,
+tool calls and task dependencies. Withdrawal is scoped to the addressed conversation. Manual
+compaction uses a native CompactionTask plus a receipt in one atomic Pi commit; reset uses a
+request-identified native reset write. Neither action implicitly resumes an interrupted session.
+Automatic compaction still uses Pi defaults. See the server guide for routes and replay semantics.
+
+Project instructions, skill catalogs and prompt templates are read inside nono, not by an
+unrestricted resource loader in Fastify. The sandbox extension renders current root instructions
+and exposes explicit nested-context/resource loading. The web inspector shows the loaded sources;
+resource commands expand before durable input admission, after duplicate-request detection.
+Project Markdown cannot widen permissions or execute extensions. Workspace-root scope is intentional;
+user resource directories, executable plugins, MCP and full CLI compatibility are separate adapters.
+The user selected equivalent Console features on the existing Durable runtime. Remaining delivery
+is tracked in [Pi capability delivery](pi-capabilities.md), without treating dependency APIs as completed UI.

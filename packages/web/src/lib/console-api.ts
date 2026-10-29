@@ -49,15 +49,42 @@ export type AgentConfiguration = {
   thinkingLevel: string;
 };
 export type Conversation = SessionSummary & {
+  queue?: { id: string; mode: "steer" | "followUp"; text: string }[];
+  usage?: {
+    models: Record<string, RecordedUsage>;
+    tools: Record<string, RecordedUsage>;
+  };
+  contextUsage?: {
+    estimatedTokens: number;
+    capacity: number;
+    reserveTokens: number;
+    backgroundTokens: number;
+  };
+  compactions?: {
+    id: string;
+    reason: string;
+    blocking: boolean;
+    attempt: number;
+    retryAt?: number;
+  }[];
+  compactionFailed?: boolean;
+  liveTools?: { id: string; name: string; status: string; output?: string }[];
   sandbox: SandboxPolicy;
   thinkingLevel: string;
   hasOlder: boolean;
+  olderCursor?: string;
   messages: {
     id: string;
     role: string;
     text: string;
     toolName?: string;
     entryId?: string;
+    kind?: string;
+    toolCalls?: {
+      id: string;
+      name: string;
+      arguments: Record<string, unknown>;
+    }[];
     reasoning?: ReasoningPart[];
   }[];
   partial: string;
@@ -66,6 +93,18 @@ export type Conversation = SessionSummary & {
   partialId?: string;
   outcome?: string;
 };
+
+export type RecordedUsage = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  totalTokens: number;
+  reasoning?: number;
+  cost: { total: number };
+};
+
+export type MessageMode = "reject" | "steer" | "followUp";
 
 export type ReasoningPart = { id: string; text: string; streaming: boolean };
 
@@ -177,6 +216,7 @@ export type BackendConnection = {
   status: string;
 };
 export type Workspace = {
+  isDefault?: number;
   id: string;
   name: string;
   path: string;
@@ -186,6 +226,7 @@ export type Workspace = {
   deleted?: number;
 };
 export type ConversationSummary = {
+  isMain?: boolean;
   parentId?: string;
   kind?: "root" | "fork" | "subagent";
   id: string;
@@ -213,5 +254,17 @@ export type AgentInspection = {
   }[];
   instructions: string;
   tasks: { id: string; name: string; state: string }[];
+  taskGraph?: {
+    id: string;
+    name: string;
+    conversationId: string;
+    owner?: string;
+    background: boolean;
+    abortRequested: boolean;
+    state: string;
+    waitingOn: string[];
+    wakeAt?: number;
+    blockedReason?: string;
+  }[];
   scheduling: string;
 };

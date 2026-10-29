@@ -60,6 +60,11 @@ export async function openSessions(
       throw error;
     }
   }
+  const defaultProject = await workspaces.ensureDefault();
+  // Associate legacy sessions without moving their databases or changing saved grants.
+  db.prepare(
+    "UPDATE sessions SET workspaceId=? WHERE workspaceId IS NULL OR workspaceId=''",
+  ).run(defaultProject.id);
   db.exec(
     "CREATE TABLE IF NOT EXISTS counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL); INSERT OR IGNORE INTO counters SELECT 'session', COALESCE(MAX(rowid),0) FROM sessions",
   );
@@ -131,14 +136,14 @@ export async function openSessions(
       name: string,
       requestId: string,
       workspaceId?: string,
-      access: "none" | "read" | "edit" | "setup" = "none",
+      access: "none" | "read" | "edit" | "project" | "setup" = "none",
     ) {
       const next = pending.then(async () => {
         const existing = db
           .prepare("SELECT id FROM sessions WHERE requestId = ?")
           .get(requestId);
         if (existing) return record(String(existing.id));
-        const workspace = workspaceId ? workspaces.get(workspaceId) : undefined;
+        const workspace = workspaces.get(workspaceId || defaultProject.id);
         if (workspace && workspace.state !== "ready")
           throw httpError(
             409,
@@ -150,9 +155,9 @@ export async function openSessions(
           )
           .get()?.value;
         const row = {
-          workspaceId: workspaceId ?? null,
+          workspaceId: workspace.id,
           id: randomUUID(),
-          name: name.trim() || `Session #${number}`,
+          name: name.trim() || `Conversation #${number}`,
           createdAt: new Date().toISOString(),
         };
         const runtime = await open(row.id);
@@ -161,8 +166,8 @@ export async function openSessions(
             ...defaultSandbox(),
             workspace: workspace.path,
             enabled: access !== "none",
-            commands: access === "setup",
-            writePaths: ["edit", "setup"].includes(access)
+            commands: ["project", "setup"].includes(access),
+            writePaths: ["edit", "project", "setup"].includes(access)
               ? [workspace.path]
               : [],
             network: access === "setup" ? "unrestricted" : "blocked",
@@ -287,7 +292,8 @@ export async function openSessions(
       db.prepare("UPDATE sessions SET deleted=0 WHERE id=?").run(id);
     },
     async trashWorkspace(id: string) {
-      workspaces.get(id);
+      if (workspaces.get(id).isDefault)
+        throw httpError(409, "The Default project cannot be deleted.");
       const rows = db
         .prepare("SELECT id FROM sessions WHERE workspaceId=? AND deleted=0")
         .all(id);

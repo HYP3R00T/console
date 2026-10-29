@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,7 +16,14 @@ export type SandboxRequest = {
     | "list"
     | "mkdir"
     | "probe-network"
-    | "command";
+    | "command"
+    | "pi"
+    | "resources";
+  resourceKind?: "skill" | "prompt";
+  resourceName?: string;
+  directory?: string;
+  tool?: string;
+  args?: Record<string, unknown>;
   command?: string;
   cwd?: string;
   path?: string;
@@ -32,6 +40,33 @@ const worker = fileURLToPath(
     import.meta.url,
   ),
 );
+const piWorker = fileURLToPath(
+  new URL(
+    import.meta.url.endsWith(".ts") ? "./sandbox-pi.ts" : "./sandbox-pi.js",
+    import.meta.url,
+  ),
+);
+const piEntry = fileURLToPath(
+  import.meta.resolve("@earendil-works/pi-durable/tools"),
+);
+const durableRoot = dirname(dirname(dirname(piEntry)));
+const resolver = createRequire(join(durableRoot, "package.json"));
+const piRuntime = [
+  durableRoot,
+  ...[
+    "typebox",
+    "diff",
+    "@earendil-works/chord",
+    "@earendil-works/pi-telemetry",
+  ].map((name) => {
+    const location = resolver.resolve
+      .paths(name)
+      ?.map((path) => join(path, name))
+      .find((path) => existsSync(join(path, "package.json")));
+    if (!location) throw new Error(`Pi runtime package missing: ${name}`);
+    return location;
+  }),
+];
 const cleanEnvironment = (home: string) => ({
   PATH: process.env.PATH,
   HOME: home,
@@ -74,7 +109,10 @@ export async function runSandbox(
     throw new Error("Sandbox tools are disabled");
   if (!(await sandboxSupport()).available)
     throw new Error("nono 0.80.0 is required; no unconfined fallback");
-  if (request.operation === "command" && !policy.commands)
+  const command =
+    request.operation === "command" ||
+    (request.operation === "pi" && request.tool === "bash");
+  if (command && !policy.commands)
     throw new Error("Shell commands are disabled by policy");
   const binary = await nonoExecutable();
   const scratch = await mkdtemp(join(privateDirectory, ".tool-"));
@@ -87,6 +125,24 @@ export async function runSandbox(
     for (const path of policy.readPaths) await grant(path, "read", "directory");
     for (const path of policy.writePaths)
       await grant(path, "readwrite", "directory");
+    if (request.operation === "pi") {
+      await grant(piWorker, "read", "file");
+      for (const path of piRuntime) await grant(path, "read", "directory");
+    }
+    if (request.operation === "resources") {
+      await grant(
+        fileURLToPath(
+          new URL(
+            import.meta.url.endsWith(".ts")
+              ? "./project-resources.ts"
+              : "./project-resources.js",
+            import.meta.url,
+          ),
+        ),
+        "read",
+        "file",
+      );
+    }
     // Fixed read-only runtime prerequisites, separate from user workspace authority.
     for (const path of [
       process.execPath,
@@ -106,8 +162,8 @@ export async function runSandbox(
     }
     const home = join(scratch, "home");
     await mkdir(home, { mode: 0o700 });
+    await grant(home, "readwrite", "directory");
     if (policy.commands) {
-      await grant(home, "readwrite", "directory");
       for (const path of [
         "/usr/bin",
         "/bin",
@@ -181,7 +237,7 @@ export async function runSandbox(
         {
           cwd: policy.workspace,
           env: cleanEnvironment(scratch),
-          detached: request.operation === "command",
+          detached: command,
           stdio: "pipe",
         },
       );
@@ -190,8 +246,7 @@ export async function runSandbox(
       let finished = false;
       const stop = () => {
         try {
-          if (request.operation === "command" && child.pid)
-            process.kill(-child.pid, "SIGKILL");
+          if (command && child.pid) process.kill(-child.pid, "SIGKILL");
           else child.kill("SIGKILL");
         } catch {
           /* Already exited. */
@@ -202,14 +257,14 @@ export async function runSandbox(
           stop();
           finish("Sandbox operation timed out");
         },
-        request.operation === "command" ? 125_000 : 10_000,
+        command ? 125_000 : 10_000,
       );
       function finish(failure?: string, code?: number | null) {
         if (finished) return;
         finished = true;
         clearTimeout(timer);
         signal?.removeEventListener("abort", abort);
-        if (request.operation === "command") stop();
+        if (command) stop();
         if (failure) {
           reject(new Error(failure));
           return;

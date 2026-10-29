@@ -213,7 +213,18 @@ test("saved sandbox policy drives real Pi tools and survives backend restart", a
       method: "POST",
       url: "/v1/sessions",
       headers,
-      payload: { name: "Sandbox", requestId: "sandbox" },
+      payload: {
+        name: "Sandbox",
+        requestId: "sandbox",
+        workspaceId: (
+          await app.inject({
+            method: "POST",
+            url: "/v1/workspaces",
+            headers,
+            payload: { name: "Fixture", path: workspace, requestId: "fixture" },
+          })
+        ).json().id,
+      },
     })
   ).json().id;
   const endpoint = `/v1/sessions/${id}`;
@@ -370,7 +381,18 @@ test("Pi can inspect a workspace and create a nested project through sandboxed t
       method: "POST",
       url: "/v1/sessions",
       headers,
-      payload: { name: "Scaffold", requestId: "scaffold" },
+      payload: {
+        name: "Scaffold",
+        requestId: "scaffold",
+        workspaceId: (
+          await app.inject({
+            method: "POST",
+            url: "/v1/workspaces",
+            headers,
+            payload: { name: "Fixture", path: workspace, requestId: "fixture" },
+          })
+        ).json().id,
+      },
     })
   ).json().id;
   const endpoint = `/v1/sessions/${id}`;
@@ -548,4 +570,182 @@ test("shell children inherit network blocking and cancellation stops delayed wri
   await assert.rejects(readFile(join(workspace, "late.txt")), {
     code: "ENOENT",
   });
+});
+
+test("official Pi read/write/edit/bash execute inside nono and cannot read private paths", async (t) => {
+  const { workspace, data, extra, policy } = await fixture(t);
+  const access = await validateSandbox(
+    { ...policy, commands: true, writePaths: [workspace] },
+    data,
+  );
+  const invoke = async (tool: string, args: Record<string, unknown>) =>
+    JSON.parse(await runSandbox(access, { operation: "pi", tool, args }, data));
+  const read = await invoke("read", { path: "input.txt" });
+  assert.match(JSON.stringify(read.output), /inside/);
+  await invoke("write", { path: "nested/native.txt", content: "before\n" });
+  await invoke("edit", {
+    path: "nested/native.txt",
+    edits: [{ oldText: "before", newText: "after" }],
+  });
+  assert.equal(
+    await readFile(join(workspace, "nested/native.txt"), "utf8"),
+    "after\n",
+  );
+  const pwd = await invoke("bash", { command: "pwd" });
+  assert.equal(pwd.structuredOutput.exitCode, 0);
+  assert.equal(pwd.structuredOutput.output.trim(), workspace);
+  for (const path of [join(data, "secret.txt"), join(extra, "extra.txt")]) {
+    await assert.rejects(invoke("read", { path }));
+    const denied = await invoke("bash", { command: `cat '${path}'` });
+    assert.equal(denied.isError, true);
+    assert.notEqual(denied.structuredOutput.exitCode, 0);
+  }
+  await symlink(join(data, "secret.txt"), join(workspace, "private-link"));
+  await assert.rejects(invoke("read", { path: "private-link" }));
+  const deniedWrite = await invoke("bash", {
+    command: `echo changed > '${join(extra, "extra.txt")}'`,
+  });
+  assert.equal(deniedWrite.isError, true);
+  assert.equal(await readFile(join(extra, "extra.txt"), "utf8"), "extra");
+  const clean = await invoke("bash", { command: "env" });
+  assert.doesNotMatch(
+    clean.structuredOutput.output,
+    /OPENAI_API_KEY=|ANTHROPIC_API_KEY=|CODEX_HOME=/,
+  );
+  await assert.rejects(
+    runSandbox(
+      { ...access, commands: false },
+      { operation: "pi", tool: "bash", args: { command: "pwd" } },
+      data,
+    ),
+    /disabled/,
+  );
+});
+
+test("project conversations offer official Pi tools and include their absolute directory in model context", async (t) => {
+  const { data, workspace } = await fixture(t);
+  const faux = fauxProvider();
+  const models = createModels();
+  models.setProvider(faux.provider);
+  const app = createApp({}, { dataDirectory: data, models: () => models });
+  t.after(() => app.close());
+  const headers = { "x-console-request": "1" };
+  const project = (
+    await app.inject({
+      method: "POST",
+      url: "/v1/workspaces",
+      headers,
+      payload: { name: "Coding", path: workspace, requestId: "coding-project" },
+    })
+  ).json();
+  const created = await app.inject({
+    method: "POST",
+    url: "/v1/sessions",
+    headers,
+    payload: {
+      workspaceId: project.id,
+      access: "project",
+      requestId: "coding-chat",
+    },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  const snapshot = created.json();
+  for (const name of ["read", "write", "edit", "bash"])
+    assert.ok(snapshot.enabledTools.includes(name));
+  assert.equal(snapshot.sandbox.network, "blocked");
+  assert.deepEqual(snapshot.sandbox.writePaths, [workspace]);
+  const base = `/v1/sessions/${snapshot.id}`;
+  await app.inject({
+    method: "PATCH",
+    url: `${base}/config`,
+    headers,
+    payload: { provider: faux.provider.id, model: faux.getModel().id },
+  });
+  faux.setResponses([
+    (context) => {
+      assert.ok(JSON.stringify(context.messages).includes(workspace));
+      return fauxAssistantMessage(fauxToolCall("bash", { command: "pwd" }), {
+        stopReason: "toolUse",
+      });
+    },
+    (context) => {
+      assert.match(
+        JSON.stringify(context.messages.at(-1)),
+        new RegExp(workspace),
+      );
+      return fauxAssistantMessage("Project directory verified");
+    },
+  ]);
+  const sent = await app.inject({
+    method: "POST",
+    url: `${base}/messages`,
+    headers,
+    payload: {
+      text: "What is the project directory?",
+      requestId: "path-check",
+    },
+  });
+  assert.equal(sent.statusCode, 202, sent.body);
+  const done = await until(
+    async () => (await app.inject(base)).json(),
+    (value) =>
+      value.status === "idle" &&
+      value.messages.at(-1)?.text === "Project directory verified",
+  );
+  assert.ok(
+    done.messages.some(
+      (message: { toolName?: string }) => message.toolName === "bash",
+    ),
+  );
+});
+
+test("native Pi bash blocks TCP and cancellation stops descendant writes", async (t) => {
+  const { workspace, data, policy } = await fixture(t);
+  const access = { ...policy, commands: true, writePaths: [workspace] };
+  const server = createServer((socket) => socket.destroy());
+  await new Promise<void>((accept) => server.listen(0, "127.0.0.1", accept));
+  t.after(() => new Promise<void>((accept) => server.close(() => accept())));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const blocked = JSON.parse(
+    await runSandbox(
+      access,
+      {
+        operation: "pi",
+        tool: "bash",
+        args: {
+          command: `node -e 'require("node:net").connect({port:${address.port},host:"127.0.0.1"}).on("error",()=>process.exit(7)).on("connect",()=>process.exit(0))'`,
+        },
+      },
+      data,
+    ),
+  );
+  assert.equal(blocked.structuredOutput.exitCode, 7);
+  const controller = new AbortController();
+  const running = runSandbox(
+    access,
+    {
+      operation: "pi",
+      tool: "bash",
+      args: {
+        command:
+          "echo started > started.txt; (sleep 0.7; echo escaped > escaped.txt) & wait",
+      },
+    },
+    data,
+    controller.signal,
+  );
+  void running.catch(() => {});
+  await until(
+    async () =>
+      readFile(join(workspace, "started.txt")).then(
+        () => true,
+        () => false,
+      ),
+    (ready) => ready,
+  );
+  controller.abort();
+  await assert.rejects(running, /cancelled/);
+  await new Promise((accept) => setTimeout(accept, 1000));
+  await assert.rejects(readFile(join(workspace, "escaped.txt")), /ENOENT/);
 });
