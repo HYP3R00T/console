@@ -75,6 +75,13 @@ kind/version, database location, replay policy, sandbox grant or browser prefere
   links. Native sandbox tests cover TypeScript workers; production verification must also exercise
   compiled JavaScript workers. Organizing files is not permission to weaken grants or copy secrets.
 
+Navigation requests session summaries with optional bundled conversations, avoiding one HTTP
+request per session on updated servers. The old session response and conversation endpoints remain
+available. Session listing reads project membership once; conversation listing shares one runtime
+task inspection across its summaries. These read optimizations do not cache execution state or
+change durable mutations. Hidden detail panels suspend their reads without unmounting drafts;
+active transcript polling remains independent.
+
 See the [server guide](packages/server.md#structure-and-extension) and
 [web guide](packages/web.md#structure-and-boundaries) for the current source map. Prefer direct
 imports from owning modules to compatibility wrappers or a new generic service framework.

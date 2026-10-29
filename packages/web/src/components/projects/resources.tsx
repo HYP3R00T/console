@@ -15,10 +15,12 @@ export function ProjectResources({
   session,
   path,
   onUse,
+  active = true,
 }: {
   session: Conversation;
   path: string;
   onUse: (text: string) => void;
+  active?: boolean;
 }) {
   const [resources, setResources] = useState<Resources>();
   const [error, setError] = useState("");
@@ -30,6 +32,7 @@ export function ProjectResources({
       setResources(undefined);
       return;
     }
+    if (!active) return;
     const controller = new AbortController();
     void api<Resources>(resourceUrl, "GET", undefined, controller.signal)
       .then((value) => {
@@ -42,7 +45,7 @@ export function ProjectResources({
         if (!controller.signal.aborted) setError(cause.message);
       });
     return () => controller.abort();
-  }, [resourceUrl, session.sandbox.enabled, available]);
+  }, [resourceUrl, session.sandbox.enabled, available, active]);
   return (
     <section aria-label="Project resources" className="space-y-3 border-t pt-4">
       <div className="flex items-center justify-between gap-2">

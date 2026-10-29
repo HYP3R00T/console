@@ -2,45 +2,30 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
-export function SharedState() {
-  const [snapshot, setSnapshot] = useState<{
-    revision: number;
-    value: Record<string, unknown>;
-  }>();
+import { startPolling } from "@/lib/poll";
+
+type State = { revision: number; value: Record<string, unknown> };
+export function SharedState({ active = true }: { active?: boolean }) {
+  const [snapshot, setSnapshot] = useState<State>();
   const [draft, setDraft] = useState<string>();
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
   const reload = useCallback(async () => {
-    const value = await api<{
-      revision: number;
-      value: Record<string, unknown>;
-    }>("/state");
+    const value = await api<State>("/state");
     setSnapshot(value);
     setDraft(undefined);
     setRevision(value.revision);
   }, []);
   useEffect(() => {
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
-      try {
-        const value = await api<{
-          revision: number;
-          value: Record<string, unknown>;
-        }>("/state", "GET", undefined, controller.signal);
-        if (!controller.signal.aborted) setSnapshot(value);
-      } catch (cause) {
-        if (!controller.signal.aborted) setError((cause as Error).message);
-      }
-      if (!controller.signal.aborted) timer = setTimeout(poll, 1500);
-    }
-    void poll();
-    return () => {
-      controller.abort();
-      clearTimeout(timer);
-    };
-  }, []);
+    if (!active) return;
+    return startPolling({
+      read: (signal) => api<State>("/state", "GET", undefined, signal),
+      onValue: setSnapshot,
+      onError: (cause) => setError(cause.message),
+      interval: 1500,
+    });
+  }, [active]);
   return (
     <form
       className="space-y-3"

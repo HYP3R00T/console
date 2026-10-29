@@ -20,7 +20,7 @@ import {
 } from "../sandbox/policy.ts";
 import type { ProjectResources } from "../sandbox/resources.ts";
 import { runSandbox } from "../sandbox/runner.ts";
-import type { Runtime } from "./context.ts";
+import type { Runtime, RuntimeInspection } from "./context.ts";
 import { PlanDoc } from "./plan.ts";
 import { offeredTools } from "./tools.ts";
 
@@ -51,10 +51,11 @@ function reasoning(message: Message, streaming = false) {
 export async function conversationSummary(
   runtime: Runtime,
   root: PiConversation,
+  currentInspection?: RuntimeInspection,
 ) {
   const { harness, models } = runtime;
   const agent = await harness.snapshot(AgentDoc, root.id, context);
-  const inspection = await harness.inspect(context);
+  const inspection = currentInspection ?? (await harness.inspect(context));
   const policy = await harness.snapshot(SandboxDoc, root.id, context);
   const tasks = inspection.tasks.filter(
     (task) => task.record.conversationId === root.id,

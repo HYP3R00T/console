@@ -67,6 +67,14 @@ The details panel keeps conversation forms mounted when hidden; shared machine s
 component/lifecycle. `navigation/branch.tsx` owns persistent expansion; tree API polling belongs to
 `machines/use-project-tree.ts`. Keep these ownership boundaries when adding a control.
 
+Tree refreshes use two requests per machine: projects plus sessions with bundled conversation
+summaries. Older servers that omit the bundle retain per-session conversation requests. The
+small `lib/poll.ts` helper schedules only after completion, aborts on cleanup and suppresses late
+callbacks. Tree/runtime/shared-state pollers use it without adding a cache or dependencies.
+Closing details or switching scope stops hidden runtime/shared-state polling while retaining
+mounted form drafts. Opening the relevant section resumes immediately; resource discovery waits
+until Instructions is visible. Transcript and connection polling keep their existing cadence.
+
 `components.json` retains shadcn aliases and theme configuration. `next.config.ts` has no default
 backend rewrite. Server-owned execution, workspaces and authority stay in Fastify; the Next.js
 proxy does not replace backend authorization. Team authentication remains unimplemented.

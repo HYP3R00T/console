@@ -67,7 +67,7 @@ All routes below use `/v1`; mutations require `X-Console-Request: 1`. JSON bodie
 - `GET /connections/current` and `GET /connections/:id`: notifications and the current prompt.
 - `POST /connections/:id/answer`: submit `{ "promptId": "...", "value": "..." }`.
 - `DELETE /connections/:id`: cancel a pending flow; `DELETE /providers/:id`: remove saved credentials. Ambient credentials are unaffected.
-- `GET /sessions`: named sessions and their current status; unavailable databases are reported individually.
+- `GET /sessions`: named sessions and their current status; unavailable databases are reported individually. `?include=conversations` adds active conversation summaries to each healthy session for batched navigation. The default response remains unchanged; Trash is excluded. Project membership is read once per list, and each runtime reuses one task inspection across its conversation summaries.
 - `POST /sessions`: create `{ "requestId": "unique-creation-id", "workspaceId": "optional-project-id" }`; retries return the same session.
 - `GET /sessions/:id`: recent history, partial answer, saved configuration, and lifecycle state. Assistant messages include visible `reasoning` blocks; `partialReasoning` carries live blocks with a `streaming` flag. Redacted content and thinking signatures are omitted.
 - `PATCH /sessions/:id/config`: save `{ "provider": "...", "model": "...", "thinkingLevel": "high" }`. The provider must be connected and the level supported by that model. Unfinished work returns 409.

@@ -14,6 +14,7 @@ export function SessionInspector({
   onSandboxSave,
   onSandboxDirtyChange,
   onResourcePrompt,
+  active = true,
 }: {
   session: Conversation;
   panel: InspectorPanel;
@@ -21,6 +22,7 @@ export function SessionInspector({
   onSandboxSave: (policy: SandboxPolicy) => Promise<void>;
   onSandboxDirtyChange: (dirty: boolean) => void;
   onResourcePrompt: (text: string) => void;
+  active?: boolean;
 }) {
   const path = `/sessions/${session.id}${session.conversationId ? `/conversations/${session.conversationId}` : ""}`;
   const usage = session.contextUsage;
@@ -160,6 +162,7 @@ export function SessionInspector({
             Project files available through this conversation’s access policy.
           </p>
           <ProjectResources
+            active={active && panel === "extend"}
             session={session}
             path={path}
             onUse={onResourcePrompt}

@@ -62,7 +62,7 @@ Evidence: [identity/auth](../packages/server/src/http/console.ts),
 | PRJ-03 | Private repository authentication | Missing | No repository credential onboarding. |
 | PRJ-04 | Protected Default project and model association | Implemented | Existing grants preserved; association alone adds no authority. |
 | PRJ-05 | Named/numbered sessions and conversations | Implemented | Persistent IDs, idempotent creation; shared session storage/workspace. |
-| PRJ-06 | Rename and project/conversation navigation | Implemented | Aligned tree, row-click toggles with persisted expansion, fork/agent icons and parent identity. |
+| PRJ-06 | Rename and project/conversation navigation | Implemented | Aligned tree, persisted row-click toggles, ancestry; batched conversation summaries with older-server fallback. |
 | PRJ-07 | Trash/restore/permanent deletion | Implemented | Idle/dependency checks; source retained; backups not physically erased. |
 | PRJ-08 | Isolated checkouts for concurrent editing | Missing | Conversations/subagents currently share source files. |
 | PRJ-09 | Diff review and verification-evidence workflow | Missing | No dedicated review/completion-evidence interface. |
@@ -185,7 +185,7 @@ Evidence: [coordination](../packages/server/src/runtime/coordination.ts),
 | --- | --- | --- | --- |
 | UI-01 | Markdown/collapsible activity, plans and output | Implemented | Icon actions; raw HTML/automatic remote images disabled; bounded output display. |
 | UI-02 | History anchoring and paused bottom-follow | Implemented | Stable aliases, inspection pauses following, jump to latest. |
-| UI-03 | On-demand inspectors/settings and machine tree | Implemented | Conversation/Project/Machine scopes; desktop details split, mobile overlay, folded technical controls. |
+| UI-03 | On-demand inspectors/settings and machine tree | Implemented | Conversation/Project/Machine scopes; responsive split/overlay; hidden reads stop while mounted drafts remain. |
 | UI-04 | Continuous model/tool event delivery | Partial | Polling saved/live snapshots; no event stream or continuous worker-output channel. |
 | UI-05 | Transcript export/import/sharing | Missing | No supported portable archive/import/sharing workflow. |
 | CLI-01 | Reusable client SDK and CLI/TUI | Missing | Internal web helper is not an external client contract. |
@@ -201,6 +201,7 @@ Evidence: [coordination](../packages/server/src/runtime/coordination.ts),
 Evidence: [chat](../packages/web/src/components/chat/conversation.tsx),
 [history following](../packages/web/src/components/chat/use-history.ts),
 [polling](../packages/web/src/components/chat/use-chat-session.ts),
+[tree/polling regression tests](../packages/server/test/polling.test.ts),
 [projection tests](../packages/server/test/chat-transcript.test.ts),
 [storage configuration](../packages/server/src/platform/configuration.ts),
 [release workflow](releases.md).
@@ -211,6 +212,12 @@ The 2026-10-29 re-audit ran `pnpm test`: 53 tests passed, none skipped, using di
 and faux inference. This dated result is not an automatically refreshed health indicator.
 The chat change passed typecheck/build/hooks before commit. All-provider login, real SSH,
 macOS isolation, abrupt-crash recovery and production scale remain unproven.
+
+The subsequent navigation/polling optimization passed 58 tests, typecheck, production builds
+and repository hooks. Request-count tests verify two tree requests on updated servers and the
+older-server fallback; polling tests cover cleanup, late results and retry. A manual browser
+check confirmed hierarchy, activity controls and retained unsaved instructions across closing
+details. These checks do not establish a production latency or throughput improvement.
 
 Recommended order, not a newly authorized implementation plan:
 

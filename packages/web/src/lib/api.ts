@@ -33,6 +33,7 @@ export type Login = {
   };
 };
 export type SessionSummary = {
+  conversations?: ConversationSummary[];
   id: string;
   name: string;
   createdAt: string;

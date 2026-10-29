@@ -21,6 +21,7 @@ export type Runtime = {
   privateDirectory: string;
   serialize: <T>(operation: () => Promise<T>) => Promise<T>;
 };
+export type RuntimeInspection = Awaited<ReturnType<Harness["inspect"]>>;
 export async function assertIdle({ harness }: Runtime, root: Conversation) {
   if (
     (await harness.inspect(context)).tasks.some(

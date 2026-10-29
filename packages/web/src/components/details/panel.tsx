@@ -160,6 +160,7 @@ export function DetailsPanel({
                     ? chat.conversationPath(session.id, session.conversationId)
                     : ""
                 }
+                active={layout.inspectorOpen}
                 panel="state"
                 idle={false}
                 onChanged={() => {}}
@@ -169,6 +170,7 @@ export function DetailsPanel({
           {session ? (
             <div hidden={layout.contextPanel === "machine"}>
               <SessionInspector
+                active={layout.inspectorOpen && !layout.contextPanel}
                 key={`${session.id}:${session.conversationId}`}
                 session={session}
                 panel={layout.panel}
@@ -205,6 +207,7 @@ export function DetailsPanel({
                     session.id,
                     session.conversationId,
                   )}
+                  active={layout.inspectorOpen && !layout.contextPanel}
                   panel={layout.panel}
                   idle={
                     session.status === "idle" &&
