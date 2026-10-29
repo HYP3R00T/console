@@ -7,7 +7,7 @@ import {
   LoaderCircleIcon,
   MessageSquareIcon,
   MonitorIcon,
-  SlidersHorizontalIcon,
+  PanelRightOpenIcon,
   TerminalSquareIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -39,6 +39,7 @@ export function SessionChat({
   onSend,
   onControl,
   onConfigure,
+  inspectorOpen,
   modelPicker,
   mode,
   onMode,
@@ -63,6 +64,7 @@ export function SessionChat({
   onMode: (mode: MessageMode) => void;
   onWithdraw: (id: string) => void;
   onConfigure: () => void;
+  inspectorOpen: boolean;
   modelPicker: ReactNode;
   onControl: (action: "cancel" | "resume") => void;
 }) {
@@ -127,11 +129,15 @@ export function SessionChat({
           <Button
             size="icon-xs"
             variant="ghost"
-            aria-label="Open agent controls"
-            title="Agent controls"
+            aria-label={
+              inspectorOpen ? "Close details panel" : "Open details panel"
+            }
+            aria-expanded={inspectorOpen}
+            aria-controls="conversation-details"
+            title="Conversation details"
             onClick={onConfigure}
           >
-            <SlidersHorizontalIcon />
+            <PanelRightOpenIcon />
           </Button>
           <span
             role="status"

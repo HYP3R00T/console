@@ -45,11 +45,11 @@ removed selection leads back to onboarding, without falling back to another mach
 - `src/app/page.tsx`: Home overview with actual machine counts and selected-machine summaries.
 - `src/app/chat/page.tsx`: session selection, polling, drafts, submission identities, and resizable navigation.
 - `src/components/network-sidebar.tsx`: collapsible machines/projects/conversations, context menus, inline rename/Trash confirmation, creation, and remote selection.
-- `src/components/agent-panels.tsx`: live State, Tasks, Tools, and Extend inspectors.
+- `src/components/agent-panels.tsx`: conversation activity/tool/instruction controls and separate machine shared state.
 - `src/components/chat-composer.tsx`: expanding text input, model/configuration shortcut, Send, and Stop.
 - `src/components/session-chat.tsx`: transcript, composer, and cancel/resume controls.
 - `src/components/chat-activity.tsx`: grouped tool activity, reasoning and recorded plans using shadcn Trace disclosures.
-- `src/components/session-inspector.tsx`: per-agent model, thinking, and sandbox controls in the contextual panel.
+- `src/components/session-inspector.tsx`: conversation overview/plan, collapsed usage controls, access summary and project resource disclosures.
 - `src/components/sandbox-settings.tsx`: explicit opt-in workspace, read/write directories, and network policy.
 - `src/app/settings/page.tsx`: full-page model preferences, machine defaults, and provider configuration.
 - `src/app/machines/page.tsx`: machine inventory, storage paths, editable name/project directory, and model defaults.
@@ -105,13 +105,13 @@ Conversation controls expose Pi's recorded usage/cost estimates; there is no acc
 
 Run `mise run dev`, open `http://127.0.0.1:3001`, and follow **Provider settings**. Select OpenAI and **Sign in with ChatGPT** for the subscription flow; API key is a separate explicit choice. Other provider methods come from the installed Pi version. Authorization opens the provider's page; any requested code, selection, or credential is relayed to Pi through Fastify. Console itself has no account sign-in yet.
 
-Return to the dashboard and create or select a named session. Choose a provider, model, and supported thinking level in the inspector, then save settings before sending a message. Unfinished work must complete or be cancelled before settings can change. Session selection is retained in the URL; unsent drafts and uncertain submissions stay separate per session while the page is open. Partial text and state are polled once per second. Network failure is shown separately from saved run status. An uncertain submission retains its request ID for retry while the page is open; reloading retrieves existing work without resubmitting. After backend restart, use Resume for interrupted work or Cancel to abandon it. New project conversations enable project-confined coding tools and commands with network blocked. Expand **Sandbox** in the conversation inspector to narrow or disable access, or explicitly allow network access. Existing policies are preserved until changed.
+Return to the dashboard and create or select a named session. Choose a model from the composer list and adjust its discrete thinking slider. Changes save immediately; provider setup stays in Settings. Unfinished work must complete or be cancelled before settings can change. Session selection is retained in the URL; unsent drafts and uncertain submissions stay separate per session while the page is open. Partial text and state are polled once per second. Network failure is shown separately from saved run status. An uncertain submission retains its request ID for retry while the page is open; reloading retrieves existing work without resubmitting. After backend restart, use Resume for interrupted work or Cancel to abandon it. New project conversations enable project-confined coding tools and commands with network blocked. Expand **Sandbox** under Conversation → Access to narrow or disable access, or explicitly allow network access. Existing policies are preserved until changed.
 
 Provider status means configuration exists, not that credentials or subscription entitlement have been tested. Environment-only providers require machine setup; Refresh models retrieves supported dynamic catalogs. The initial UI does not edit custom provider definitions or machine environment variables.
 
 ## Configure a sandbox
 
-Open **Sandbox** in the session inspector. Select an existing absolute workspace and enable sandboxed tools. The workspace is readable by default; leave writable directories empty for read-only use and keep network blocked unless needed. Additional directory grants use one absolute path per line. Save explicitly while the session is idle. Unsaved sandbox changes block Send, just like unsaved model settings.
+Open **Conversation → Access → Sandbox** in the details panel. Select an existing absolute workspace and enable sandboxed tools. The workspace is readable by default; leave writable directories empty for read-only use and keep network blocked unless needed. Additional directory grants use one absolute path per line. Save explicitly while the session is idle. Unsaved sandbox changes block Send, just like unsaved model settings.
 
 Enabled policies can also be saved again without editing paths, to refresh their tool selection
 after an upgrade. Existing sessions need this reapplication to select newly added tools.
@@ -154,7 +154,7 @@ clear after recovery without erasing action failures. Custom hook editors, examp
 and automatic private-repository authentication remain later work.
 
 The machine tree has a resizable width and a remembered collapsed rail. Agent controls open in a
-nonmodal right-side panel; closing it preserves mounted drafts. Nodes use shadcn Base UI Collapsible; right-click opens creation, rename, settings,
+resizable desktop split; on narrow screens it becomes a right-side overlay. Closing preserves mounted drafts. Nodes use shadcn Base UI Collapsible; right-click opens creation, rename, settings,
 and Trash actions. A trailing ellipsis provides the same menu for keyboard and touch users. Forks and delegated children nest beneath their parent. Remote selection
 navigates to its machine/session/conversation address; unsent drafts do not transfer across machines.
 
@@ -171,9 +171,11 @@ until the user selects tools or reapplies their sandbox. No paid/live inference 
 The machine toggle changes its icon without a persistent selected background. Tree action menus
 appear on hover/focus in their own reserved flex space; trailing metadata yields to the menu button. Rename replaces the label with an input;
 Enter/blur saves and Escape cancels.
-`composer-model-picker.tsx` uses shadcn Popover next to the input. It searches connected models,
-shows current selection, and saves supported model/thinking changes immediately without opening
-the inspector. The permissions link still opens the full workspace editor.
+`composer-model-picker.tsx` uses a compact shadcn Popover with the configured model list and a
+native discrete range control for supported, preferred thinking levels (including the saved level).
+There is no search field or permissions shortcut. Model selection saves immediately; the slider
+saves on release, keyboard adjustment or blur, with one commit per adjustment. Failures remain
+visible and the slider restores its saved value. Provider/catalog management stays in Settings.
 
 Trash offers Delete forever followed by a named confirmation. UI verification must not confirm
 permanent deletion of personal data; erasure tests use temporary fixtures. Main/delegated entries
@@ -189,43 +191,22 @@ scopes provider credentials and defaults; model menu preferences belong to the w
 Machine gears open Settings for that machine. Every machine exposes Add project, including when
 it already has projects; this opens the existing repository-clone/directory-registration page.
 
-Chat reserves permanent space only for the machine tree and conversation. The breadcrumb's
-Agent controls icon, composer permissions action, and slash commands open the contextual right
-panel with Session, State, Tasks, Tools, and Extend tabs. These controls affect the selected agent,
-not global defaults. Project gears also open scoped project controls there. Close or Escape dismisses
-the panel and returns focus to its trigger; unsaved controls remain mounted while it is hidden.
-There is no second collapsed inspector rail, extra toggle, or duplicate conversation toolbar.
+Chat reserves permanent space only for the machine tree and conversation. The header's Details
+button toggles a resizable desktop split, with an overlay below 768px. Escape closes it and returns
+focus. Opening/closing explicitly sets the group layout after panel constraints register, returning
+space to the conversation rather than growing the tree. User resizing is remembered while mounted.
 
-`backend-connections.tsx` manages connections and recent machines on `/machines`, outside Settings.
-`machine-store.ts` owns private registry persistence, protocol validation, preferences, and proxying;
-`ssh-tunnel.ts` owns only the OpenSSH process and endpoint. Connection tokens never enter responses.
-Connection setup, connected machines, and recent machines use separate shadcn Cards. Reconnect
-attempts the saved connection immediately and prompts inline only when a token is required.
-The server supplies the machine name. Chat navigation requires a selected connection.
-
-Home machine cards open their workspace when clicked. A small red icon disconnects independently,
-preserving machine data and execution. Tree menu buttons reserve a square trailing slot and appear on hover/focus,
-replacing machine metadata and conversation IDs without overlaying text. Right-click offers the
-same actions. Moving an item to Trash reveals inline confirm/cancel buttons before deletion. Internal session containers are hidden; conversations use a single message icon. Create, rename, delete, and confirmation controls are 24px squares. Borders remain one pixel.
-
-Only the machine tree remains resizable. Dragging stops at the expanded minimum; its toggle
-collapses to a 40px rail containing machine shortcuts. The tab's `sessionStorage` remembers that
-choice across routes, machine changes, and reloads. Viewport changes do not override it. Panel
-backgrounds match the page. Native scrolling remains enabled without scrollbar chrome or resize pills.
-
-## Conversation history
-
-Opening a conversation shows its latest page at the bottom. Snapshots contain at most 50 Pi
-entries. Scrolling upward near the top requests the preceding page; Load earlier messages is a
-keyboard-accessible fallback. Older pages merge by stable message ID with live snapshots, without
-duplicates or losing pages during polling. Prepending preserves the visible message's position.
-New output follows the bottom only while already there; scrolling upward stops that following.
-Reasoning/content resizing follows the same rule. Switching conversations aborts pending history
-requests and starts a fresh latest-page view. Errors leave existing history available for retry.
+The panel identifies its selected entity and offers Conversation, Project and Machine scopes.
+Conversation sections are Overview (reported plan and folded usage/context), Activity (active model/
+tool tasks), Access (sandbox summary/editor and folded tool selection), and Instructions (project
+resources, custom instructions and folded extensions). Machine owns shared state and machine-settings
+navigation. Project owns project name/path/status. A fork/child shows its parent's human-visible name.
+Shared-state JSON editing and long technical details stay behind disclosures. Runtime task dependencies
+explicitly identify that they span the underlying session. They are not a to-do list.
 
 ## Project navigation and creation
 
-The tree shows machine → Projects → project → conversation. Default collects conversations
+The tree shows machine → project → conversation; Projects is a collapsible section without an additional indentation level. Default collects conversations
 without an explicitly selected project; it is a real backend registration, not a synthetic folder.
 The initial Main conversation uses its session name until renamed. Session containers stay internal;
 additional roots appear beside the initial conversation and forks/subagents nest beneath their parent.
@@ -248,9 +229,15 @@ start with the Project sandbox preset: project reads/writes and commands, with n
 Permissions remain editable inside the conversation. If nono cannot enforce the policy, creation
 fails visibly; there is no unconfined execution fallback.
 
-Project settings show only project controls. Conversation, State, Tasks, Tools, and Extend tabs
-appear only in the conversation inspector. Tools lists both Console compatibility tools and native
-Pi `read`, `write`, `edit`, and `bash`; all execute under the same saved sandbox grants.
+Project settings show only project controls; shared state belongs to Machine. Conversation Access
+contains tool selection, including Console compatibility tools and native Pi read/write/edit/bash,
+all under the same saved grants. Same-level conversation rows reserve an identical disclosure slot;
+clicking any expandable row (including its name or chevron) toggles it; a conversation row also
+selects that conversation. Expansion choices persist in localStorage, keyed by connection and stable
+project/session/conversation IDs, so renames and reloads retain them. Explicit saved choices take
+precedence over automatic defaults; navigation and polling do not reopen a collapsed branch. Fork and delegated
+agent icons distinguish ancestry without adding a redundant Projects tree level. Machine chat counts
+include roots, forks and children rather than counting hidden session containers.
 
 ## Ongoing work and context controls
 
@@ -269,7 +256,7 @@ are shown. Automatic compaction still uses Pi's defaults; threshold editing rema
 The transcript includes expandable tool-call arguments, available live tool status/output, and
 labels for saved compaction summaries and handoff entries. Tasks also exposes session-wide ownership,
 wait dependencies, sleep deadlines, cancellation and blocked reasons. Transport remains polling;
-worker output is not a continuous byte stream. See [Pi capability delivery](../pi-capabilities.md).
+worker output is not a continuous byte stream. See the [Console feature inventory](../features.md).
 
 Project resources in Conversation controls lists loaded instruction sources and indexed skills/templates.
 Use skill/template fills the composer without sending. Add the request or template arguments and

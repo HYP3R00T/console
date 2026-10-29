@@ -1,8 +1,8 @@
 "use client";
-import { ChevronDownIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { ChoiceSelect } from "@/components/choice-select";
+
+import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { useModelPreferences } from "@/components/model-preferences";
 import {
   Popover,
@@ -21,15 +21,12 @@ export function ComposerModelPicker({
   providers,
   disabled,
   onSave,
-  onConfigure,
 }: {
   session: Conversation;
   providers: Provider[];
   disabled: boolean;
   onSave: (config: AgentConfiguration) => Promise<void>;
-  onConfigure: () => void;
 }) {
-  const router = useRouter();
   const preferences = useModelPreferences();
   const choices = providers
     .map((provider) => ({
@@ -43,7 +40,6 @@ export function ComposerModelPicker({
     }))
     .filter((provider) => provider.models.length);
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
   const provider = providers.find(
@@ -57,8 +53,10 @@ export function ComposerModelPicker({
     setError("");
     try {
       await onSave(config);
+      return true;
     } catch (cause) {
       setError((cause as Error).message);
+      return false;
     } finally {
       setWorking(false);
     }
@@ -80,131 +78,181 @@ export function ComposerModelPicker({
       <PopoverContent
         side="top"
         align="start"
-        className="w-80 max-w-[calc(100vw-2rem)] gap-3 p-3"
+        className="w-72 max-w-[calc(100vw-2rem)] gap-3 p-3"
       >
-        <PopoverTitle>Model & thinking</PopoverTitle>
+        <PopoverTitle>Model</PopoverTitle>
         {error && (
-          <p role="alert" className="text-destructive">
+          <p role="alert" className="text-xs text-destructive">
             {error}
           </p>
         )}
-        {!providers.length && (
-          <button
-            type="button"
-            className="underline"
-            onClick={() => {
-              setOpen(false);
-              router.push("/settings?section=providers");
-            }}
-          >
-            Connect a provider on this machine
-          </button>
-        )}
-        <input
-          aria-label="Search connected models"
-          placeholder="Search connected models…"
-          className="border bg-background p-2 text-xs"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
         <section
           className="max-h-56 overflow-y-auto"
-          aria-label="Connected models"
+          aria-label="Available models"
         >
           {choices.map((item) => (
             <section key={item.id}>
-              <h3 className="p-2 text-[10px] uppercase text-muted-foreground">
-                {item.name}
-              </h3>
-              {item.models
-                .filter((choice) =>
-                  `${choice.name} ${choice.id}`
-                    .toLowerCase()
-                    .includes(search.toLowerCase()),
-                )
-                .map((choice) => (
+              {choices.length > 1 && (
+                <h3 className="px-2 py-1 text-[10px] uppercase text-muted-foreground">
+                  {item.name}
+                </h3>
+              )}
+              {item.models.map((choice) => {
+                const selected =
+                  provider?.id === item.id && model?.id === choice.id;
+                return (
                   <button
                     type="button"
                     key={choice.id}
-                    aria-pressed={
-                      provider?.id === item.id && model?.id === choice.id
-                    }
-                    className={`flex w-full justify-between gap-2 p-2 text-left text-xs hover:bg-accent ${provider?.id === item.id && model?.id === choice.id ? "bg-accent font-medium" : ""}`}
+                    aria-pressed={selected}
+                    className={`flex w-full items-center justify-between gap-2 p-2 text-left text-xs hover:bg-accent ${selected ? "bg-accent font-medium" : ""}`}
                     disabled={disabled || working}
-                    onClick={() =>
-                      void save({
-                        provider: item.id,
-                        model: choice.id,
-                        thinkingLevel: choice.thinkingLevels.includes(
-                          session.thinkingLevel,
-                        )
-                          ? session.thinkingLevel
-                          : (choice.thinkingLevels[0] ?? "off"),
-                      })
-                    }
+                    onClick={() => {
+                      if (!selected)
+                        void save({
+                          provider: item.id,
+                          model: choice.id,
+                          thinkingLevel: choice.thinkingLevels.includes(
+                            session.thinkingLevel,
+                          )
+                            ? session.thinkingLevel
+                            : (choice.thinkingLevels[0] ?? "off"),
+                        });
+                    }}
                   >
                     {choice.name}
-                    <span>
-                      {provider?.id === item.id && model?.id === choice.id
-                        ? "✓"
-                        : ""}
-                    </span>
+                    {selected && (
+                      <CheckIcon className="size-3" aria-hidden="true" />
+                    )}
                   </button>
-                ))}
+                );
+              })}
             </section>
           ))}
         </section>
-        <button
-          type="button"
-          className="text-left text-xs underline"
-          onClick={() => {
-            setOpen(false);
-            router.push("/settings?section=models");
-          }}
-        >
-          Manage model choices
-        </button>
-        <ChoiceSelect
-          label="Thinking level"
-          value={session.thinkingLevel ?? "off"}
-          disabled={disabled || working || !model}
-          items={(model?.thinkingLevels ?? ["off"])
-            .filter(
+        {!choices.length && (
+          <Link
+            className="text-xs underline"
+            href={
+              providers.length
+                ? "/settings?section=models"
+                : "/settings?section=providers"
+            }
+          >
+            {providers.length
+              ? "Choose models in Settings"
+              : "Connect a provider"}
+          </Link>
+        )}
+        {model && (
+          <ThinkingLevel
+            key={`${provider?.id}/${model.id}`}
+            levels={model.thinkingLevels.filter(
               (level) =>
                 preferences.thinkingLevels.includes(level) ||
                 level === session.thinkingLevel,
-            )
-            .map((level) => ({
-              value: level,
-              label: level,
-            }))}
-          onChange={(level) => {
-            if (session.model)
-              void save({
-                provider: session.model.provider,
-                model: session.model.modelId,
-                thinkingLevel: level,
-              });
-          }}
-        />
-        <p role="status" className="text-muted-foreground">
-          {working
-            ? "Saving…"
-            : disabled
-              ? "Finish or cancel active work to change the model."
-              : "Selections are saved immediately for this agent."}
-        </p>
-        <button
-          type="button"
-          className="border-t pt-2 text-left underline"
-          onClick={() => {
-            setOpen(false);
-            onConfigure();
-          }}
-        >
-          Workspace and tool permissions
-        </button>
+            )}
+            value={session.thinkingLevel ?? "off"}
+            disabled={disabled || working}
+            onSave={(thinkingLevel) =>
+              save({
+                provider: provider?.id ?? "",
+                model: model.id,
+                thinkingLevel,
+              })
+            }
+          />
+        )}
+        {(working || disabled) && (
+          <p role="status" className="text-xs text-muted-foreground">
+            {working ? "Saving…" : "Available when this conversation is idle."}
+          </p>
+        )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+function ThinkingLevel({
+  levels,
+  value,
+  disabled,
+  onSave,
+}: {
+  levels: string[];
+  value: string;
+  disabled: boolean;
+  onSave: (level: string) => Promise<boolean>;
+}) {
+  const [index, setIndex] = useState(Math.max(0, levels.indexOf(value)));
+  const changed = useRef(false);
+  const levelsKey = levels.join(",");
+  useEffect(() => {
+    setIndex(Math.max(0, levelsKey.split(",").indexOf(value)));
+    changed.current = false;
+  }, [value, levelsKey]);
+  function commit() {
+    if (!changed.current || disabled) return;
+    changed.current = false;
+    const next = levels[index];
+    if (next && next !== value)
+      void onSave(next).then((saved) => {
+        if (!saved) setIndex(Math.max(0, levels.indexOf(value)));
+      });
+  }
+  return (
+    <div className="space-y-2 border-t pt-3">
+      <label
+        htmlFor="composer-thinking"
+        className="flex justify-between text-xs"
+      >
+        <span>Thinking</span>
+        <span className="font-medium capitalize">{levels[index] ?? value}</span>
+      </label>
+      {levels.length > 1 && (
+        <input
+          id="composer-thinking"
+          aria-label="Thinking level"
+          aria-valuetext={levels[index] ?? value}
+          type="range"
+          min={0}
+          max={levels.length - 1}
+          step={1}
+          value={index}
+          disabled={disabled}
+          className="w-full accent-foreground"
+          onChange={(event) => {
+            changed.current = true;
+            setIndex(Number(event.target.value));
+          }}
+          onPointerUp={commit}
+          onKeyUp={(event) => {
+            if (
+              [
+                "ArrowLeft",
+                "ArrowRight",
+                "ArrowUp",
+                "ArrowDown",
+                "Home",
+                "End",
+                "PageUp",
+                "PageDown",
+              ].includes(event.key)
+            )
+              commit();
+          }}
+          onBlur={commit}
+        />
+      )}
+      {levels.length > 1 && (
+        <div
+          aria-hidden="true"
+          className="flex justify-between text-[10px] capitalize text-muted-foreground"
+        >
+          <span>{levels[0]}</span>
+          <span>{levels.at(-1)}</span>
+        </div>
+      )}
+    </div>
   );
 }

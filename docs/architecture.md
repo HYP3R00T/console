@@ -243,7 +243,7 @@ projects, sessions, root conversations, forks, and task-owned children. Pi's imm
 IDs supply agent numbers; session numbers use catalog row identities. Naming is optional on
 creation and editable afterward. Trash does not recycle these identities.
 
-The inspector's Session, State, Tasks, Tools, and Extend panels read actual runtime data. Tools
+The details panel separates Conversation, Project and Machine scope and reads actual runtime data. Tools
 come from Pi's installed registry with schemas, descriptions, and replay policies; selection cannot
 exceed the saved sandbox grants. Extension checkboxes select actual Pi extensions, including their prompt sections and hooks.
 Their tools still require saved sandbox grants. They do not install arbitrary code. Child agents
@@ -288,8 +288,8 @@ sessions are permanently deleted; project source directories remain untouched.
 Machine-tree rows use shadcn context menus and trailing ellipsis menus. Hover/focus replaces
 trailing metadata with a square button in normal layout, keeping actions clear of labels.
 Trash actions require inline confirmation. Rename edits its label; Enter/blur saves and Escape cancels. The remembered machine tree
-is the sole permanent side column; agent controls open on demand in a nonmodal right-side panel.
-The composer uses shadcn Popover for searchable connected models and supported thinking levels;
+is the sole permanent side column; details open as a resizable desktop split or narrow-screen overlay.
+The composer uses shadcn Popover for a model list and discrete supported-thinking slider;
 selections update the selected conversation immediately. The Tools panel explains empty selection
 and provides explicit coordination/tool-permission setup actions.
 
@@ -309,9 +309,17 @@ for an existing folder, new folder, or public GitHub clone. Conversation rows si
 their project; a project-row plus creates and opens one directly, with no access-selection dialog.
 Tool permissions remain conversation controls. Internal session containers and the initial Main label
 are hidden. Forks and children
-stay nested. Machine menus route to machine-scoped Settings. Session, State, Tasks, Tools, and Extend remain scoped to the selected agent in an on-demand
-right panel; project controls use that panel as well. Closing it preserves mounted drafts and returns
-focus. The panel does not persist as a second rail or shrink the conversation. Tree collapse is
+stay nested, with distinct fork/delegation icons and aligned disclosure slots. Expandable rows
+toggle from their name or chevron; conversation rows also select their conversation. Browser-local
+expansion choices use stable connection/project/session/conversation IDs and survive reloads and
+renames. Saved collapse choices are not overridden by selection or polling. Projects is collapsible
+without introducing another indentation level.
+Machine menus route to machine-scoped Settings. The on-demand details panel explicitly selects
+Conversation, Project or Machine scope. Conversation has Overview, Activity, Access and Instructions;
+shared state belongs to Machine, and project metadata belongs to Project. Overview folds usage/context
+controls; Access folds tool selection; Instructions folds resources/extensions. Reported plans and
+runtime tasks are distinct. Closing preserves mounted drafts and returns focus. The desktop split
+resizes the conversation and restores its space when closed; narrow screens use an overlay. Tree collapse is
 explicit, remembered per browser tab, and its button has no persistent selected background.
 Deletion remains recoverable through Trash, with explicit permanent deletion and confirmation.
 
@@ -372,8 +380,8 @@ kernel-confined. The Bash environment adapter keeps child processes in the worke
 cancellation and timeouts kill that group. Output is bounded and scratch files expire after a call.
 The assigned directory is included in prompt context independently of tool enablement.
 
-Project settings and conversation inspectors have separate navigation. Project settings contain no
-conversation tabs; the conversation inspector owns Conversation, State, Tasks, Tools, and Extend.
+Project, conversation and machine controls have explicit scope navigation. Shared machine state
+is not presented as conversation state; project metadata contains no conversation tabs.
 See [native Pi coding tools](decisions/0009-native-pi-tools-in-nono.md).
 
 ## Runtime controls and project resources
@@ -392,7 +400,8 @@ resource commands expand before durable input admission, after duplicate-request
 Project Markdown cannot widen permissions or execute extensions. Workspace-root scope is intentional;
 user resource directories, executable plugins, MCP and full CLI compatibility are separate adapters.
 The user selected equivalent Console features on the existing Durable runtime. Remaining delivery
-is tracked in [Pi capability delivery](pi-capabilities.md), without treating dependency APIs as completed UI.
+is tracked in the [Console feature inventory](features.md), without treating dependency APIs as completed UI.
+[Pi integration scope](pi-capabilities.md) records compatibility and adapter boundaries.
 
 ## Readable transcript projection
 
