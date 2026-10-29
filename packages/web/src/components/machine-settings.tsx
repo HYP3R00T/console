@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 
 import { useEffect, useState } from "react";
 import { ChoiceSelect } from "@/components/choice-select";
@@ -19,6 +20,7 @@ type Settings = {
   runtime?: { node: string; pi: string; git: boolean };
 };
 export function MachineSettings() {
+  const router = useRouter();
   const { id } = useBackend();
   const [settings, setSettings] = useState<Settings>();
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -204,12 +206,7 @@ export function MachineSettings() {
               type="button"
               className="underline"
               onClick={() => {
-                window.dispatchEvent(new Event("console:open-settings"));
-                window.dispatchEvent(
-                  new CustomEvent("console:settings-section", {
-                    detail: "providers",
-                  }),
-                );
+                router.push("/settings?section=providers");
               }}
             >
               Manage providers for this machine

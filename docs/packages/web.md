@@ -1,9 +1,8 @@
 # Web app
 
 `packages/web` is the private `@console/web` workspace package. It uses Next.js App Router,
-React, TypeScript, Tailwind CSS v4, and shadcn/ui. The dashboard has a top action bar,
-a collapsible left panel for sessions/configuration, and a dedicated conversation with
-a bottom composer. Provider settings belong to the machine. `/machines` shows its identity, session counts, and actual database locations.
+React, TypeScript, Tailwind CSS v4, and shadcn/ui. Chat has a collapsible Machines tree, a dedicated
+conversation with a bottom composer, and on-demand agent controls. Settings is a separate page. Provider settings belong to the machine. `/machines` shows its identity, session counts, and actual database locations.
 
 ## Run and verify
 
@@ -51,9 +50,9 @@ removed selection leads back to onboarding, without falling back to another mach
 - `src/components/chat-composer.tsx`: expanding text input, model/configuration shortcut, Send, and Stop.
 - `src/components/session-chat.tsx`: transcript, composer, and cancel/resume controls.
 - `src/components/message-reasoning.tsx`: provider-visible thinking in shadcn Trace rows; opens while thinking and closes afterward unless manually toggled.
-- `src/components/session-inspector.tsx`: left-panel provider, model, and supported thinking-level controls.
+- `src/components/session-inspector.tsx`: per-agent model, thinking, and sandbox controls in the contextual panel.
 - `src/components/sandbox-settings.tsx`: explicit opt-in workspace, read/write directories, and network policy.
-- `src/app/settings/providers/page.tsx`: connected-provider cards, searchable connection setup, and model-catalog refresh.
+- `src/app/settings/page.tsx`: full-page model preferences, machine defaults, and provider configuration.
 - `src/app/machines/page.tsx`: machine inventory, storage paths, editable name/project directory, and model defaults.
 - `src/components/choice-select.tsx`: shared shadcn Select controls for model, provider, thinking, and network choices.
 - `src/components/provider-connection.tsx`: generic Pi prompts, OAuth links, device codes, and cancellation.
@@ -98,8 +97,7 @@ is mounted; reloaded history starts collapsed.
 
 The layout takes structural inspiration from [Durable Pi](https://github.com/disler/durable-pi)
 and its [interface walkthrough](https://www.youtube.com/watch?v=DNDYYHsypZg), while retaining
-Console's shadcn theme and square Lyra controls. The top bar creates sessions; the left panel switches between
-workspace-grouped session navigation and configuration without discarding drafts. Conversation provider pickers show only connected providers; the connection-management page still offers other providers through search. On narrow screens the resizable panels stack vertically. Breadcrumbs show the local machine, saved workspace when present, and session.
+Console's shadcn theme and square Lyra controls. The header links to Home, Chat, and Settings; the left tree navigates machines, projects, sessions, and conversations. Agent configuration opens on demand. Conversation provider pickers show only connected providers; the connection-management page still offers other providers through search. On narrow screens the resizable panels stack vertically. Breadcrumbs show the local machine, saved workspace when present, and session.
 The composer sends with Enter and inserts a newline with Shift+Enter; IME composition does not
 submit. Text paste works normally. Image/file attachments, transcription, and measured token/cost dashboards are not implemented.
 
@@ -154,8 +152,8 @@ Provider discovery and session polling retry after disconnection. Background con
 clear after recovery without erasing action failures. Custom hook editors, example durable-job workflows, attachments,
 and automatic private-repository authentication remain later work.
 
-The network and inspector collapse independently without discarding their mounted drafts. Both
-retain resize handles. Nodes use shadcn Base UI Collapsible; focus/hover exposes rename, creation,
+The machine tree has a resizable width and a remembered collapsed rail. Agent controls open in a
+nonmodal right-side panel; closing it preserves mounted drafts. Nodes use shadcn Base UI Collapsible; focus/hover exposes rename, creation,
 and Trash actions. Forks and delegated children nest beneath their parent. Remote selection
 navigates to its machine/session/conversation address; unsent drafts do not transfer across machines.
 
@@ -169,9 +167,9 @@ requires Reload before editing again. Tool switches are limited to installed too
 select real Pi extensions and their sections/hooks; they cannot broaden sandbox authority. Existing conversations remain unchanged
 until the user selects tools or reapplies their sandbox. No paid/live inference is used in UI checks.
 
-Each column now owns its collapse/expand toggle; there is no extra status bar. Collapsed rails
-retain an expansion button with a different icon. Network actions reserve their width on hover
-and focus. Rename replaces the label with an input; Enter/blur saves, Escape cancels.
+The machine toggle changes its icon without a persistent selected background. Tree actions
+appear on hover/focus without reserving label space. Rename replaces the label with an input;
+Enter/blur saves and Escape cancels.
 `composer-model-picker.tsx` uses shadcn Popover next to the input. It searches connected models,
 shows current selection, and saves supported model/thinking changes immediately without opening
 the inspector. The permissions link still opens the full workspace editor.
@@ -183,46 +181,34 @@ can be enabled without granting files; the workspace editor is expanded when its
 
 ## UI responsibilities
 
-The header navigation and Settings window live in `console-shell.tsx` and `settings-window.tsx`.
-`backend-connections.tsx` manages explicit connections/recent entries. `machine-store.ts` owns
-private registry persistence, protocol validation, preferences, and proxying; `ssh-tunnel.ts`
-owns only the OpenSSH process and forwarded endpoint. Connection tokens never enter UI responses.
-`model-preferences.tsx` curates chat/inspector choices across machines without changing backend
-model support. Machine and project gears show contextual inspectors. Provider credentials remain
-machine-scoped. `confirm-delete.tsx` supplies fixed-width confirmation controls for trash/purge.
+`console-shell.tsx` owns the icon-only Home, Chat, and Settings navigation. Settings is a real
+`/settings` page with Model choices, Machine defaults, and Providers sections. Its machine selector
+scopes provider credentials and defaults; model menu preferences belong to the web server.
+`provider-settings.tsx` contains provider UI; `/settings/providers` remains a compatible entry point.
+Machine gears open Settings for that machine. Every machine exposes Add project, including when
+it already has projects; this opens the existing repository-clone/directory-registration page.
 
-Machine connection management lives in the main `/machines` page, independently of Settings.
-Home’s Connect a machine and the network’s Add machine both open that page. The header holds
-icon-only Home, Chat, and Settings controls with accessible labels/tooltips; machine switching stays in the network/connection list, and session
-creation stays within the workspace. There is no permanent application rail.
+Chat reserves permanent space only for the machine tree and conversation. The breadcrumb's
+Agent controls icon, composer permissions action, and slash commands open the contextual right
+panel with Session, State, Tasks, Tools, and Extend tabs. These controls affect the selected agent,
+not global defaults. Project gears also open scoped project controls there. Close or Escape dismisses
+the panel and returns focus to its trigger; unsaved controls remain mounted while it is hidden.
+There is no second collapsed inspector rail, extra toggle, or duplicate conversation toolbar.
 
-Connection management uses shadcn Cards to separate connected machines, the connection form,
-and recent machines. Row actions share a right-aligned group. The form uses a labeled connection
-method selector and takes the machine name from the server; there is no separate optional name
-field. Chat navigation appears only after selecting a connected machine.
+`backend-connections.tsx` manages connections and recent machines on `/machines`, outside Settings.
+`machine-store.ts` owns private registry persistence, protocol validation, preferences, and proxying;
+`ssh-tunnel.ts` owns only the OpenSSH process and endpoint. Connection tokens never enter responses.
+Connection setup, connected machines, and recent machines use separate shadcn Cards. Reconnect
+attempts the saved connection immediately and prompts inline only when a token is required.
+The server supplies the machine name. Chat navigation requires a selected connection.
 
-Home machine cards open their workspace when clicked. A separate small red trash icon disconnects
-without opening the card. The icon is a sibling of the full-card link, not nested inside it. Disconnect uses the same web
-registry operation as the Machines page, preserves machine data, and refreshes connection state.
-Action failures remain visible independently of the summary poll.
+Home machine cards open their workspace when clicked. A small red icon disconnects independently,
+preserving machine data and execution. Tree actions overlay the trailing edge on hover/focus, so
+hidden controls do not consume label space or shift rows. Conversation IDs occupy that edge until
+actions take precedence. Session containers have stacked-message icons; conversations use a single
+message. Create, rename, delete, and confirmation controls are 24px squares. Borders remain one pixel.
 
-Panel resize stops at the expanded minimum width; dragging never collapses a panel. Only the
-header toggle collapses it into a fixed 40px rail. Both toggles use the same directional icons,
-with persistent dividers and icon shortcuts for machines and agent panels. Shortcuts expand the
-relevant panel. Native scrolling remains enabled while scrollbar chrome and resize pills are hidden.
-
-Network actions overlay the row’s trailing edge on hover/focus, so hidden controls do not consume
-label space or shift rows. Conversation IDs sit at that edge until actions take precedence. Tree
-controls use matching icon sizes, and panel separators provide the sole one-pixel vertical divider.
-
-Network and inspector open/closed choices are stored independently in browser `sessionStorage`.
-They survive route navigation, conversation/machine changes, and reloads in that tab. A fresh
-layout defaults to closed on small screens; viewport changes do not override an explicit choice.
-Panel icon/configuration actions may explicitly reopen the relevant panel. The duplicate chat
-heading/New agent bar is removed; breadcrumbs identify the conversation and network/slash controls
-remain available for agent creation.
-
-Tree action overlays match the row control height instead of stretching to the padded row height.
-Create, rename, delete and confirmation actions use the shadcn `icon-xs` 24px square variant.
-Session containers have a stacked-conversation icon; individual conversations keep the single
-message icon, alongside machine and project icons.
+Only the machine tree remains resizable. Dragging stops at the expanded minimum; its toggle
+collapses to a 40px rail containing machine shortcuts. The tab's `sessionStorage` remembers that
+choice across routes, machine changes, and reloads. Viewport changes do not override it. Panel
+backgrounds match the page. Native scrolling remains enabled without scrollbar chrome or resize pills.

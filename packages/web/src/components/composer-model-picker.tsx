@@ -1,5 +1,6 @@
 "use client";
 import { ChevronDownIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ChoiceSelect } from "@/components/choice-select";
 import { useModelPreferences } from "@/components/model-preferences";
@@ -28,6 +29,7 @@ export function ComposerModelPicker({
   onSave: (config: AgentConfiguration) => Promise<void>;
   onConfigure: () => void;
 }) {
+  const router = useRouter();
   const preferences = useModelPreferences();
   const choices = providers
     .map((provider) => ({
@@ -92,12 +94,7 @@ export function ComposerModelPicker({
             className="underline"
             onClick={() => {
               setOpen(false);
-              window.dispatchEvent(new Event("console:open-settings"));
-              window.dispatchEvent(
-                new CustomEvent("console:settings-section", {
-                  detail: "providers",
-                }),
-              );
+              router.push("/settings?section=providers");
             }}
           >
             Connect a provider on this machine
@@ -162,10 +159,7 @@ export function ComposerModelPicker({
           className="text-left text-xs underline"
           onClick={() => {
             setOpen(false);
-            window.dispatchEvent(new Event("console:open-settings"));
-            window.dispatchEvent(
-              new CustomEvent("console:settings-section", { detail: "models" }),
-            );
+            router.push("/settings?section=models");
           }}
         >
           Manage model choices
