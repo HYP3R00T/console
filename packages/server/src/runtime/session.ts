@@ -18,7 +18,7 @@ import { assertIdle, type Runtime } from "./context.ts";
 import { agentExtension, type openAgentState } from "./coordination.ts";
 import { ConversationInfo } from "./documents.ts";
 import { conversationInput } from "./input.ts";
-import { conversationView } from "./view.ts";
+import { conversationSummary, conversationView } from "./view.ts";
 export async function openConversation(
   models: Models,
   directory: string,
@@ -125,13 +125,14 @@ export async function openConversation(
   async function conversations(trash = false) {
     const rows = await storage.scanConversations({}, 1000, undefined, context);
     if (rows.next) throw httpError(409, "Conversation list limit reached.");
+    const inspection = await harness.inspect(context);
     const items = await Promise.all(
       rows.items.map(async (row) => {
         const info = await harness.snapshot(ConversationInfo, row.id, context);
         const handle = await harness.conversation(row.id, context);
         if (!handle) throw httpError(404, "Conversation not found.");
         return {
-          ...(await bind(handle).summary()),
+          ...(await conversationSummary(runtime, handle, inspection)),
           name:
             info?.name ||
             (row.id === main.id
@@ -154,8 +155,8 @@ export async function openConversation(
   return {
     ...bind(main),
     async summary() {
-      const state = await bind(main).summary();
       const inspection = await harness.inspect(context);
+      const state = await conversationSummary(runtime, main, inspection);
       return {
         ...state,
         status: inspection.tasks.length

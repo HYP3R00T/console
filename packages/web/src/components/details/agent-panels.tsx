@@ -9,6 +9,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { type AgentInspection, api } from "@/lib/api";
+import { startPolling } from "@/lib/poll";
 
 export type InspectorPanel = "session" | "state" | "tasks" | "tools" | "extend";
 export function AgentPanels({
@@ -16,11 +17,13 @@ export function AgentPanels({
   panel,
   idle,
   onChanged,
+  active = true,
 }: {
   path: string;
   panel: InspectorPanel;
   idle: boolean;
   onChanged: () => void;
+  active?: boolean;
 }) {
   const [inspection, setInspection] = useState<AgentInspection>();
   const [error, setError] = useState("");
@@ -28,32 +31,18 @@ export function AgentPanels({
   const [loadError, setLoadError] = useState("");
   const [instructions, setInstructions] = useState<string>();
   useEffect(() => {
-    if (panel === "state") return;
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
-      try {
-        const value = await api<AgentInspection>(
-          `${path}/inspect`,
-          "GET",
-          undefined,
-          controller.signal,
-        );
-        if (!controller.signal.aborted) {
-          setInspection(value);
-          setLoadError("");
-        }
-      } catch (cause) {
-        if (!controller.signal.aborted) setLoadError((cause as Error).message);
-      }
-      if (!controller.signal.aborted) timer = setTimeout(poll, 1500);
-    }
-    void poll();
-    return () => {
-      controller.abort();
-      clearTimeout(timer);
-    };
-  }, [path, panel]);
+    if (!active || panel === "state" || panel === "session") return;
+    return startPolling({
+      read: (signal) =>
+        api<AgentInspection>(`${path}/inspect`, "GET", undefined, signal),
+      onValue: (value) => {
+        setInspection(value);
+        setLoadError("");
+      },
+      onError: (cause) => setLoadError(cause.message),
+      interval: 1500,
+    });
+  }, [path, panel, active]);
   async function save(tools: string[], nextInstructions?: string) {
     setWorking(true);
     setError("");
@@ -101,7 +90,7 @@ export function AgentPanels({
         </p>
       )}
       {panel === "state" ? (
-        <SharedState />
+        <SharedState active={active} />
       ) : !inspection ? (
         <p className="text-muted-foreground">Loading runtime…</p>
       ) : (

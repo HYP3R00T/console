@@ -104,28 +104,30 @@ export async function openSessions(
   return {
     workspaces,
     state,
-    async list(trash = false) {
+    async list(trash = false, includeConversations = false) {
       const rows = db
         .prepare(
           "SELECT id, name, createdAt, workspaceId, deleted FROM sessions WHERE deleted=? ORDER BY createdAt, id",
         )
         .all(trash ? 1 : 0) as Session[];
+      const projectIds = new Set(
+        [...workspaces.list(trash), ...(trash ? workspaces.list() : [])].map(
+          (project) => project.id,
+        ),
+      );
       return Promise.all(
         rows
-          .filter(
-            (row) =>
-              !row.workspaceId ||
-              workspaces
-                .list(trash)
-                .some((workspace) => workspace.id === row.workspaceId) ||
-              (trash &&
-                workspaces
-                  .list()
-                  .some((workspace) => workspace.id === row.workspaceId)),
-          )
+          .filter((row) => !row.workspaceId || projectIds.has(row.workspaceId))
           .map(async (row) => {
             try {
-              return { ...(await (await open(row.id)).summary()), ...row };
+              const runtime = await open(row.id);
+              return {
+                ...(await runtime.summary()),
+                ...row,
+                ...(includeConversations
+                  ? { conversations: await runtime.conversations() }
+                  : {}),
+              };
             } catch {
               return { ...row, status: "unavailable" };
             }

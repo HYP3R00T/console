@@ -46,7 +46,18 @@ export function registerSessionRoutes(
       return reply.code(204).send();
     },
   );
-  app.get("/sessions", () => sessions.list());
+  app.get<{ Querystring: { include?: "conversations" } }>(
+    "/sessions",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          properties: { include: { enum: ["conversations"] } },
+        },
+      },
+    },
+    (req) => sessions.list(false, req.query.include === "conversations"),
+  );
   app.get("/sessions/trash", () => sessions.list(true));
   app.delete<{ Params: { id: string } }>(
     "/sessions/:id",

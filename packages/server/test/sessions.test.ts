@@ -11,6 +11,7 @@ import {
   fauxText,
   fauxThinking,
 } from "@earendil-works/pi-ai/providers/faux";
+import { Harness } from "@earendil-works/pi-durable";
 import { createApp } from "../src/app.ts";
 import { openConversation } from "../src/runtime/session.ts";
 import { defaultSandbox } from "../src/sandbox/policy.ts";
@@ -447,4 +448,86 @@ test("one damaged session does not hide healthy sessions", async (t) => {
     "unavailable",
   );
   assert.equal((await app.inject(`/v1/sessions/${ids[1]}`)).statusCode, 200);
+  const batch = (await app.inject("/v1/sessions?include=conversations")).json();
+  assert.equal(
+    batch.find((item: { id: string }) => item.id === ids[0]).status,
+    "unavailable",
+  );
+  assert.equal(
+    batch.find((item: { id: string }) => item.id === ids[1]).conversations
+      .length,
+    1,
+  );
+});
+
+test("batched session summaries preserve conversation hierarchy and exclude Trash", async (t) => {
+  const inspections: { callCount(): number; resetCalls(): void }[] = [];
+  const open = Harness.open;
+  t.mock.method(Harness, "open", async (...args: Parameters<typeof open>) => {
+    const harness = await open(...args);
+    inspections.push(t.mock.method(harness, "inspect").mock);
+    return harness;
+  });
+  const directory = await mkdtemp(join(tmpdir(), "console-batch-"));
+  const { app } = fixture(directory);
+  t.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true });
+  });
+  for (const requestId of ["first", "second"]) {
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      headers,
+      payload: { requestId },
+    });
+    assert.equal(created.statusCode, 201);
+    const base = `/v1/sessions/${created.json().id}`;
+    for (const name of ["Retained", "Trashed"]) {
+      const conversation = await app.inject({
+        method: "POST",
+        url: `${base}/conversations`,
+        headers,
+        payload: { name, requestId: name },
+      });
+      assert.equal(conversation.statusCode, 201);
+      if (name === "Trashed")
+        assert.equal(
+          (
+            await app.inject({
+              method: "DELETE",
+              url: `${base}/conversations/${conversation.json().id}`,
+              headers,
+            })
+          ).statusCode,
+          204,
+        );
+    }
+  }
+  const plain = (await app.inject("/v1/sessions")).json();
+  for (const inspection of inspections) inspection.resetCalls();
+  const batch = (await app.inject("/v1/sessions?include=conversations")).json();
+  assert.equal(
+    inspections.reduce(
+      (total, inspection) => total + inspection.callCount(),
+      0,
+    ),
+    4,
+  ); // One summary and one list inspection per session.
+  assert.equal(batch.length, 2);
+  for (const [index, { conversations, ...summary }] of batch.entries()) {
+    assert.deepEqual(summary, plain[index]);
+    assert.deepEqual(
+      conversations,
+      (await app.inject(`/v1/sessions/${summary.id}/conversations`)).json(),
+    );
+    assert.deepEqual(
+      conversations.map((item: { name: string }) => item.name),
+      ["Main", "Retained"],
+    );
+  }
+  assert.equal(
+    (await app.inject("/v1/sessions?include=credentials")).statusCode,
+    400,
+  );
 });
