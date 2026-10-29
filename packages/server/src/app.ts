@@ -1,5 +1,5 @@
 import Fastify, { type FastifyServerOptions } from "fastify";
-import { type ConsoleOptions, registerConsole } from "./console.ts";
+import { type ConsoleOptions, registerConsole } from "./http/console.ts";
 
 export function createApp(
   options: FastifyServerOptions = {},

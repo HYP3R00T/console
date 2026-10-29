@@ -56,6 +56,29 @@ backend runs locally; relevant task content and tool results may be sent to that
 - **Persistent state:** retain Console metadata and required runtime state. These may be separate
   stores owned by Console and the harness; no shared database schema has been chosen.
 
+## Source organization
+
+The existing packages remain one backend and one web application; folders are ownership boundaries,
+not new services. Entrypoints stay stable and the refactor changes no HTTP route, persisted document
+kind/version, database location, replay policy, sandbox grant or browser preference key.
+
+- Server: `http` composes routes; `models`, `platform`, `connections` and `projects` own their
+  domain services; `sessions` owns catalog/lifecycle routes; `runtime` owns the Harness,
+  configuration, input admission and read projections; `sandbox` owns the execution boundary.
+- Web: App Router entries compose domain components. `chat` separates data/requests from layout;
+  `details`, `navigation`, `machines`, `models`, `projects` and `layout` own their respective UI.
+  `shared` contains reusable form controls and `ui` retains shadcn primitives. Pure transcript
+  transformations live in `lib/chat`; server-only connection/SSH code lives in `lib/server`.
+- One session still owns one mutation queue and Harness. Splitting runtime operations into modules
+  must not create parallel queues or change the order of permission, retry or recovery checks.
+- Source moves must update worker/module URLs, package-relative metadata, fixtures and evidence
+  links. Native sandbox tests cover TypeScript workers; production verification must also exercise
+  compiled JavaScript workers. Organizing files is not permission to weaken grants or copy secrets.
+
+See the [server guide](packages/server.md#structure-and-extension) and
+[web guide](packages/web.md#structure-and-boundaries) for the current source map. Prefer direct
+imports from owning modules to compatibility wrappers or a new generic service framework.
+
 ## Logical data model
 
 - A backend identifies an execution machine and its capabilities.
@@ -140,12 +163,12 @@ decision and its reasoning when agreed. Keep feature tasks and verification resu
 The [integration decision](decisions/0001-local-pi-integration.md) records provider boundaries. The [session decision](decisions/0002-session-owned-harnesses.md) records isolation, configuration, and preservation of existing data.
 
 - Next.js owns the browser application and the independent machine registry/proxy. `/api/machines` manages explicit connections; `/api/machines/:id/api/*` forwards allowlisted requests with server-held credentials. Nothing enrolls or selects a local backend automatically. The prior backend hub API remains for compatibility, but the web client does not use it. Machine identity/settings remain on each Fastify backend; see the connection section below.
-- `src/console.ts` registers validated routes, closes resources, and rejects browser mutations without the Console request header. No CORS or Console user authentication is configured. This is for private loopback use only.
-- `src/providers.ts` adapts Pi's built-in catalog, login prompts, notifications, cancellation, logout, and explicit model-catalog refresh. Environment-only providers show setup guidance. Provider discovery does not prove access to a model.
-- `src/credentials.ts` supplies Pi's credential-store interface. Credentials and installation identity live in `credentials.sqlite`; Pi owns login and token refresh. An exclusive SQLite lock prevents two backend processes from rotating the same credentials.
-- `src/sessions.ts` owns a SQLite catalog and one cached harness per session. New sessions store Pi state under `sessions/<uuid>/conversation.sqlite`; an existing root `conversation.sqlite` is registered as the `default` session without moving it. A session that cannot open is listed as unavailable while other sessions remain usable.
-- `src/conversation.ts` owns each harness and root conversation. The sandbox extension is registered, with tools disabled until explicitly configured. Configuration, submission, cancellation, and resume are serialized within each session. Conversations run independently; each conversation can accept steering and queued follow-ups during its run.
-- `src/session-routes.ts` exposes session creation, snapshots, saved configuration, and lifecycle commands. Creation request IDs deduplicate retries; message request IDs are scoped to their session.
+- `src/http/console.ts` registers validated routes, closes resources, and rejects browser mutations without the Console request header. No CORS or Console user authentication is configured. This is for private loopback use only.
+- `src/models/providers.ts` adapts Pi's built-in catalog, login prompts, notifications, cancellation, logout, and explicit model-catalog refresh. Environment-only providers show setup guidance. Provider discovery does not prove access to a model.
+- `src/models/credentials.ts` supplies Pi's credential-store interface. Credentials and installation identity live in `credentials.sqlite`; Pi owns login and token refresh. An exclusive SQLite lock prevents two backend processes from rotating the same credentials.
+- `src/sessions/catalog.ts` owns a SQLite catalog and one cached harness per session. New sessions store Pi state under `sessions/<uuid>/conversation.sqlite`; an existing root `conversation.sqlite` is registered as the `default` session without moving it. A session that cannot open is listed as unavailable while other sessions remain usable.
+- `src/runtime/session.ts` owns each harness and root conversation. The sandbox extension is registered, with tools disabled until explicitly configured. Configuration, submission, cancellation, and resume are serialized within each session. Conversations run independently; each conversation can accept steering and queued follow-ups during its run.
+- `src/sessions/routes.ts` exposes session creation, snapshots, saved configuration, and lifecycle commands. Creation request IDs deduplicate retries; message request IDs are scoped to their session.
 - Provider responses include supported thinking levels from Pi's `getSupportedThinkingLevels()` and model context capacity. Saving settings validates the selected model/level against the installed catalog and persists them in Pi's `pi.agent` document. Settings changes during unfinished work return 409. Messages use saved settings instead of carrying a second configuration.
 - Browser polling retrieves the latest 50 transcript entries, committed partial text, and lifecycle state. The browser never owns the run. Session list polling runs every two seconds; selected transcript polling runs every second. A URL query remembers selection on reload, and in-memory drafts and uncertain submission IDs remain separate per conversation while the page is open. Repeated submissions with the same request ID return the original admission, including after restart. A request ID identifies its original input and must not be reused for different content or delivery mode.
 - Closing the browser leaves execution running. Backend restart opens saved work without scheduling it; Resume explicitly enables scheduling. Cancel aborts the conversation and persists that outcome. Read/list tools may replay; file writes and HTTP GET do not replay automatically after interruption. Other external-effect workflows remain unimplemented.
@@ -158,10 +181,10 @@ Pi packages are pinned to 1.4.0. A pnpm patch adds missing JSON import attribute
 
 [Decision 0003](decisions/0003-configurable-nono-workers.md) records the process boundary and the CLI choice. Pi retains execution state and model access in Fastify. Tool execution crosses into a fresh `nono wrap` worker for each call.
 
-- `sandbox-policy.ts` defines the saved `console.sandbox` Pi document and validates directory grants. Defaults disable tools, allow no writes, and block network. Enabling requires an existing absolute workspace, which becomes readable. Additional readable and writable directories are explicit; writable grants include reads.
-- `sandbox-tools.ts` registers `read_file`/`list_directory`, optional `write_file`/`create_directory`, and optional `fetch_url`. It reads the saved policy and revalidates grants for every invocation. The model cannot change policy through these tools. `run_command` is offered only when the saved policy explicitly enables commands.
-- `sandbox-runner.ts` creates a nono capability manifest inside Console's protected data directory. It supplies a minimal environment, no provider secrets, and fixed read-only prerequisites for Node, the worker/package metadata, system libraries, OpenSSL configuration, and required device files. It executes nono 0.80.0 directly without a shell or inherited profiles.
-- `sandbox-worker.ts` runs only after nono installs restrictions and execs Node, so Node's worker threads inherit them. File/HTTP calls have a ten-second deadline and bounded input/output; command limits are described below; text files and HTTP bodies are limited to 64 KiB. Unknown operations/arguments cannot be selected by the model.
+- `sandbox/policy.ts` defines the saved `console.sandbox` Pi document and validates directory grants. Defaults disable tools, allow no writes, and block network. Enabling requires an existing absolute workspace, which becomes readable. Additional readable and writable directories are explicit; writable grants include reads.
+- `sandbox/tools.ts` registers `read_file`/`list_directory`, optional `write_file`/`create_directory`, and optional `fetch_url`. It reads the saved policy and revalidates grants for every invocation. The model cannot change policy through these tools. `run_command` is offered only when the saved policy explicitly enables commands.
+- `sandbox/runner.ts` creates a nono capability manifest inside Console's protected data directory. It supplies a minimal environment, no provider secrets, and fixed read-only prerequisites for Node, the worker/package metadata, system libraries, OpenSSL configuration, and required device files. It executes nono 0.80.0 directly without a shell or inherited profiles.
+- `sandbox/worker.ts` runs only after nono installs restrictions and execs Node, so Node's worker threads inherit them. File/HTTP calls have a ten-second deadline and bounded input/output; command limits are described below; text files and HTTP bodies are limited to 64 KiB. Unknown operations/arguments cannot be selected by the model.
 - Policies cannot grant Console's private storage or its environment file. Writable grants also exclude the running Console source and Node/nono executable paths. This prevents a tool from rewriting its policy, backend, or launcher. Readable/writable roots are additive; overlapping broad parents are rejected rather than pretending to carve private children out on Linux.
 - Policy updates require an idle session, validate paths, and run a restricted startup check before saving an enabled policy. They commit policy and offered tools together. Disabling remains possible even if an old workspace no longer exists. Existing policies are never replaced after a failed activation, and tools never retry outside nono.
 
@@ -204,7 +227,7 @@ Resume starts the session scheduler. New input cannot implicitly resume other in
 
 ## Machine and project lifecycle
 
-`machine-settings.ts` persists the name, default clone directory (`~/Projects` initially), fixed
+`platform/machine-settings.ts` persists the name, default clone directory (`~/Projects` initially), fixed
 model default, and last selected configuration in `catalog.sqlite`. Pi is a backend dependency;
 there is no separate Pi CLI installation step. Git availability is reported for repository cloning.
 New sessions prefer the project's last model configuration, then a fixed machine default, then
@@ -212,7 +235,7 @@ the machine's last configuration. Existing connected configurations seed the rem
 when upgrading. Unavailable saved models require an explicit selection, not a silent substitute.
 
 Public HTTPS GitHub URLs can be cloned under the machine's project directory, with an optional
-absolute override. `workspaces.ts` tracks cloning, ready, failed, and interrupted states. Clone
+absolute override. `projects/workspaces.ts` tracks cloning, ready, failed, and interrupted states. Clone
 uses Git without user credential helpers, hooks, templates, or file/ext transports; it writes to
 a temporary sibling and publishes the directory after success. Failed clones can be retried.
 Registration/cloning never runs repository setup scripts or grants agent tools.
@@ -276,7 +299,7 @@ must be idle and closed before removing its Pi database and catalog record. Lega
 is removed individually; machine credentials, shared state, connection registry, and source files
 are retained. Session labels use a persistent counter so deletion never reuses a number.
 
-Pi 1.4 has no public per-conversation deletion API. `purge-conversation.ts` is a maintenance adapter
+Pi 1.4 has no public per-conversation deletion API. `runtime/purge.ts` is a maintenance adapter
 for that pinned storage schema, called only after closing the idle harness. It removes a trashed
 leaf's entries, submissions, tasks, document revisions, documents, and conversation record in one
 transaction, retaining minted-ID history. It refuses a different pinned Pi version pending review.
@@ -405,7 +428,7 @@ is tracked in the [Console feature inventory](features.md), without treating dep
 
 ## Readable transcript projection
 
-The backend retains Pi's entries, tool-call IDs and error flags. The web's `chat-transcript.ts` derives
+The backend retains Pi's entries, tool-call IDs and error flags. The web's `lib/chat/transcript.ts` derives
 message, context and activity blocks without changing storage. Calls/results pair by call ID, including
 parallel calls that finish out of order. Results whose call is outside the loaded page remain visible;
 loading earlier history joins them without dropping the output. Committed results override stale live

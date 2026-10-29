@@ -3,7 +3,8 @@
 This is the authoritative implementation checklist for Console, including Pi integration,
 nono sandboxing, product features, clients and operations. Reviewed against source on
 2026-10-29 after the compact-chat implementation (`bd5f81c`). This is a maintained inventory,
-not a live runtime health report or a claim of complete upstream parity.
+not a live runtime health report or a claim of complete upstream parity. Source links follow the
+domain organization described in the package guides; the refactor changes no feature statuses.
 
 [Requirements](requirements.md) owns product intent; [architecture](architecture.md) owns design
 and execution boundaries. [Pi integration scope](pi-capabilities.md) explains compatibility.
@@ -46,9 +47,9 @@ For each feature change:
 | NET-07 | Execution migration between machines | Deferred | Connections do not move running work, databases or source. |
 | NET-08 | Multiple users and per-user authorization | Deferred | Private single-user product; bearer access is not team access control. |
 
-Evidence: [identity/auth](../packages/server/src/console.ts),
-[registry/proxy](../packages/web/src/lib/machine-store.ts),
-[SSH](../packages/web/src/lib/ssh-tunnel.ts),
+Evidence: [identity/auth](../packages/server/src/http/console.ts),
+[registry/proxy](../packages/web/src/lib/server/machine-store.ts),
+[SSH](../packages/web/src/lib/server/ssh-tunnel.ts),
 [registry tests](../packages/server/test/machine-store.test.ts),
 [hierarchy tests](../packages/server/test/hierarchy.test.ts).
 
@@ -66,9 +67,9 @@ Evidence: [identity/auth](../packages/server/src/console.ts),
 | PRJ-08 | Isolated checkouts for concurrent editing | Missing | Conversations/subagents currently share source files. |
 | PRJ-09 | Diff review and verification-evidence workflow | Missing | No dedicated review/completion-evidence interface. |
 
-Evidence: [projects](../packages/server/src/workspaces.ts),
-[sessions](../packages/server/src/sessions.ts),
-[purge](../packages/server/src/purge-conversation.ts),
+Evidence: [projects](../packages/server/src/projects/workspaces.ts),
+[sessions](../packages/server/src/sessions/catalog.ts),
+[purge](../packages/server/src/runtime/purge.ts),
 [lifecycle tests](../packages/server/test/lifecycle.test.ts),
 [Default project tests](../packages/server/test/default-project.test.ts),
 [purge tests](../packages/server/test/purge.test.ts).
@@ -86,10 +87,10 @@ Evidence: [projects](../packages/server/src/workspaces.ts),
 | MOD-07 | Token/cache/cost and context inspection | Implemented | Conversation ledgers/estimates; not account billing totals. |
 | MOD-08 | Usage aggregation and enforced cost budgets | Missing | No project/machine billing dashboard or spending enforcement. |
 
-Evidence: [providers](../packages/server/src/providers.ts),
-[credentials](../packages/server/src/credentials.ts),
-[runtime](../packages/server/src/conversation.ts),
-[usage UI](../packages/web/src/components/conversation-runtime.tsx),
+Evidence: [providers](../packages/server/src/models/providers.ts),
+[credentials](../packages/server/src/models/credentials.ts),
+[runtime](../packages/server/src/runtime/configuration.ts),
+[usage UI](../packages/web/src/components/details/runtime.tsx),
 [provider tests](../packages/server/test/console.test.ts),
 [model configuration tests](../packages/server/test/sessions.test.ts).
 
@@ -108,9 +109,9 @@ Evidence: [providers](../packages/server/src/providers.ts),
 | SEC-09 | Executable plugin/MCP trust review | Missing | Markdown grants no execution; no executable-resource trust editor/host boundary. |
 | SEC-10 | Durable human approval for consequential tools | Missing | Static grants do not implement persisted approve/reject decisions. |
 
-Evidence: [policy](../packages/server/src/sandbox-policy.ts),
-[supervisor](../packages/server/src/sandbox-runner.ts),
-[Pi bridge](../packages/server/src/sandbox-pi.ts),
+Evidence: [policy](../packages/server/src/sandbox/policy.ts),
+[supervisor](../packages/server/src/sandbox/runner.ts),
+[Pi bridge](../packages/server/src/sandbox/pi-tools.ts),
 [enforcement/cancellation tests](../packages/server/test/sandbox.test.ts),
 [execution design](decisions/0009-native-pi-tools-in-nono.md).
 
@@ -132,8 +133,8 @@ Evidence: [policy](../packages/server/src/sandbox-policy.ts),
 | RUN-12 | Abrupt-crash/external-effect recovery proof | Partial | Close/reopen/cancel tested; no kill-at-checkpoint/power-loss proof or general effect idempotency. |
 | RUN-13 | Operational reports/telemetry | Missing | No configured Harness onReport/telemetry pipeline or diagnostic interface. |
 
-Evidence: [runtime/history](../packages/server/src/conversation.ts),
-[routes](../packages/server/src/session-routes.ts),
+Evidence: [runtime/history](../packages/server/src/runtime/view.ts),
+[routes](../packages/server/src/sessions/routes.ts),
 [runtime-control tests](../packages/server/test/runtime-controls.test.ts),
 [history tests](../packages/server/test/history.test.ts),
 [agent/fork tests](../packages/server/test/agent-controls.test.ts).
@@ -154,9 +155,9 @@ Evidence: [runtime/history](../packages/server/src/conversation.ts),
 | EXT-10 | Deferred tool discovery/search | Missing | No deferred registry/exposure or agent search adapter. |
 | EXT-11 | Mid-run agent configuration | Missing | Settings idle-only; timing/revocation semantics need design. |
 
-Evidence: [resources](../packages/server/src/project-resources.ts),
-[sandbox tools/sections](../packages/server/src/sandbox-tools.ts),
-[registry selection](../packages/server/src/conversation.ts),
+Evidence: [resources](../packages/server/src/sandbox/resources.ts),
+[sandbox tools/sections](../packages/server/src/sandbox/tools.ts),
+[registry selection](../packages/server/src/runtime/configuration.ts),
 [resource tests](../packages/server/test/project-resources.test.ts),
 [compatibility boundary](pi-capabilities.md).
 
@@ -173,8 +174,8 @@ Evidence: [resources](../packages/server/src/project-resources.ts),
 | AGT-07 | Durable approval/review gates | Missing | No checkpointed decision lifecycle or evidence-based completion gate. |
 | AGT-08 | Schedules/authenticated event triggers | Missing | No automatic initiation through the bounded submission path. |
 
-Evidence: [coordination](../packages/server/src/agent-extension.ts),
-[plans](../packages/server/src/plan.ts),
+Evidence: [coordination](../packages/server/src/runtime/coordination.ts),
+[plans](../packages/server/src/runtime/plan.ts),
 [coordination tests](../packages/server/test/agent-controls.test.ts),
 [plan persistence/fork tests](../packages/server/test/plan.test.ts).
 
@@ -197,11 +198,11 @@ Evidence: [coordination](../packages/server/src/agent-extension.ts),
 | OPS-06 | Versions/changelogs and quality tooling | Implemented | Changesets, types/tests/build, Biome, RumDL and prek; not deployment automation. |
 | OPS-07 | Publishing/deployment/release automation | Deferred | Not configured; separately authorized actions required. |
 
-Evidence: [chat](../packages/web/src/components/session-chat.tsx),
-[history following](../packages/web/src/components/use-chat-history.ts),
-[polling](../packages/web/src/app/chat/page.tsx),
+Evidence: [chat](../packages/web/src/components/chat/conversation.tsx),
+[history following](../packages/web/src/components/chat/use-history.ts),
+[polling](../packages/web/src/components/chat/use-chat-session.ts),
 [projection tests](../packages/server/test/chat-transcript.test.ts),
-[storage configuration](../packages/server/src/configuration.ts),
+[storage configuration](../packages/server/src/platform/configuration.ts),
 [release workflow](releases.md).
 
 ## Verification baseline and next decisions

@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { createModels } from "@earendil-works/pi-ai/models";
-import { api } from "../../web/src/lib/console-api.ts";
-import { openMachineStore } from "../../web/src/lib/machine-store.ts";
+import { api } from "../../web/src/lib/api.ts";
+import { openMachineStore } from "../../web/src/lib/server/machine-store.ts";
 import { createApp } from "../src/app.ts";
 
 test("web connections start empty, authenticate explicitly, persist and disconnect without touching machine data", async (t) => {
@@ -179,7 +179,9 @@ test("onboarding rejects incompatible servers, redirects and unsafe origins befo
 });
 
 test("managed SSH transport closes on disconnect, retains history without credentials and reconnects explicitly", async (t) => {
-  const { sshArguments } = await import("../../web/src/lib/ssh-tunnel.ts");
+  const { sshArguments } = await import(
+    "../../web/src/lib/server/ssh-tunnel.ts"
+  );
   const directory = await mkdtemp(join(tmpdir(), "console-ssh-"));
   const app = createApp(
     {},

@@ -3,7 +3,7 @@
 import { LoaderCircleIcon, TrashIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useBackend } from "@/components/console-shell";
+import { useBackend } from "@/components/machines/connection-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -11,7 +11,7 @@ import {
   type Machine,
   type SessionSummary,
   type Workspace,
-} from "@/lib/console-api";
+} from "@/lib/api";
 
 export default function Home() {
   const { connections, id, select } = useBackend();

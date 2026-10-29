@@ -1,0 +1,99 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { ConfirmDelete } from "@/components/shared/confirm-delete";
+import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
+
+type Item = { id: string; name: string; kind?: string };
+export function Trash({
+  kind,
+  sessionId,
+  onRestore,
+}: {
+  kind: "projects" | "sessions" | "conversations";
+  sessionId?: string;
+  onRestore?: () => void;
+}) {
+  const [items, setItems] = useState<Item[]>([]);
+  const [error, setError] = useState("");
+  const [working, setWorking] = useState(false);
+  const base =
+    kind === "projects"
+      ? "/workspaces"
+      : kind === "sessions"
+        ? "/sessions"
+        : `/sessions/${sessionId}/conversations`;
+  useEffect(() => {
+    const controller = new AbortController();
+    api<Item[]>(`${base}/trash`, "GET", undefined, controller.signal)
+      .then(setItems)
+      .catch((cause) => {
+        if (!controller.signal.aborted) setError(cause.message);
+      });
+    return () => controller.abort();
+  }, [base]);
+  return (
+    <details className="border-t p-3 text-xs text-muted-foreground">
+      <summary className="cursor-pointer">
+        Deleted {kind} · {items.length}
+      </summary>
+      <p className="my-3">
+        Restore items or delete them permanently. Permanent deletion erases
+        saved history; project source files stay on disk. Main and delegated
+        history must be erased with their session.
+      </p>
+      {error && <p role="alert">{error}</p>}
+      {items.map((item) => (
+        <div
+          key={item.id}
+          className="my-2 flex items-center justify-between gap-3"
+        >
+          <span>{item.name}</span>
+          <div className="flex flex-wrap gap-1">
+            <Button
+              disabled={working}
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                try {
+                  await api(`${base}/${item.id}/restore`, "POST");
+                  setItems(await api(`${base}/trash`));
+                  onRestore?.();
+                } catch (cause) {
+                  setError((cause as Error).message);
+                }
+              }}
+            >
+              Restore
+            </Button>
+            {kind === "conversations" &&
+            (item.id === "1" || item.kind === "subagent") ? (
+              <span className="text-xs">Erase through its session</span>
+            ) : (
+              <ConfirmDelete
+                label={`Permanently delete ${item.name}; cannot be undone`}
+                disabled={working}
+                onConfirm={() => {
+                  void (async () => {
+                    setWorking(true);
+                    setError("");
+                    try {
+                      await api(`${base}/${item.id}/permanent`, "DELETE");
+                      setItems(await api(`${base}/trash`));
+                      onRestore?.();
+                    } catch (cause) {
+                      setError((cause as Error).message);
+                    } finally {
+                      setWorking(false);
+                    }
+                  })();
+                }}
+              />
+            )}
+          </div>
+        </div>
+      ))}
+    </details>
+  );
+}

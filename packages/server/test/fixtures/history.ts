@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { Conversation } from "../../../web/src/lib/console-api.ts";
+import type { Conversation } from "../../../web/src/lib/api.ts";
 
 const headers = { "x-console-request": "1" };
 export const historyAnswer = (index: number) =>

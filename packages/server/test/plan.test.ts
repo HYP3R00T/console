@@ -9,7 +9,7 @@ import {
   fauxProvider,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import type { Conversation } from "../../web/src/lib/console-api.ts";
+import type { Conversation } from "../../web/src/lib/api.ts";
 import { createApp } from "../src/app.ts";
 
 test("recorded plans persist, fork at historical progress, reject invalid statuses and remain conversation-scoped", async (t) => {

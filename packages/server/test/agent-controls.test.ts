@@ -9,8 +9,8 @@ import {
   fauxProvider,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { openAgentState } from "../src/agent-extension.ts";
 import { createApp } from "../src/app.ts";
+import { openAgentState } from "../src/runtime/coordination.ts";
 
 const headers = { "x-console-request": "1" };
 async function wait<T>(read: () => Promise<T>, ready: (value: T) => boolean) {
