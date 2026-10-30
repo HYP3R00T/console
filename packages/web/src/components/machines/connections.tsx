@@ -81,7 +81,7 @@ export function BackendConnections() {
         </p>
       )}
       {!!connections.length && (
-        <Card>
+        <Card className="rounded-xl">
           <CardHeader>
             <CardTitle>
               <h2>Connected machines</h2>
@@ -134,7 +134,7 @@ export function BackendConnections() {
           </CardContent>
         </Card>
       )}
-      <Card>
+      <Card className="rounded-xl">
         <CardHeader>
           <CardTitle>
             <h2>Connect a machine</h2>
@@ -297,7 +297,7 @@ export function BackendConnections() {
         </CardContent>
       </Card>
       {!!recent.length && (
-        <Card>
+        <Card className="rounded-xl">
           <CardHeader>
             <CardTitle>
               <h2>Recent machines</h2>

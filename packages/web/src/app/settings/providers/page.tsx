@@ -1,1 +1,4 @@
-export { default } from "@/components/models/provider-settings";
+import { redirect } from "next/navigation";
+export default function ProviderSettingsPage() {
+  redirect("/settings?section=providers");
+}

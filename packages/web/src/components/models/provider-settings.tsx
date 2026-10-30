@@ -5,7 +5,11 @@ import { ProviderConnection } from "@/components/models/provider-connection";
 import { Button } from "@/components/ui/button";
 import { api, fieldClass, type Login, type Provider } from "@/lib/api";
 
-export default function ProviderSettings() {
+export default function ProviderSettings({
+  active = true,
+}: {
+  active?: boolean;
+}) {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [providerId, setProviderId] = useState("");
   const [search, setSearch] = useState("");
@@ -16,6 +20,7 @@ export default function ProviderSettings() {
   const loginId = login?.id;
   const loginStatus = login?.status;
   useEffect(() => {
+    if (!active || providers.length) return;
     const controller = new AbortController();
     Promise.all([
       api<Provider[]>("/providers", "GET", undefined, controller.signal),
@@ -34,9 +39,9 @@ export default function ProviderSettings() {
         if (!controller.signal.aborted) setError(cause.message);
       });
     return () => controller.abort();
-  }, []);
+  }, [active, providers.length]);
   useEffect(() => {
-    if (!loginId || loginStatus !== "pending") return;
+    if (!active || !loginId || loginStatus !== "pending") return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const id = loginId;
@@ -68,7 +73,7 @@ export default function ProviderSettings() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [loginId, loginStatus]);
+  }, [loginId, loginStatus, active]);
 
   async function act(operation: () => Promise<void>) {
     setWorking(true);
@@ -82,12 +87,9 @@ export default function ProviderSettings() {
     }
   }
   return (
-    <section className="mx-auto max-w-3xl space-y-8 px-6 py-12">
+    <section className="space-y-6">
       <header className="space-y-2">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground">
-          Machine settings
-        </p>
-        <h1 className="text-3xl font-semibold">Provider connections</h1>
+        <h2 className="text-lg font-semibold">Provider connections</h2>
         <p className="text-sm text-muted-foreground">
           Connections belong to this backend machine. Pi handles each provider's
           authentication flow.
@@ -150,7 +152,7 @@ export default function ProviderSettings() {
                     setProviderId(item.id);
                     setSearch("");
                   }}
-                  className="border p-3 text-left text-sm hover:bg-accent"
+                  className="rounded-lg border p-3 text-left text-sm hover:bg-accent"
                 >
                   {item.name}
                 </button>
@@ -159,7 +161,7 @@ export default function ProviderSettings() {
         )}
       </section>
       {provider && (
-        <section className="space-y-4 rounded-none border p-5">
+        <section className="space-y-4 rounded-xl border p-5">
           <h2 className="font-medium">{provider.name}</h2>
           <p className="text-sm text-muted-foreground">
             {provider.configured

@@ -39,7 +39,7 @@ Begin with one user, one local backend, a web client, and manually submitted wor
 workspace. Prove this path before adding remote hosts, additional clients, or automatic triggers.
 The current integration provides one durable runtime per project and configurable conversations. Users create, select and reopen conversations, save model/thinking settings, and select installed tools. Native read/write/edit/bash run through NodeExecutionEnv in the backend process environment. Project paths are starting directories, not access boundaries. Native history forks and task-owned subagents are implemented.
 
-Machine settings persist a readable name, default project directory, and model defaults. Projects can register directories or clone public GitHub repositories. Conversations use native Pi IDs for default names and can be renamed. Native forks and delegated child agents appear beneath their parent. Explicit project memory, separate operator-managed machine state, active-task inspection, tool selection, and installed extension controls are available. Sessions and conversations have recoverable deletion; project files and databases are retained. Home shows an overview; Chat provides a resizable machine/project/conversation tree. The project runtime stays hidden. Each machine has a persistent Default project for unassigned conversations, with an independent working directory. Agent controls open on demand; Settings is a full page for machine defaults, providers, and model preferences. Conversation switching must retain the current view until uncached data is ready and show cached visits without a welcome/loading flash. Composer model/thinking choices update local client drafts and apply only on Send; polling must not overwrite unsent choices. Other editors keep their explicit Save actions.
+Machine settings persist a readable name, default project directory, and model defaults. Projects can register directories or clone public GitHub repositories. Conversations use native Pi IDs for default names and can be renamed. Native forks and delegated child agents appear beneath their parent. Explicit project memory, separate operator-managed machine state, active-task inspection, tool selection, and installed extension controls are available. Sessions and conversations have recoverable deletion; project files and databases are retained. Home shows an overview; Chat provides a collapsible, resizable machine/project/conversation sidebar with a visible drag grip and remembered width, plus the conversation and optional details split. The project runtime stays hidden. Each machine has a persistent Default project for unassigned conversations, with an independent working directory. Conversation controls use expandable sections with project/machine settings kept separate; Settings is a full page for machine defaults, providers, and model preferences. Conversation switching must retain the current view until uncached data is ready and show cached visits without a welcome/loading flash. Thinking controls must follow the selected model's Pi-reported capabilities, hiding for off-only models and exposing every supported tier. The composer shows the selected model and thinking level together, with a backend-estimated context usage ring, and shows delivery choices only during running work. Composer model/thinking choices update local client drafts and apply only on Send; polling must not overwrite unsent choices. Other editors keep their explicit Save actions.
 
 Connection onboarding is explicit: the web app can start with no machine, validates a server's
 identity/API before saving a connection, and supports disconnect/reconnect without stopping work
@@ -143,3 +143,18 @@ settle consequential choices, and identify executable checks as implementation m
 Keep these questions here only while they shape the product baseline; link concrete implementation
 issues when they exist. GitHub remains the task/status tracker. Update this document when product
 expectations change rather than copying individual issue progress into it.
+
+## Unified workspace and model clarity
+
+Chat, settings and machine connection management share the persistent machine tree and resizable
+workspace. Settings and Add machine replace the center pane; Home is no longer a separate dashboard.
+Returning to chat on the same machine preserves unsent text and model/thinking drafts. Settings
+identifies the selected machine through cards, then separates model-menu choices, providers and
+machine defaults. Provider credentials and defaults remain machine-owned; model-menu favorites
+remain shared by this web app. Changing machines may discard unsent client state.
+
+Both composer and settings group models under their provider names. Settings expands provider
+catalogs and exposes context capacity and supported thinking levels. The composer control fits its
+label. Off is selectable only when Pi reports support; required-thinking models explain its absence.
+The frontend cannot supply a model missing from the machine's catalog; see the
+[installed catalog audit](model-catalog-audit.md) for the unresolved CLI/package Terra discrepancy.

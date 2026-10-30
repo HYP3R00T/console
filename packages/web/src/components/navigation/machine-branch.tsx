@@ -12,13 +12,14 @@ import {
   SettingsIcon,
   TrashIcon,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useRef, useState } from "react";
 import { useBackend } from "@/components/machines/connection-context";
 import { useProjectTree } from "@/components/machines/use-project-tree";
 import { type TreeAction, TreeRow } from "@/components/navigation/tree-row";
 import { ProjectDialog } from "@/components/projects/dialog";
 import { api, type BackendConnection, type Workspace } from "@/lib/api";
+import { workspaceLocation } from "@/lib/workspace-location";
 import { Branch } from "./branch";
 
 export function MachineBranch({
@@ -40,6 +41,7 @@ export function MachineBranch({
 }) {
   const { select: selectMachine } = useBackend();
   const router = useRouter();
+  const pathname = usePathname();
   const { data, error, refresh } = useProjectTree(machine.id);
   const [actionError, setActionError] = useState("");
   const [addingProject, setAddingProject] = useState(false);
@@ -110,7 +112,7 @@ export function MachineBranch({
   function open(sid: string, cid?: string) {
     if (active) onSelect(sid, cid);
     else
-      window.location.assign(
+      navigate(
         `/chat?backend=${encodeURIComponent(machine.id)}&session=${encodeURIComponent(sid)}${cid ? `&conversation=${encodeURIComponent(cid)}` : ""}`,
       );
   }
@@ -143,7 +145,7 @@ export function MachineBranch({
     ];
   }
   function navigate(path: string) {
-    selectMachine(machine.id);
+    if (!active) selectMachine(machine.id);
     router.push(path);
   }
   function agents(sid: string, parentId?: string): ReactNode {
@@ -348,13 +350,15 @@ export function MachineBranch({
                       label: "Project settings",
                       icon: SettingsIcon,
                       run: () => {
-                        if (active)
+                        if (active) {
+                          if (!["/", "/chat"].includes(pathname))
+                            router.push(workspaceLocation());
                           window.dispatchEvent(
                             new CustomEvent("console:inspect-project", {
                               detail: project.id,
                             }),
                           );
-                        else
+                        } else
                           navigate(
                             `/chat?backend=${encodeURIComponent(machine.id)}&inspect=project&workspace=${encodeURIComponent(project.id)}`,
                           );

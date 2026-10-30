@@ -1,74 +1,78 @@
 "use client";
-
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { useBackend } from "@/components/machines/connection-context";
 import { MachineSettings } from "@/components/machines/settings";
+import { MachineSwitcher } from "@/components/machines/switcher";
 import { ModelPreferencesSettings } from "@/components/models/preferences";
 import ProviderSettings from "@/components/models/provider-settings";
-import { ChoiceSelect } from "@/components/shared/choice-select";
 
 function SettingsContent() {
   const params = useSearchParams();
   const section = ["machine", "providers"].includes(params.get("section") ?? "")
     ? params.get("section")
     : "models";
-  const { id, connections, select } = useBackend();
+  const { id, connections } = useBackend();
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-5 sm:flex-row sm:p-8">
-      <nav
-        aria-label="Settings sections"
-        className="flex shrink-0 gap-2 sm:w-44 sm:flex-col"
-      >
-        <h1 className="hidden pb-4 text-xl font-semibold sm:block">Settings</h1>
-        {[
-          ["models", "Model choices"],
-          ["machine", "Machine defaults"],
-          ["providers", "Providers"],
-        ].map(([key, label]) => (
-          <Link
-            key={key}
-            href={`/settings?section=${key}`}
-            aria-current={section === key ? "page" : undefined}
-            className={`px-3 py-2 text-sm hover:bg-accent ${section === key ? "bg-accent" : ""}`}
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
-      <div className="min-w-0 flex-1 space-y-6">
-        <div className="max-w-sm space-y-2">
-          <p className="text-xs text-muted-foreground">Selected machine</p>
-          <ChoiceSelect
-            label="Settings machine"
-            value={id}
-            items={connections.map((item) => ({
-              value: item.id,
-              label: item.name,
-            }))}
-            placeholder="No machine selected"
-            disabled={!connections.length}
-            onChange={select}
-          />
-        </div>
-        <div key={`${section}:${id}`}>
-          {section === "models" ? (
-            <ModelPreferencesSettings />
-          ) : !id ? (
-            <p className="text-sm text-muted-foreground">
-              <Link className="underline" href="/machines">
-                Connect or select a machine
-              </Link>{" "}
-              to configure its defaults and providers.
+    <main className="mx-auto w-full max-w-5xl space-y-6 p-5 sm:p-8">
+      <header className="space-y-2">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Workspace settings
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Choose a machine, then manage its providers, model catalog and
+          defaults.
+        </p>
+      </header>
+      <MachineSwitcher />
+      {id ? (
+        <div
+          key={id}
+          className="overflow-hidden rounded-2xl border border-border/70 bg-card/30"
+        >
+          <header className="border-b px-5 pt-4">
+            <p className="mb-3 text-xs font-medium text-muted-foreground">
+              {connections.find((machine) => machine.id === id)?.name}{" "}
+              configuration
             </p>
-          ) : section === "machine" ? (
-            <MachineSettings />
-          ) : (
-            <ProviderSettings />
-          )}
+            <nav
+              aria-label="Settings sections"
+              className="flex gap-1 overflow-auto"
+            >
+              {[
+                ["models", "Model menu"],
+                ["providers", "Providers"],
+                ["machine", "Machine defaults"],
+              ].map(([key, label]) => (
+                <Link
+                  key={key}
+                  href={`/settings?section=${key}`}
+                  aria-current={section === key ? "page" : undefined}
+                  className={`shrink-0 border-b-2 px-3 py-3 text-xs font-medium ${section === key ? "border-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                >
+                  {label}
+                </Link>
+              ))}
+            </nav>
+          </header>
+          <div className="p-5 sm:p-6">
+            <div hidden={section !== "models"}>
+              <ModelPreferencesSettings active={section === "models"} />
+            </div>
+            <div hidden={section !== "providers"}>
+              <ProviderSettings active={section === "providers"} />
+            </div>
+            <div hidden={section !== "machine"}>
+              <MachineSettings active={section === "machine"} />
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        <p className="rounded-xl border p-5 text-sm text-muted-foreground">
+          Select a saved machine above or add a connection to configure it.
+        </p>
+      )}
     </main>
   );
 }
@@ -76,7 +80,7 @@ export default function SettingsPage() {
   return (
     <Suspense
       fallback={
-        <p className="p-6 text-sm text-muted-foreground">Loading settings…</p>
+        <p className="p-6 text-sm text-muted-foreground">Opening settings…</p>
       }
     >
       <SettingsContent />

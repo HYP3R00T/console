@@ -1,4 +1,5 @@
 "use client";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBackend } from "@/components/machines/connection-context";
 import {
@@ -20,8 +21,11 @@ import {
   savedConfiguration,
   submitDraft,
 } from "@/lib/chat/submission";
+import { rememberWorkspaceLocation } from "@/lib/workspace-location";
 export function useChatSession() {
   const { connections, id: machineId, select: selectMachine } = useBackend();
+  const pathname = usePathname();
+  const route = useSearchParams().toString();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -79,28 +83,36 @@ export function useChatSession() {
       `/sessions/${id}${cid ? `/conversations/${cid}` : ""}`,
     [],
   );
-  const showConversation = useCallback((value?: Conversation) => {
-    ++epoch.current;
-    conversationAttempt.current = undefined;
-    if (selectedRef.current !== (value?.id ?? "")) setConversations([]);
-    selectedRef.current = value?.id ?? "";
-    conversationRef.current = value?.conversationId ?? "";
-    setSelected(selectedRef.current);
-    setConversationId(conversationRef.current);
-    updateSnapshot(value);
-    setDetailOnline(Boolean(value));
-    setError("");
-    setDetailError("");
-    const url = new URL(window.location.href);
-    for (const key of ["session", "conversation", "workspace", "new"])
-      url.searchParams.delete(key);
-    if (value) {
-      url.searchParams.set("session", value.id);
-      if (value.conversationId)
-        url.searchParams.set("conversation", value.conversationId);
-    }
-    window.history.replaceState(null, "", url.pathname + url.search);
-  }, []);
+  const showConversation = useCallback(
+    (value?: Conversation) => {
+      ++epoch.current;
+      conversationAttempt.current = undefined;
+      if (selectedRef.current !== (value?.id ?? "")) setConversations([]);
+      selectedRef.current = value?.id ?? "";
+      conversationRef.current = value?.conversationId ?? "";
+      setSelected(selectedRef.current);
+      setConversationId(conversationRef.current);
+      updateSnapshot(value);
+      setDetailOnline(Boolean(value));
+      setError("");
+      setDetailError("");
+      const url = new URL(window.location.href);
+      for (const key of ["session", "conversation", "workspace", "new"])
+        url.searchParams.delete(key);
+      if (value) {
+        url.searchParams.set("session", value.id);
+        if (value.conversationId)
+          url.searchParams.set("conversation", value.conversationId);
+      }
+      if (machineId) url.searchParams.set("backend", machineId);
+      url.searchParams.delete("section");
+      const location = `/chat${url.search}`;
+      rememberWorkspaceLocation(location);
+      if (["/", "/chat"].includes(window.location.pathname))
+        window.history.replaceState(null, "", location);
+    },
+    [machineId],
+  );
   const navigation = useMemo(
     () =>
       createConversationNavigation({
@@ -216,17 +228,27 @@ export function useChatSession() {
     return () => window.removeEventListener("console:tree-deleted", deleted);
   }, [chooseConversation, navigation]);
   useEffect(() => {
-    const open = () => setCreating(true);
-    setWorkspaceId(
-      new URLSearchParams(window.location.search).get("workspace") ?? "",
-    );
-    window.addEventListener("console:new-session", open);
-    if (new URLSearchParams(window.location.search).has("new"))
+    if (!["/", "/chat"].includes(pathname)) return;
+    const params = new URLSearchParams(route);
+    if (params.has("new")) {
+      setWorkspaceId(params.get("workspace") ?? "");
       setCreating(true);
-    return () => window.removeEventListener("console:new-session", open);
-  }, []);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("new");
+      window.history.replaceState(null, "", url.pathname + url.search);
+      return;
+    }
+    const sid = params.get("session");
+    const cid = params.get("conversation") ?? undefined;
+    if (
+      sid &&
+      (sid !== selectedRef.current || (cid && cid !== conversationRef.current))
+    )
+      void openConversation(sid, cid);
+  }, [pathname, route, openConversation]);
 
   useEffect(() => {
+    if (!machineId) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     let initial = true;
@@ -261,15 +283,11 @@ export function useChatSession() {
           select(items[0]?.id ?? "");
         if (initial) {
           initial = false;
-          const id =
-            new URL(window.location.href).searchParams.get("session") ||
-            items[0]?.id;
-          if (id && !selectedRef.current) {
-            const cid = new URL(window.location.href).searchParams.get(
-              "conversation",
-            );
-            void openConversation(id, cid ?? undefined);
-          }
+          const explicit = new URL(window.location.href).searchParams.get(
+            "session",
+          );
+          if (!explicit && items[0]?.id && !selectedRef.current)
+            void openConversation(items[0].id);
         }
       } catch (cause) {
         if (!controller.signal.aborted) {
@@ -284,7 +302,7 @@ export function useChatSession() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [select, openConversation]);
+  }, [machineId, select, openConversation]);
 
   useEffect(() => {
     if (!selected) return;

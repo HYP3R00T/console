@@ -3,6 +3,7 @@
 import {
   ArrowUpIcon,
   CheckIcon,
+  ChevronDownIcon,
   CornerDownRightIcon,
   HandIcon,
   ListPlusIcon,
@@ -54,11 +55,11 @@ export function ChatComposer({
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const commands = [
-    ["config", "Model and thinking"],
+    ["config", "Choose model"],
     ["state", "Project shared memory"],
-    ["tasks", "Active Pi tasks"],
+    ["tasks", "Current work"],
     ["tools", "Tool definitions and selection"],
-    ["extend", "Extensions and instructions"],
+    ["extend", "Instructions and resources"],
     ["new", "New conversation in this project"],
     ["stop", "Cancel current work"],
     ["resume", "Resume interrupted project work"],
@@ -81,7 +82,7 @@ export function ChatComposer({
           role="listbox"
           id="chat-commands"
           aria-label="Slash commands"
-          className="absolute inset-x-3 bottom-full z-20 mx-auto max-h-72 max-w-3xl overflow-y-auto border bg-popover p-1 shadow-lg"
+          className="absolute inset-x-3 bottom-full z-20 mx-auto max-h-72 max-w-3xl overflow-y-auto rounded-xl border bg-popover p-1 shadow-lg"
         >
           {commands.map(([name, description], index) => (
             <button
@@ -100,7 +101,7 @@ export function ChatComposer({
         </div>
       )}
       <form
-        className="mx-auto max-w-3xl rounded-none border bg-muted/20 p-3 shadow-sm transition-shadow focus-within:ring-1 focus-within:ring-ring/30 sm:p-4"
+        className="mx-auto max-w-3xl rounded-2xl border border-border/70 bg-muted/20 p-3 shadow-sm focus-within:border-ring/60 sm:p-4"
         onSubmit={(event) => {
           event.preventDefault();
           if (showCommands) execute(commands[active]?.[0] ?? "");
@@ -112,10 +113,10 @@ export function ChatComposer({
         </label>
         <textarea
           id="message"
-          className="field-sizing-content min-h-16 max-h-48 w-full resize-none bg-transparent px-1 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground disabled:opacity-50"
+          className="field-sizing-content min-h-12 max-h-48 w-full resize-none bg-transparent px-1 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground disabled:opacity-50"
           rows={2}
           maxLength={32000}
-          placeholder="Give your agent something to work on, or type / for commands…"
+          placeholder="Message Console…"
           value={text}
           disabled={disabled}
           aria-controls={showCommands ? "chat-commands" : undefined}
@@ -163,64 +164,83 @@ export function ChatComposer({
         <div className="mt-2 flex items-center justify-between gap-2">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {modelPicker}
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    type="button"
-                    size="icon-xs"
-                    variant="ghost"
-                    disabled={disabled || uncertain || !modesAvailable}
-                  />
-                }
-                aria-label="Message delivery mode"
-                title={
-                  mode === "steer"
-                    ? "Steer current work"
-                    : mode === "followUp"
-                      ? "Queue follow-up"
-                      : "Only when idle"
-                }
-              >
-                {mode === "steer" ? (
-                  <CornerDownRightIcon />
-                ) : mode === "followUp" ? (
-                  <ListPlusIcon />
-                ) : (
-                  <HandIcon />
-                )}
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="min-w-48">
-                {(
-                  [
-                    {
-                      value: "steer",
-                      label: "Steer current work",
-                      icon: CornerDownRightIcon,
-                    },
-                    {
-                      value: "followUp",
-                      label: "Queue follow-up",
-                      icon: ListPlusIcon,
-                    },
-                    {
-                      value: "reject",
-                      label: "Only when idle",
-                      icon: HandIcon,
-                    },
-                  ] as const
-                ).map((item) => (
-                  <DropdownMenuItem
-                    key={item.value}
-                    onClick={() => onMode(item.value)}
-                  >
-                    <item.icon />
-                    <span>{item.label}</span>
-                    {mode === item.value && <CheckIcon className="ml-auto" />}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {busy && modesAvailable && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 gap-1.5 rounded-full px-2.5 text-xs"
+                      disabled={disabled || uncertain || !modesAvailable}
+                    />
+                  }
+                  aria-label="Message delivery mode"
+                  title={
+                    mode === "steer"
+                      ? "Guide current work"
+                      : mode === "followUp"
+                        ? "Queue next message"
+                        : "Keep as draft"
+                  }
+                >
+                  {mode === "steer" ? (
+                    <CornerDownRightIcon />
+                  ) : mode === "followUp" ? (
+                    <ListPlusIcon />
+                  ) : (
+                    <HandIcon />
+                  )}
+                  <span>
+                    {mode === "steer"
+                      ? "Guide now"
+                      : mode === "followUp"
+                        ? "Queue next"
+                        : "Keep draft"}
+                  </span>
+                  <ChevronDownIcon className="size-3" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-64 rounded-xl p-1">
+                  {(
+                    [
+                      {
+                        value: "steer",
+                        label: "Guide current work",
+                        description: "Send guidance to the active run.",
+                        icon: CornerDownRightIcon,
+                      },
+                      {
+                        value: "followUp",
+                        label: "Queue next message",
+                        description: "Run after the current work finishes.",
+                        icon: ListPlusIcon,
+                      },
+                      {
+                        value: "reject",
+                        label: "Keep as draft",
+                        description: "Wait until the agent is idle.",
+                        icon: HandIcon,
+                      },
+                    ] as const
+                  ).map((item) => (
+                    <DropdownMenuItem
+                      key={item.value}
+                      onClick={() => onMode(item.value)}
+                    >
+                      <item.icon />
+                      <span className="flex-1">
+                        <span className="block text-xs">{item.label}</span>
+                        <span className="block pt-1 text-[11px] text-muted-foreground">
+                          {item.description}
+                        </span>
+                      </span>
+                      {mode === item.value && <CheckIcon className="ml-auto" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {busy && (
@@ -228,6 +248,7 @@ export function ChatComposer({
                 type="button"
                 variant="outline"
                 size="icon"
+                className="rounded-full"
                 disabled={!canCancel}
                 onClick={onCancel}
                 aria-label="Stop current work"
@@ -239,7 +260,7 @@ export function ChatComposer({
             <Button
               type="submit"
               size="icon"
-              className="rounded-none"
+              className="rounded-full"
               disabled={sending}
               aria-label={uncertain ? "Retry message" : "Send message"}
               title={uncertain ? "Retry message" : "Send message (Enter)"}

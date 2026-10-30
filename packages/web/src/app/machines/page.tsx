@@ -41,10 +41,9 @@ export default function Machines() {
   return (
     <main className="mx-auto w-full max-w-4xl space-y-8 px-5 py-8 sm:px-8">
       <header className="space-y-2">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground">
-          Connections
-        </p>
-        <h1 className="text-3xl font-semibold">Machines</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Machine connections
+        </h1>
         <p className="text-sm text-muted-foreground">
           Execution and saved conversations belong to the machine.
         </p>
@@ -65,7 +64,10 @@ export default function Machines() {
         </p>
       )}
       {machines.map((machine) => (
-        <section key={machine.id} className="space-y-6 border p-5 sm:p-6">
+        <section
+          key={machine.id}
+          className="space-y-6 rounded-xl border p-5 sm:p-6"
+        >
           <header className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <MonitorIcon className="size-5" aria-hidden="true" />
@@ -92,11 +94,11 @@ export default function Machines() {
               </div>
             ))}
           </dl>
-          <section className="space-y-4">
-            <h3 className="flex items-center gap-2 text-sm font-medium">
+          <details className="space-y-4">
+            <summary className="flex cursor-pointer items-center gap-2 text-sm font-medium">
               <DatabaseIcon className="size-4" aria-hidden="true" />
               Persistent storage
-            </h3>
+            </summary>
             <dl className="space-y-3 text-sm">
               {[
                 ["Data directory", machine.storage.directory],
@@ -120,7 +122,7 @@ export default function Machines() {
               conversation.sqlite remains in the data directory when present.
               Credentials are stored locally without encryption.
             </p>
-          </section>
+          </details>
 
           <p className="border-t pt-4 text-xs text-muted-foreground">
             This is the selected execution machine. Saved connections belong to

@@ -6,12 +6,14 @@ import {
   PanelLeftOpenIcon,
   PlusIcon,
 } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 import type { ChatSession } from "@/components/chat/use-chat-session";
 import type { WorkspaceLayout } from "@/components/chat/use-workspace-layout";
 import { NetworkSidebar } from "@/components/navigation/network-sidebar";
 import { Trash } from "@/components/navigation/trash";
 import { Button } from "@/components/ui/button";
 import { api, type ConversationSummary } from "@/lib/api";
+import { workspaceLocation } from "@/lib/workspace-location";
 export function WorkspaceNavigation({
   chat,
   layout,
@@ -20,12 +22,16 @@ export function WorkspaceNavigation({
   layout: WorkspaceLayout;
 }) {
   const { session } = chat;
+  const router = useRouter();
+  const pathname = usePathname();
 
   return (
     <aside
       id="workspace-navigation"
       aria-label="Workspace navigation"
-      className={`flex h-full min-h-0 bg-background ${layout.compact && !layout.navigationOpen ? "flex-row" : "flex-col"}`}
+      data-slot="sidebar"
+      data-state={layout.navigationOpen ? "expanded" : "collapsed"}
+      className={`flex h-full min-h-0 border-r bg-sidebar text-sidebar-foreground ${layout.compact && !layout.navigationOpen ? "flex-row" : "flex-col"}`}
     >
       <div className="flex h-10 shrink-0 items-center border-b px-1">
         <Button
@@ -36,6 +42,7 @@ export function WorkspaceNavigation({
             layout.navigationOpen ? "Collapse machines" : "Expand machines"
           }
           aria-expanded={layout.navigationOpen}
+          aria-controls="workspace-sidebar-content"
           onClick={layout.toggleNavigation}
         >
           {layout.navigationOpen ? (
@@ -53,7 +60,7 @@ export function WorkspaceNavigation({
             variant="ghost"
             className="ml-auto size-7"
             aria-label="Add machine"
-            onClick={() => window.location.assign("/machines")}
+            onClick={() => router.push("/machines")}
           >
             <PlusIcon />
           </Button>
@@ -91,13 +98,14 @@ export function WorkspaceNavigation({
             className="size-7 shrink-0"
             aria-label="Add machine"
             title="Add machine"
-            onClick={() => window.location.assign("/machines")}
+            onClick={() => router.push("/machines")}
           >
             <PlusIcon />
           </Button>
         </nav>
       )}
       <div
+        id="workspace-sidebar-content"
         className={
           layout.navigationOpen ? "flex h-full min-h-0 flex-col" : "hidden"
         }
@@ -109,11 +117,23 @@ export function WorkspaceNavigation({
             conversationId={session?.conversationId}
             onSelect={(id, cid) => {
               layout.setContextPanel("");
-              void chat.openConversation(id, cid);
+              void chat.openConversation(id, cid).then(() => {
+                if (!["/", "/chat"].includes(pathname))
+                  router.push(workspaceLocation());
+              });
             }}
             onNew={(id) => {
-              chat.setWorkspaceId(id);
-              chat.setCreating(true);
+              if (!["/", "/chat"].includes(pathname)) {
+                const params = new URLSearchParams({
+                  backend: chat.machineId,
+                  workspace: id,
+                  new: "1",
+                });
+                router.push(`/chat?${params}`);
+              } else {
+                chat.setWorkspaceId(id);
+                chat.setCreating(true);
+              }
             }}
           />
         </div>
