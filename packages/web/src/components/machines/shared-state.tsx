@@ -5,27 +5,35 @@ import { api } from "@/lib/api";
 import { startPolling } from "@/lib/poll";
 
 type State = { revision: number; value: Record<string, unknown> };
-export function SharedState({ active = true }: { active?: boolean }) {
+export function SharedState({
+  active = true,
+  path = "/state",
+  project = false,
+}: {
+  active?: boolean;
+  path?: string;
+  project?: boolean;
+}) {
   const [snapshot, setSnapshot] = useState<State>();
   const [draft, setDraft] = useState<string>();
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
   const reload = useCallback(async () => {
-    const value = await api<State>("/state");
+    const value = await api<State>(path);
     setSnapshot(value);
     setDraft(undefined);
     setRevision(value.revision);
-  }, []);
+  }, [path]);
   useEffect(() => {
     if (!active) return;
     return startPolling({
-      read: (signal) => api<State>("/state", "GET", undefined, signal),
+      read: (signal) => api<State>(path, "GET", undefined, signal),
       onValue: setSnapshot,
       onError: (cause) => setError(cause.message),
       interval: 1500,
     });
-  }, [active]);
+  }, [active, path]);
   return (
     <form
       className="space-y-3"
@@ -35,7 +43,7 @@ export function SharedState({ active = true }: { active?: boolean }) {
         setError("");
         try {
           const value = JSON.parse(draft ?? "{}");
-          await api("/state", "PUT", { value, revision });
+          await api(path, "PUT", { value, revision });
           await reload();
         } catch (cause) {
           setError((cause as Error).message);
@@ -44,10 +52,14 @@ export function SharedState({ active = true }: { active?: boolean }) {
         }
       }}
     >
-      <h2 className="font-semibold">Machine shared state</h2>
+      <h2 className="font-semibold">
+        {project ? "Project memory" : "Machine shared state"}
+      </h2>
       <p className="text-xs text-muted-foreground">
-        All projects on this machine · revision {snapshot?.revision ?? "…"}.
-        Never store credentials.
+        {project
+          ? "Shared facts for this project; conversation histories remain separate"
+          : "All projects on this machine"}{" "}
+        · revision {snapshot?.revision ?? "…"}. Never store credentials.
       </p>
       {error && (
         <p role="alert" className="text-xs text-destructive">

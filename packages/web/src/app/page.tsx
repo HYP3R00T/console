@@ -87,7 +87,7 @@ export default function Home() {
         {[
           ["Machines", connections.length, "/machines"],
           ["Projects", summary?.projects.length ?? "—", "/workspaces"],
-          ["Sessions", summary?.sessions.length ?? "—", "/chat"],
+          ["Active projects", summary?.sessions.length ?? "—", "/chat"],
           ["Unfinished", summary?.machine.activeSessions ?? "—", "/chat"],
         ].map(([label, value, href]) => (
           <Link
@@ -154,7 +154,8 @@ export default function Home() {
       <section className="space-y-3">
         <header className="flex items-center justify-between">
           <h2 className="font-medium">
-            Recent sessions · {summary?.machine.name || "selected machine"}
+            Recent project activity ·{" "}
+            {summary?.machine.name || "selected machine"}
           </h2>
           <Link href="/chat" className="text-xs underline">
             Open conversations
@@ -177,7 +178,7 @@ export default function Home() {
           ))}
         {summary && !summary.sessions.length && (
           <p className="text-sm text-muted-foreground">
-            No sessions yet. Add a project or start a conversation.
+            No project activity yet. Add a project or start a conversation.
           </p>
         )}
       </section>

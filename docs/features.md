@@ -61,8 +61,8 @@ Evidence: [identity/auth](../packages/server/src/http/console.ts),
 | PRJ-02 | Public GitHub clone/retry | Implemented | Public HTTPS; temporary destination and async states; no repository hooks. |
 | PRJ-03 | Private repository authentication | Missing | No repository credential onboarding. |
 | PRJ-04 | Protected Default project and model association | Implemented | Project association sets cwd; host tools are not confined. |
-| PRJ-05 | Named/numbered sessions and conversations | Implemented | Persistent IDs, idempotent creation; shared session storage/workspace. |
-| PRJ-06 | Rename and project/conversation navigation | Implemented | Aligned tree, persisted row-click toggles, ancestry; batched conversation summaries with older-server fallback. |
+| PRJ-05 | Named/numbered sessions and conversations | Implemented | One hidden Harness/database per project; New conversation uses it; native IDs and idempotent creation. |
+| PRJ-06 | Rename and project/conversation navigation | Implemented | Direct machine/project/conversation tree; no Projects wrapper or session rows; persistent toggles and ancestry. |
 | PRJ-07 | Trash/restore/permanent deletion | Implemented | Idle/dependency checks; source retained; backups not physically erased. |
 | PRJ-08 | Isolated checkouts for concurrent editing | Missing | Conversations/subagents currently share source files. |
 | PRJ-09 | Diff review and verification-evidence workflow | Missing | No dedicated review/completion-evidence interface. |
@@ -79,7 +79,7 @@ Evidence: [projects](../packages/server/src/projects/workspaces.ts),
 | ID | Feature | Status | Boundary / remaining work |
 | --- | --- | --- | --- |
 | MOD-01 | Built-in providers, supported login and catalog refresh | Implemented | Persisted credentials and disconnect; not every provider live-tested. |
-| MOD-02 | Model/thinking selection and defaults | Implemented | Composer model list/discrete thinking slider, project/machine defaults and picker preferences. |
+| MOD-02 | Model/thinking selection and defaults | Implemented | Composer list/slider, silent saves with stable feedback layout/options, scoped configuration responses, project/machine defaults. |
 | MOD-03 | Custom/local endpoints, headers and model overrides | Missing | No Console configuration API/editor. |
 | MOD-04 | Virtual-model routing | Missing | No routing policy/configuration. |
 | MOD-05 | Attachments and non-text result rendering | Missing | Text admission/projection; no end-to-end attachment path. |
@@ -168,16 +168,18 @@ Evidence: [resources](../packages/server/src/projects/resources.ts),
 | --- | --- | --- | --- |
 | AGT-01 | Foreground task-owned subagents | Implemented | Explicit delegation, inherited model/cwd, stable admission, parent cancellation; no recursion. |
 | AGT-02 | Background spawn/message/wait/stop/report-back | Missing | Foreground delegation waits; no background protocol. |
-| AGT-03 | Revisioned machine-wide shared state | Implemented | Whole-object compare-and-swap and tool receipts; cross-project, not private memory. |
+| AGT-03 | Revisioned shared state | Implemented | Agent tools use native project memory with CAS/receipts; machine operator JSON remains separate. |
 | AGT-04 | Atomic shared-state path operations | Missing | No create/update/delete/increment-by-path tools. |
 | AGT-05 | Recorded conversation plans | Implemented | Durable/fork-aware reported progress; existing agents must select update_plan. |
 | AGT-06 | Checkpointed application jobs and durable sleep/wake | Missing | Runtime task APIs exist, but no Console job definitions/launch controls. |
 | AGT-07 | Durable approval/review gates | Missing | No checkpointed decision lifecycle or evidence-based completion gate. |
 | AGT-08 | Schedules/authenticated event triggers | Missing | No automatic initiation through the bounded submission path. |
+| AGT-09 | Explicit project memory | Implemented | Native session document, shared across project conversations; separate histories and cross-project memory; no automatic transcript merging. |
 
 Evidence: [coordination](../packages/server/src/runtime/coordination.ts),
 [plans](../packages/server/src/runtime/plan.ts),
 [coordination tests](../packages/server/test/agent-controls.test.ts),
+[project runtime/memory tests](../packages/server/test/project-runtime.test.ts),
 [plan persistence/fork tests](../packages/server/test/plan.test.ts).
 
 ## Web, other clients and operations
@@ -233,6 +235,21 @@ replaces the retired confinement suite with native-host execution coverage. Repo
 passed against the compiled production app. Browser verification of the saved Fork #35 confirmed the native tool registry and Tools panel
 without a sandbox editor; no inference or tool-setting changes were submitted. No development
 server was restarted.
+
+The maintainer subsequently replaced visible session grouping with one hidden runtime per
+project and authorized deleting experimental histories. Project memory now uses native Pi session
+documents; agent tools no longer address machine-wide operator state. All 54 tests pass, including
+concurrent creation/retry identity, one-Harness reuse, native memory tools, CAS conflicts, separate
+histories, cross-project isolation, reopening and receipt replay. Typechecks, production builds
+and repository hooks passed. Both new tests also passed against the compiled backend. Browser
+verification confirmed direct project conversation creation and the Project memory panel with no
+visible session layer. One fresh empty conversation was created; no inference was submitted.
+A transient system-load run timed out; the unchanged full suite passed on retry.
+
+The subsequent picker fix reproduced a 28-pixel save-status layout jump. Browser measurements
+then showed zero movement of the popup, slider and adjacent controls before/during/after saving,
+plus stable model switching. Configuration writes now own the snapshot update and invalidate old
+polls. All 54 tests, typechecks, builds and hooks passed; no inference was submitted for UI checks.
 
 Recommended order, not a newly authorized implementation plan:
 

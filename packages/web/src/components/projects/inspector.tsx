@@ -1,8 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
+import { SharedState } from "@/components/machines/shared-state";
 import { Button } from "@/components/ui/button";
 import { api, fieldClass, type Workspace } from "@/lib/api";
-export function ProjectInspector({ id }: { id: string }) {
+export function ProjectInspector({
+  id,
+  active = true,
+}: {
+  id: string;
+  active?: boolean;
+}) {
   const [project, setProject] = useState<Workspace>();
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
@@ -63,6 +70,12 @@ export function ProjectInspector({ id }: { id: string }) {
           </Button>
         </>
       )}
+      <SharedState
+        key={id}
+        path={`/workspaces/${id}/memory`}
+        active={active}
+        project
+      />
       <p role="status" className="text-sm">
         {message}
       </p>

@@ -163,11 +163,7 @@ export function MachineBranch({
           (conversationId
             ? conversationId === item.id
             : item.isMain || item.name === "Main");
-        const name =
-          (item.isMain || item.name === "Main") && item.name === "Main"
-            ? (data?.sessions.find((session) => session.id === sid)?.name ??
-              item.name)
-            : item.name;
+        const name = item.name;
         const label = (
           <>
             {item.kind === "fork" ? (
@@ -197,9 +193,7 @@ export function MachineBranch({
         const actions = rowActions(
           name,
           `/sessions/${sid}/conversations/${item.id}`,
-          all.length === 1
-            ? `/sessions/${sid}`
-            : `/sessions/${sid}/conversations/${item.id}`,
+          `/sessions/${sid}/conversations/${item.id}`,
         );
         return (
           <div key={item.id}>
@@ -277,11 +271,16 @@ export function MachineBranch({
               {error
                 ? "offline"
                 : data
-                  ? `${Object.values(data.conversations).reduce((total, rows) => total + rows.length, 0)} chats`
+                  ? `${Object.values(data.conversations).reduce((total, rows) => total + rows.length, 0)} conversations`
                   : "connecting"}
             </span>
           </>
         }
+        quickAction={{
+          label: `Add project on ${machine.name}`,
+          icon: PlusIcon,
+          run: () => setAddingProject(true),
+        }}
         actions={[
           {
             label: "Machine settings",
@@ -308,90 +307,73 @@ export function MachineBranch({
             {actionError}
           </p>
         )}
-        <Branch
-          name="Projects"
-          storageKey={`console.tree:${JSON.stringify([machine.id, "projects"])}`}
-          initial
-          indentChildren={false}
-          label={
-            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Projects
-            </span>
-          }
-          quickAction={{
-            label: `Add project on ${machine.name}`,
-            icon: PlusIcon,
-            run: () => setAddingProject(true),
-          }}
-        >
-          {projects.map((project) => (
-            <Branch
-              key={project.id}
-              name={project.name}
-              storageKey={`console.tree:${JSON.stringify([machine.id, "project", project.id])}`}
-              initial={active}
-              quickAction={{
-                label: `New conversation in ${project.name}`,
+        {projects.map((project) => (
+          <Branch
+            key={project.id}
+            name={project.name}
+            storageKey={`console.tree:${JSON.stringify([machine.id, "project", project.id])}`}
+            initial={active}
+            quickAction={{
+              label: `New conversation in ${project.name}`,
+              icon: PlusIcon,
+              disabled:
+                creating ||
+                Boolean(error) ||
+                Boolean(project.state && project.state !== "ready"),
+              run: () => newConversation(project),
+            }}
+            editing={edit?.path === `/workspaces/${project.id}`}
+            label={
+              <>
+                <FolderIcon
+                  className="size-3.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                {nameLabel(project.name, `/workspaces/${project.id}`)}
+              </>
+            }
+            actions={[
+              {
+                label: "New conversation",
                 icon: PlusIcon,
                 disabled:
                   creating ||
                   Boolean(error) ||
                   Boolean(project.state && project.state !== "ready"),
                 run: () => newConversation(project),
-              }}
-              editing={edit?.path === `/workspaces/${project.id}`}
-              label={
-                <>
-                  <FolderIcon
-                    className="size-3.5 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  {nameLabel(project.name, `/workspaces/${project.id}`)}
-                </>
-              }
-              actions={[
-                {
-                  label: "New conversation",
-                  icon: PlusIcon,
-                  disabled:
-                    creating ||
-                    Boolean(error) ||
-                    Boolean(project.state && project.state !== "ready"),
-                  run: () => newConversation(project),
-                },
-                ...(project.id
-                  ? [
-                      {
-                        label: "Project settings",
-                        icon: SettingsIcon,
-                        run: () => {
-                          if (active)
-                            window.dispatchEvent(
-                              new CustomEvent("console:inspect-project", {
-                                detail: project.id,
-                              }),
-                            );
-                          else
-                            navigate(
-                              `/chat?backend=${encodeURIComponent(machine.id)}&inspect=project&workspace=${encodeURIComponent(project.id)}`,
-                            );
-                        },
+              },
+              ...(project.id
+                ? [
+                    {
+                      label: "Project settings",
+                      icon: SettingsIcon,
+                      run: () => {
+                        if (active)
+                          window.dispatchEvent(
+                            new CustomEvent("console:inspect-project", {
+                              detail: project.id,
+                            }),
+                          );
+                        else
+                          navigate(
+                            `/chat?backend=${encodeURIComponent(machine.id)}&inspect=project&workspace=${encodeURIComponent(project.id)}`,
+                          );
                       },
-                      ...(!project.isDefault
-                        ? rowActions(project.name, `/workspaces/${project.id}`)
-                        : []),
-                    ]
-                  : []),
-              ]}
-            >
-              {data?.sessions
-                .filter((item) => (item.workspaceId ?? "") === project.id)
-                .map((item) => (
-                  <div key={item.id}>{agents(item.id)}</div>
-                ))}
-            </Branch>
-          ))}
-        </Branch>
+                    },
+                    ...(!project.isDefault
+                      ? rowActions(project.name, `/workspaces/${project.id}`)
+                      : []),
+                  ]
+                : []),
+            ]}
+          >
+            {data?.sessions
+              .filter((item) => (item.workspaceId ?? "") === project.id)
+              .map((item) => (
+                <div key={item.id}>{agents(item.id)}</div>
+              ))}
+          </Branch>
+        ))}
       </Branch>
       <ProjectDialog
         open={addingProject}

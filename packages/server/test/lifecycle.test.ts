@@ -200,7 +200,7 @@ test("machine settings and remembered project models persist; deletion is recove
     ).statusCode,
     200,
   );
-  assert.equal((await app.inject("/v1/sessions")).json().length, 2);
+  assert.equal((await app.inject("/v1/sessions")).json().length, 1);
   await app.close();
   app = createApp({}, { dataDirectory: directory, models: () => models });
   const restored = (await app.inject("/v1/machine-settings")).json();

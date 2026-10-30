@@ -25,6 +25,58 @@ export function registerSessionRoutes(
     },
     (req) => sessions.state.save(req.body.value, req.body.revision),
   );
+  app.post<{
+    Params: { id: string };
+    Body: { name?: string; requestId: string };
+  }>(
+    "/workspaces/:id/conversations",
+    {
+      schema: {
+        params,
+        body: {
+          ...nameBody,
+          required: ["requestId"],
+          properties: { ...nameBody.properties, requestId: string },
+        },
+      },
+    },
+    async (req, reply) =>
+      reply
+        .code(201)
+        .send(
+          await sessions.startConversation(
+            req.params.id,
+            req.body.name ?? "",
+            req.body.requestId,
+          ),
+        ),
+  );
+  app.get<{ Params: { id: string } }>(
+    "/workspaces/:id/memory",
+    { schema: { params } },
+    (req) => sessions.projectMemory(req.params.id),
+  );
+  app.put<{
+    Params: { id: string };
+    Body: { value: Record<string, unknown>; revision: number };
+  }>(
+    "/workspaces/:id/memory",
+    {
+      schema: {
+        params,
+        body: {
+          type: "object",
+          required: ["value", "revision"],
+          additionalProperties: false,
+          properties: {
+            value: { type: "object", additionalProperties: true },
+            revision: { type: "integer", minimum: 0 },
+          },
+        },
+      },
+    },
+    (req) => sessions.projectMemory(req.params.id, req.body),
+  );
   app.delete<{ Params: { id: string } }>(
     "/sessions/:id/permanent",
     async (req, reply) => {

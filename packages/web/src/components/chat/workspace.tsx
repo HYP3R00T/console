@@ -57,7 +57,7 @@ export function ChatWorkspace() {
             <WorkspaceNavigation chat={chat} layout={layout} />
           </ResizablePanel>
           <ResizableHandle
-            aria-label="Resize machine and session navigation"
+            aria-label="Resize project and conversation navigation"
             disabled={!layout.navigationOpen}
           />
           <ResizablePanel id="conversation" minSize="30%">

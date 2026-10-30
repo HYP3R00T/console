@@ -138,6 +138,7 @@ export function DetailsPanel({
             <ProjectInspector
               key={layout.inspectedProject}
               id={layout.inspectedProject}
+              active={layout.inspectorOpen && layout.contextPanel === "project"}
             />
           )}
         </div>

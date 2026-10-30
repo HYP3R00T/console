@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBackend } from "@/components/machines/connection-context";
 import {
+  type AgentConfiguration,
   ApiError,
   api,
   type Conversation,
@@ -37,6 +38,7 @@ export function useChatSession() {
   const [selected, setSelected] = useState("");
   const selectedRef = useRef("");
   const epoch = useRef(0);
+  const mutations = useRef(0);
   const [snapshot, setSnapshot] = useState<Conversation>();
   const [online, setOnline] = useState(false);
   const [detailOnline, setDetailOnline] = useState(false);
@@ -101,8 +103,12 @@ export function useChatSession() {
     setError("");
     void (async () => {
       try {
+        const projectId =
+          input.workspaceId || workspaces.find((item) => item.isDefault)?.id;
+        if (!projectId)
+          throw new Error("Choose a project before starting a conversation.");
         const created = await api<Conversation>(
-          "/sessions",
+          `/workspaces/${projectId}/conversations`,
           "POST",
           {
             requestId: input.requestId,
@@ -115,6 +121,7 @@ export function useChatSession() {
         ++epoch.current;
         focusNewConversation.current = true;
         select(created.id);
+        if (created.conversationId) chooseConversation(created.conversationId);
         setSnapshot(created);
         setDetailOnline(true);
         setDetailError("");
@@ -127,7 +134,15 @@ export function useChatSession() {
         setWorking(false);
       }
     })();
-  }, [creating, online, machineId, workspaceId, select]);
+  }, [
+    creating,
+    online,
+    machineId,
+    workspaceId,
+    select,
+    chooseConversation,
+    workspaces,
+  ]);
 
   useEffect(() => {
     if (focusNewConversation.current && session) {
@@ -228,6 +243,10 @@ export function useChatSession() {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
+      if (mutations.current) {
+        timer = setTimeout(poll, 1000);
+        return;
+      }
       const started = epoch.current;
       try {
         const current = await api<Conversation>(
@@ -272,6 +291,7 @@ export function useChatSession() {
 
   async function operate(id: string, action: () => Promise<void>) {
     const cid = conversationRef.current;
+    ++mutations.current;
     ++epoch.current;
     setWorking(true);
     setError("");
@@ -287,24 +307,33 @@ export function useChatSession() {
       setError((cause as Error).message);
     } finally {
       ++epoch.current;
-      setWorking(false);
+      --mutations.current;
+      setWorking(mutations.current > 0);
     }
   }
-  async function newAgent() {
-    if (!session) return;
-    const input = conversationAttempt.current ?? {
-      requestId: crypto.randomUUID(),
-    };
-    conversationAttempt.current = input;
-    await operate(session.id, async () => {
-      const row = await api<ConversationSummary>(
-        `/sessions/${session.id}/conversations`,
-        "POST",
+  async function saveConfiguration(input: AgentConfiguration) {
+    const id = selectedRef.current;
+    const cid = conversationRef.current;
+    ++mutations.current;
+    ++epoch.current;
+    setWorking(true);
+    try {
+      const current = await api<Conversation>(
+        `${conversationPath(id, cid)}/config`,
+        "PATCH",
         input,
       );
-      conversationAttempt.current = undefined;
-      chooseConversation(row.id);
-    });
+      ++epoch.current;
+      if (selectedRef.current === id && conversationRef.current === cid) {
+        setSnapshot(current);
+        setDetailOnline(true);
+        setDetailError("");
+      }
+    } finally {
+      ++epoch.current;
+      --mutations.current;
+      setWorking(mutations.current > 0);
+    }
   }
   const forkAttempt = useRef<
     { entryId: string; requestId: string } | undefined
@@ -366,10 +395,7 @@ export function useChatSession() {
   const parentConversation = conversations.find(
     (item) => item.id === selectedConversation?.parentId,
   );
-  const parentName =
-    parentConversation?.name === "Main"
-      ? session?.name
-      : parentConversation?.name;
+  const parentName = parentConversation?.name;
   const relationship =
     selectedConversation?.kind === "fork" ? "Forked from" : "Delegated by";
 
@@ -407,13 +433,10 @@ export function useChatSession() {
     draftKey,
     conversationPath,
     operate,
-    newAgent,
+    saveConfiguration,
     fork,
     send,
-    agentName:
-      selectedConversation?.name === "Main"
-        ? session?.name
-        : selectedConversation?.name,
+    agentName: selectedConversation?.name,
     parentName,
     relationship,
   };

@@ -178,7 +178,22 @@ Enter/blur saves and Escape cancels.
 native discrete range control for supported, preferred thinking levels (including the saved level).
 There is no search field or permissions shortcut. Model selection saves immediately; the slider
 saves on release, keyboard adjustment or blur, with one commit per adjustment. Failures remain
-visible and the slider restores its saved value. Provider/catalog management stays in Settings.
+visible and the slider restores its saved value. The trigger has a stable width so adjacent composer controls do not move as labels change.
+Saves are visually silent; only failures and the idle-only availability hint are shown.
+The popup reserves one feedback line and a
+stable thinking-control area; model labels/checkmarks cannot wrap or resize rows during saves.
+The selection present when opened stays available until reopening, so saving cannot remove a
+slider step or current-model row underneath the user. Provider/catalog management stays in Settings.
+
+Configuration saves belong to use-chat-session: the PATCH response updates the addressed
+conversation directly, without a redundant GET. The same mutation epoch used by other controls
+rejects old polls and pauses detail polling during mutations. Navigating away prevents an old
+save from overwriting the newly selected conversation. Inline failures still reach the picker.
+A browser reproduction measured a 28-pixel popup jump before the fix; after the fix, the popup
+and slider positions were unchanged before, during Saving, and after a keyboard adjustment.
+The trigger width and adjacent delivery-mode position also stayed fixed; switching between
+connected models retained popup geometry. The original model/thinking values were restored. This verifies
+that interaction, not every possible layout change across the application.
 
 Trash offers Delete forever followed by a named confirmation. UI verification must not confirm
 permanent deletion of personal data; erasure tests use temporary fixtures. Main/delegated entries
@@ -201,43 +216,46 @@ space to the conversation rather than growing the tree. User resizing is remembe
 The panel identifies its selected entity and offers Conversation, Project and Machine scopes.
 Conversation sections are Overview (reported plan and folded usage/context), Activity (active model/
 tool tasks), Tools (folded tool and extension selection), and Instructions (project
-resources, custom instructions and folded extensions). Machine owns shared state and machine-settings
-navigation. Project owns project name/path/status. A fork/child shows its parent's human-visible name.
+resources, custom instructions and folded extensions). Machine owns separate operator state and machine-settings
+navigation. Project owns name/path/status and explicit shared memory. A fork/child shows its parent's human-visible name.
 Shared-state JSON editing and long technical details stay behind disclosures. Runtime task dependencies
 explicitly identify that they span the underlying session. They are not a to-do list.
 
 ## Project navigation and creation
 
-The tree shows machine → project → conversation; Projects is a collapsible section without an additional indentation level. Default collects conversations
-without an explicitly selected project; it is a real backend registration, not a synthetic folder.
-The initial Main conversation uses its session name until renamed. Session containers stay internal;
-additional roots appear beside the initial conversation and forks/subagents nest beneath their parent.
-Deleting the last remaining conversation uses session deletion so the backend lifecycle stays valid.
+The tree shows machine → project → conversation, with project folders directly beneath each
+machine and no redundant Projects heading. Each project owns one hidden Pi runtime; no session container is shown.
+New conversation selects the created thread. Additional conversations sit alongside the first;
+forks/subagents remain beneath their parent. Conversation menus rename/trash only that thread,
+even when it is the final visible conversation. The hidden runtime remains for project memory and
+future threads. Permanent erasure of initial/delegated history still requires the full runtime-history
+maintenance API; the web does not expose that destructive operation.
 
-The Projects heading has a square hover/focus plus button. `components/projects/dialog.tsx` uses the shadcn
+Each machine row has a square hover/focus Add project plus button. `components/projects/dialog.tsx` uses the shadcn
 Base UI Dialog and shared Select/Button components for a name and an existing machine-local folder,
 a new folder, or a public GitHub clone. Requests target that machine explicitly and preserve their
 idempotency key when retried unchanged. Clone state remains visible through project controls.
 Hover changes opacity and row background without resizing action buttons or shifting labels.
 
-## Direct conversation creation
+## Project conversation creation
 
-Each project row has a square plus button visible on hover/focus and on touch devices. It creates
-and opens a numbered conversation immediately, expands its project, and focuses the composer.
-The menu action, empty-state button, and existing `new-session` command use the same creation path.
-Creation stays scoped to the chosen machine/project, preserves request IDs across unchanged retries,
-and blocks duplicate clicks while pending. There is no project/access selection modal. New contexts
-select native coding tools and start in the project directory. No sandbox activation is required.
+Each project row has a square New conversation plus button visible on hover/focus and on touch.
+The menu, empty-state button and `/new` command use `POST /workspaces/:id/conversations`.
+The server creates/reuses the single project runtime, reuses unused Main for the first thread,
+and creates independent conversations thereafter. Request IDs survive uncertain retries. Selection
+uses the returned runtime/conversation IDs; typing adds messages without creating another runtime.
+There is no new-session command, session row, session breadcrumb or session Trash section.
+Model settings remain conversation-specific; native coding tools execute directly on the host.
 
-Project settings show only project controls; shared state belongs to Machine. Conversation Tools
-contains tool selection, including native Pi read/write/edit/bash and the project resource tool,
-all running with backend host authority. Same-level conversation rows reserve an identical disclosure slot;
-clicking any expandable row (including its name or chevron) toggles it; a conversation row also
-selects that conversation. Expansion choices persist in localStorage, keyed by connection and stable
-project/session/conversation IDs, so renames and reloads retain them. Explicit saved choices take
-precedence over automatic defaults; navigation and polling do not reopen a collapsed branch. Fork and delegated
-agent icons distinguish ancestry without adding a redundant Projects tree level. Machine chat counts
-include roots, forks and children rather than counting hidden session containers.
+Project settings show metadata and a folded Project memory JSON editor. All conversations can
+explicitly read/update the same revisioned memory through read_state/update_state; their full
+histories remain separate. `/state` opens this project scope. Machine operator JSON is a separate
+control and is not the model's project memory. Project memory polling stops when details close.
+
+Same-level conversation rows reserve the same disclosure slot. Fork/delegation ancestry stays
+nested. Expansion choices persist by stable connection/project/conversation IDs across reloads.
+Saved collapse choices take precedence over defaults. The breadcrumb shows machine, project and
+conversation; Resume project work names the shared scheduler's scope.
 
 ## Ongoing work and context controls
 

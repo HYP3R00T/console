@@ -172,7 +172,7 @@ The [integration decision](decisions/0001-local-pi-integration.md) records provi
 - `src/http/console.ts` registers validated routes, closes resources, and rejects browser mutations without the Console request header. No CORS or Console user authentication is configured. This is for private loopback use only.
 - `src/models/providers.ts` adapts Pi's built-in catalog, login prompts, notifications, cancellation, logout, and explicit model-catalog refresh. Environment-only providers show setup guidance. Provider discovery does not prove access to a model.
 - `src/models/credentials.ts` supplies Pi's credential-store interface. Credentials and installation identity live in `credentials.sqlite`; Pi owns login and token refresh. An exclusive SQLite lock prevents two backend processes from rotating the same credentials.
-- `src/sessions/catalog.ts` owns a SQLite catalog and one cached harness per session. New sessions store Pi state under `sessions/<uuid>/conversation.sqlite`; an existing root `conversation.sqlite` is registered as the `default` session without moving it. A session that cannot open is listed as unavailable while other sessions remain usable.
+- `src/sessions/catalog.ts` owns a SQLite catalog and one cached Harness per project runtime. A unique project index prevents multiple runtimes; state lives under `sessions/<uuid>/conversation.sqlite`; legacy root database import has been removed. A session that cannot open is listed as unavailable while other sessions remain usable.
 - `src/runtime/session.ts` owns each harness and root conversation. CodingTools and the project resource extension are registered directly, with native tools selected initially. Configuration, submission, cancellation, and resume are serialized within each session. Conversations run independently; each conversation can accept steering and queued follow-ups during its run.
 - `src/sessions/routes.ts` exposes session creation, snapshots, saved configuration, and lifecycle commands. Creation request IDs deduplicate retries; message request IDs are scoped to their session.
 - Provider responses include supported thinking levels from Pi's `getSupportedThinkingLevels()` and model context capacity. Saving settings validates the selected model/level against the installed catalog and persists them in Pi's `pi.agent` document. Settings changes during unfinished work return 409. Messages use saved settings instead of carrying a second configuration.
@@ -228,7 +228,8 @@ may register an existing directory or explicitly create one under an existing pa
 does not enable agent tools. New sessions may bind to a workspace; legacy unbound sessions remain
 valid. Session and project names are editable without moving directories or databases.
 
-Every session still owns one Pi Harness and SQLite database. Its conversations now use Pi's own
+Each project lazily owns one hidden session: a Pi Harness and SQLite database. Creation is serialized
+and the catalog enforces a unique workspaceId. Its conversations use Pi's own
 `createConversation()` API, with name/request identity stored atomically in `console.conversation`.
 New conversations inherit the main conversation's model and working directory, then retain independent
 settings, transcript, inputs, and cancellation. Requests use `/sessions/:id/conversations/:conversationId`.
@@ -277,12 +278,13 @@ Tools execute with host authority. They do not install arbitrary code. Child age
 and new conversations inherit the actual extension selection. Instructions are saved separately.
 Tasks lists live Pi model/tool tasks, not a catalog of example jobs.
 
-`console.agent` supplies `read_state`, `update_state`, and explicit `subagent` delegation. New
-sessions select coordination and native coding tools. Existing
-conversations keep their saved selection until explicitly changed. Machine-wide JSON lives in
-`agent-state.sqlite`; compare-and-swap revisions reject stale full-object saves. Tool updates use
-session/task receipts committed in the same SQLite transaction so replay cannot apply them twice.
-State is shared across projects on the machine and must not contain credentials.
+`console.agent` supplies `read_state`, `update_state`, explicit `subagent` delegation and plans.
+The state tools now address `console.project-memory`, a native session-scoped Pi document.
+Revision checks reject stale full-object saves; task receipts commit with updates in Pi so replay
+cannot apply them twice. Memory survives reopening, is shared by all conversations/forks in that
+project, and is separate from other projects. Tool descriptions explain that transcripts are not
+shared automatically. Never store credentials in memory. The existing `/state` SQLite resource
+remains separate machine-wide operator data; agent tools no longer read or write it.
 
 The subagent tool creates a Pi conversation owned by its durable tool task in one commit, reuses
 it on replay, and submits with a stable request ID. It inherits the parent's model, instructions,
@@ -329,22 +331,27 @@ page with separate Model choices, Machine defaults, and Providers sections. Cred
 defaults belong to the selected execution machine; model/thinking menu preferences belong to the
 web server. Model preferences filter menus only, never change running or saved agents. Empty
 preferences offer only the current model until the user selects more models in Settings.
+Configuration mutations are owned by the chat-state hook. Detail polling pauses while a mutation
+is pending, and epoch/selection checks discard stale poll or save responses. The configuration
+PATCH returns the saved snapshot directly. Picker save/error feedback uses reserved space;
+background state updates must not add/remove layout rows during ordinary control adjustments.
 
 Chat permanently reserves space only for the machine tree and conversation. The tree heading is
-Machines. Each machine has a Projects section with a plus button opening a shadcn Dialog
-for an existing folder, new folder, or public GitHub clone. Conversation rows sit directly under
-their project; a project-row plus creates and opens one directly, with no access-selection dialog.
-Tool permissions remain conversation controls. Internal session containers and the initial Main label
-are hidden. Forks and children
+Machines. Project folders sit directly beneath their machine, whose plus button opens a shadcn Dialog
+for an existing folder, new folder, or public GitHub clone. Project rows contain conversations
+directly; New conversation initializes/reuses the project's canonical hidden runtime, then creates
+an independent thread. The unused initial Main is reused for the first thread. Retried request IDs
+select the original thread. New defaults use Conversation #N. Session rows, creation commands,
+breadcrumbs and Trash controls are hidden. Conversation menus address the conversation alone,
+including when it is the last visible thread; the hidden Harness remains. Forks and children
 stay nested, with distinct fork/delegation icons and aligned disclosure slots. Expandable rows
 toggle from their name or chevron; conversation rows also select their conversation. Browser-local
 expansion choices use stable connection/project/session/conversation IDs and survive reloads and
-renames. Saved collapse choices are not overridden by selection or polling. Projects is collapsible
-without introducing another indentation level.
+renames. Saved collapse choices are not overridden by selection or polling. There is no redundant Projects heading or disclosure.
 Machine menus route to machine-scoped Settings. The on-demand details panel explicitly selects
-Conversation, Project or Machine scope. Conversation has Overview, Activity, Access and Instructions;
-shared state belongs to Machine, and project metadata belongs to Project. Overview folds usage/context
-controls; Access folds tool selection; Instructions folds resources/extensions. Reported plans and
+Conversation, Project or Machine scope. Conversation has Overview, Activity, Tools and Instructions;
+project memory and metadata belong to Project; separate operator state belongs to Machine. Overview folds usage/context
+controls; Tools folds tool selection; Instructions folds resources/extensions. Reported plans and
 runtime tasks are distinct. Closing preserves mounted drafts and returns focus. The desktop split
 resizes the conversation and restores its space when closed; narrow screens use an overlay. Tree collapse is
 explicit, remembered per browser tab, and its button has no persistent selected background.

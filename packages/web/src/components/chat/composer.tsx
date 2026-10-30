@@ -55,14 +55,13 @@ export function ChatComposer({
   const [dismissed, setDismissed] = useState(false);
   const commands = [
     ["config", "Model and thinking"],
-    ["state", "Machine shared state"],
+    ["state", "Project shared memory"],
     ["tasks", "Active Pi tasks"],
     ["tools", "Tool definitions and selection"],
     ["extend", "Extensions and instructions"],
-    ["new", "New numbered agent"],
-    ["new-session", "New conversation in this project"],
+    ["new", "New conversation in this project"],
     ["stop", "Cancel current work"],
-    ["resume", "Resume interrupted work"],
+    ["resume", "Resume interrupted project work"],
   ].filter(([name]) => name?.startsWith(text.slice(1).toLowerCase()));
   const showCommands =
     !dismissed &&
