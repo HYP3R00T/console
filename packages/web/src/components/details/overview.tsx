@@ -1,122 +1,92 @@
 "use client";
 
-import { CheckIcon, CircleIcon, LoaderCircleIcon } from "lucide-react";
-import type { InspectorPanel } from "@/components/details/agent-panels";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  CircleIcon,
+  LoaderCircleIcon,
+} from "lucide-react";
 import { ConversationRuntime } from "@/components/details/runtime";
-import { ProjectResources } from "@/components/projects/resources";
 import type { Conversation } from "@/lib/api";
 
 export function SessionInspector({
   session,
-  panel,
   disabled,
-  onResourcePrompt,
-  active = true,
+  modelName,
 }: {
   session: Conversation;
-  panel: InspectorPanel;
   disabled: boolean;
-  onResourcePrompt: (text: string) => void;
-  active?: boolean;
+  modelName?: string;
 }) {
   const path = `/sessions/${session.id}${session.conversationId ? `/conversations/${session.conversationId}` : ""}`;
-  const usage = session.contextUsage;
-  const cost = Object.values(session.usage?.models ?? {}).reduce(
-    (sum, item) => sum + item.cost.total,
-    0,
-  );
+  const running = session.status === "running";
   return (
-    <section className="px-4 text-sm" aria-label="Conversation details">
-      <section hidden={panel !== "session"} className="space-y-4 py-4">
-        <dl className="grid grid-cols-2 gap-3 text-xs">
-          <div>
-            <dt className="text-muted-foreground">Status</dt>
-            <dd className="mt-1 capitalize">{session.status}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Recorded cost</dt>
-            <dd className="mt-1">${cost.toFixed(4)}</dd>
-          </div>
-          <div className="col-span-2">
-            <dt className="text-muted-foreground">Model</dt>
-            <dd className="mt-1 break-all">
-              {session.model
-                ? `${session.model.provider}/${session.model.modelId}`
-                : "Not selected"}{" "}
-              · {session.thinkingLevel}
-            </dd>
-          </div>
-          {usage && (
-            <div className="col-span-2">
-              <dt className="text-muted-foreground">Estimated context</dt>
-              <dd className="mt-1">
-                {usage.estimatedTokens.toLocaleString()} /{" "}
-                {usage.capacity.toLocaleString()} tokens
+    <section
+      className="space-y-4 p-4 text-xs"
+      aria-label="Conversation summary"
+    >
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <span
+          className={`size-1.5 rounded-full ${running ? "bg-emerald-500" : "bg-muted-foreground/50"}`}
+        />
+        <span className={session.status === "idle" ? "" : "capitalize"}>
+          {session.status === "idle"
+            ? "Ready for your message"
+            : session.status}
+        </span>
+      </div>
+      {!!session.plan?.steps.length && (
+        <section
+          aria-label="Conversation plan"
+          className="space-y-3 rounded-xl border border-border/60 p-3"
+        >
+          <h3 className="font-medium">{session.plan.title}</h3>
+          <ol className="space-y-2.5">
+            {session.plan.steps.map((step) => {
+              const Icon =
+                step.status === "completed"
+                  ? CheckIcon
+                  : step.status === "in_progress"
+                    ? LoaderCircleIcon
+                    : CircleIcon;
+              return (
+                <li key={step.step} className="flex items-start gap-2.5">
+                  <Icon
+                    aria-label={step.status.replaceAll("_", " ")}
+                    className={`mt-0.5 size-3.5 shrink-0 text-muted-foreground ${step.status === "in_progress" ? "animate-spin motion-reduce:animate-none" : ""}`}
+                  />
+                  <span>{step.step}</span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
+      <details className="group rounded-xl border border-border/60">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-3 font-medium [&::-webkit-details-marker]:hidden">
+          <span className="flex-1">Usage & context</span>
+          <ChevronDownIcon className="size-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="space-y-3 border-t p-3">
+          <dl className="space-y-2 text-xs">
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Saved model</dt>
+              <dd className="text-right">
+                {modelName ?? session.model?.modelId ?? "Not selected"}
               </dd>
             </div>
-          )}
-        </dl>
-        {session.plan?.steps.length ? (
-          <section
-            className="space-y-3 border-t pt-4"
-            aria-label="Conversation plan"
-          >
-            <h3 className="text-xs font-medium">{session.plan.title}</h3>
-            <ol className="space-y-2">
-              {session.plan.steps.map((step) => {
-                const Icon =
-                  step.status === "completed"
-                    ? CheckIcon
-                    : step.status === "in_progress"
-                      ? LoaderCircleIcon
-                      : CircleIcon;
-                return (
-                  <li
-                    key={step.step}
-                    className="flex items-start gap-2 text-xs"
-                  >
-                    <Icon
-                      className="mt-0.5 size-3 shrink-0 text-muted-foreground"
-                      aria-label={step.status.replaceAll("_", " ")}
-                    />
-                    <span>{step.step}</span>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-        ) : (
-          <p className="border-t pt-4 text-xs text-muted-foreground">
-            No recorded plan.
-          </p>
-        )}
-        <details className="border-t pt-3">
-          <summary className="cursor-pointer text-xs font-medium">
-            Usage and context controls
-          </summary>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Saved thinking</dt>
+              <dd className="capitalize">{session.thinkingLevel}</dd>
+            </div>
+          </dl>
           <ConversationRuntime
             session={session}
             path={path}
             disabled={disabled}
           />
-        </details>
-      </section>
-      <section hidden={panel !== "extend"} className="py-4">
-        <details>
-          <summary className="cursor-pointer text-xs font-medium">
-            Project instructions, skills and prompts
-          </summary>
-          <p className="py-2 text-xs text-muted-foreground">
-            Project instructions and resources from the working directory.
-          </p>
-          <ProjectResources
-            active={active && panel === "extend"}
-            session={session}
-            path={path}
-            onUse={onResourcePrompt}
-          />
-        </details>
-      </section>
+        </div>
+      </details>
     </section>
   );
 }

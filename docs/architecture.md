@@ -259,9 +259,9 @@ No Console resource quota or project confinement is applied.
 Deleting an idle session or conversation marks it as Trash. Deleting a project hides its sessions;
 restore the project before restoring individual sessions. Moving to Trash removes neither project files nor conversation databases. The last active conversation cannot be deleted separately; delete its session instead.
 
-Home (`/`) shows actual machine counts and selected-machine summaries. `/chat` provides machine
-selection, project/conversation navigation, conversation controls, and shadcn Resizable panels. All routes
-share the application header. Machine selection remains scoped to the browser tab.
+`/` and `/chat` show the chat workspace. The persistent root shell owns the machine tree,
+conversation state and shadcn Resizable panels; management routes replace its center pane.
+Machine selection remains scoped to the browser tab.
 
 ## Network and agent inspection
 
@@ -271,12 +271,12 @@ projects, sessions, root conversations, forks, and task-owned children. Pi's imm
 IDs supply agent numbers; session numbers use catalog row identities. Naming is optional on
 creation and editable afterward. Trash does not recycle these identities.
 
-The details panel separates Conversation, Project and Machine scope and reads actual runtime data. Tools
+Conversation details uses expandable sections and reads actual runtime data; project and machine settings retain explicit separate entry points. Tools
 come from Pi's installed registry with schemas, descriptions, and replay policies; selection cannot
 include tools outside the installed registry. Extension checkboxes select actual Pi extensions, including their prompt sections and hooks.
 Tools execute with host authority. They do not install arbitrary code. Child agents
 and new conversations inherit the actual extension selection. Instructions are saved separately.
-Tasks lists live Pi model/tool tasks, not a catalog of example jobs.
+Current work lists live Pi model/tool tasks, not a catalog of example jobs.
 
 `console.agent` supplies `read_state`, `update_state`, explicit `subagent` delegation and plans.
 The state tools now address `console.project-memory`, a native session-scoped Pi document.
@@ -324,12 +324,12 @@ and provides explicit coordination/tool-permission setup actions.
 
 ## Settings and transport ownership
 
-The header owns Home, Chat, and Settings. Machine selection and session creation are contextual
-workspace actions, not global header controls. Connect a machine opens `/machines` in the main
-display, with connection/disconnection and recent history outside Settings. `/settings` is a full
-page with separate Model choices, Machine defaults, and Providers sections. Credentials and machine
-defaults belong to the selected execution machine; model/thinking menu preferences belong to the
-web server. Model preferences filter menus only, never change running or saved agents. Empty
+The header offers settings or return-to-chat within one workspace. Connect a machine opens
+`/machines` in the center pane. `/settings` shows machine cards with Model menu, Providers and
+Machine defaults sections. Chat stays mounted and hidden during same-machine management
+navigation; client links replace full-document navigation. Credentials and machine
+defaults belong to the selected execution machine; model-menu preferences belong to the
+web server. Model-menu preferences filter models only, never change running or saved agents. Composer thinking choices use the selected model's complete Pi-projected capability list, with no global tier filter. Empty
 preferences offer only the current model until the user selects more models in Settings.
 Model/thinking choices are local per-conversation drafts owned by the chat-state hook. Polling
 updates saved state without overwriting a draft. Only Send applies changed configuration before
@@ -337,8 +337,9 @@ message admission. Confirmed configuration is remembered for uncertain admission
 retain the same request ID and do not reconfigure running work. Configuration and admission remain
 sequential backend requests, not atomic; competing clients may cause conflicts. Detail polling
 pauses during actual mutations, and epoch/selection checks reject stale responses. Local control
-changes do not set chat-wide working state. Drafts last while chat is mounted; routes still own
-their pages and can remount them. Backend contracts and runtime ownership remain unchanged.
+changes do not set chat-wide working state. Drafts last while chat is mounted, including same-machine management navigation. Settings
+sections retain drafts across their tabs and gate inactive reads. Changing machines remounts the
+workspace. Backend contracts and runtime ownership remain unchanged.
 
 Chat permanently reserves space only for the machine tree and conversation. The tree heading is
 Machines. Project folders sit directly beneath their machine, whose plus button opens a shadcn Dialog
@@ -352,11 +353,12 @@ stay nested, with distinct fork/delegation icons and aligned disclosure slots. E
 toggle from their name or chevron; conversation rows also select their conversation. Browser-local
 expansion choices use stable connection/project/session/conversation IDs and survive reloads and
 renames. Saved collapse choices are not overridden by selection or polling. There is no redundant Projects heading or disclosure.
-Machine menus route to machine-scoped Settings. The on-demand details panel explicitly selects
-Conversation, Project or Machine scope. Conversation has Overview, Activity, Tools and Instructions;
-project memory and metadata belong to Project; separate operator state belongs to Machine. Overview folds usage/context
-controls; Tools folds tool selection; Instructions folds resources/extensions. Reported plans and
-runtime tasks are distinct. Closing preserves mounted drafts and returns focus. The desktop split
+Machine menus route to machine-scoped Settings. The details panel has one conversation scope
+with expandable Usage & context, Current work, Instructions & resources and Tools & extensions.
+One panel owner keeps instruction drafts while sections change and stops inactive inspection.
+Project memory/metadata use project settings with an explicit back action; separate operator state
+is in machine settings. Composer model/thinking share a combined local-draft popover. An adjacent context ring projects saved backend estimates, including unknown/offline states; delivery
+choices appear only during running work. Reported plans and runtime tasks remain distinct. Sidebar and details proportions are retained per browser tab. Only active separators render; hidden disabled separators can disrupt the library's geometry-based hit testing. Closing preserves mounted drafts and returns focus. The desktop split
 resizes the conversation and restores its space when closed; narrow screens use an overlay. Tree collapse is
 explicit, remembered per browser tab, and its button has no persistent selected background.
 Deletion remains recoverable through Trash, with explicit permanent deletion and confirmation.
@@ -411,7 +413,7 @@ Native Pi coding tools execute through `NodeExecutionEnv` directly. They use the
 account and environment as the backend. `host-runtime.test.ts` verifies native read/write/edit/bash,
 project cwd, access outside the project, cancellation and persisted history on reopening.
 
-Project, conversation and machine controls retain explicit scope navigation. Shared machine
+Project settings and conversation details identify their entity; machine controls live in Settings. Shared machine
 state is not presented as conversation state; project metadata contains no conversation tabs.
 
 ## Runtime controls and project resources
@@ -461,3 +463,12 @@ URL and projection together. Abort checks reject late responses even when transp
 is ignored. Failed navigation leaves the prior view in place. This changes no backend ownership
 or API: cached status is provisional, and mutations remain validated by the server. Components
 are keyed by conversation to isolate history; inactive React trees are not kept alive.
+
+## Provider catalog presentation
+
+`lib/chat/model-catalog.ts` selects provider-qualified favorites and current/opening model choices
+without fabricating missing catalog rows. Composer groups always name their provider; settings
+uses collapsible provider catalogs with context and supported-thinking metadata. The trigger uses
+content width. Thinking Off is included only when projected by Pi; otherwise the control explains
+that thinking is required. See the [catalog audit](model-catalog-audit.md) for the observed CLI/npm
+catalog mismatch, browser evidence and remaining live-provider limits.

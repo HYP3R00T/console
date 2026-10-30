@@ -317,7 +317,9 @@ export function SessionChat({
         </section>
       )}
       <ChatComposer
-        modesAvailable={session.queue !== undefined}
+        modesAvailable={
+          session.status === "running" && session.queue !== undefined
+        }
         mode={mode}
         onMode={onMode}
         text={text}

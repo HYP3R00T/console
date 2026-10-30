@@ -24,7 +24,19 @@ function usePanelOpen(key: string) {
   return [open, setOpen] as const;
 }
 
-export function useWorkspaceLayout() {
+function savedSize(key: string, fallback: number) {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const value = Number(sessionStorage.getItem(key));
+    return Number.isFinite(value) && value >= 1 && value <= 70
+      ? value
+      : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function useWorkspaceLayout(management = false) {
   const [navigationOpen, setNavigationOpen] = usePanelOpen(
     "console.network-open",
   );
@@ -64,8 +76,26 @@ export function useWorkspaceLayout() {
   const [compact, setCompact] = useState(false);
   const [panel, setPanel] = useState<InspectorPanel>("session");
   const layoutRef = useGroupRef();
-  const expandedInspector = useRef(32);
-  const expandedNavigation = useRef(22);
+  const [initialSizes] = useState(() => ({
+    navigation: savedSize("console.sidebar-size", 22),
+    details: savedSize("console.details-size", 32),
+  }));
+  const expandedInspector = useRef(initialSizes.details);
+  const expandedNavigation = useRef(initialSizes.navigation);
+  function rememberSizes() {
+    try {
+      sessionStorage.setItem(
+        "console.sidebar-size",
+        String(expandedNavigation.current),
+      );
+      sessionStorage.setItem(
+        "console.details-size",
+        String(expandedInspector.current),
+      );
+    } catch {
+      /* Resizing still works when browser storage is unavailable. */
+    }
+  }
   const compactNavigation = useRef(40);
   useEffect(() => {
     const navigation = navigationOpen
@@ -73,7 +103,8 @@ export function useWorkspaceLayout() {
         ? compactNavigation.current
         : expandedNavigation.current
       : 0;
-    const details = inspectorOpen && !compact ? expandedInspector.current : 0;
+    const details =
+      inspectorOpen && !compact && !management ? expandedInspector.current : 0;
     // Apply after the panels register their changed open/closed constraints.
     const frame = requestAnimationFrame(() => {
       layoutRef.current?.setLayout({
@@ -83,7 +114,7 @@ export function useWorkspaceLayout() {
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, [navigationOpen, inspectorOpen, compact, layoutRef]);
+  }, [navigationOpen, inspectorOpen, compact, management, layoutRef]);
   function closeInspector() {
     setInspectorOpen(false);
   }
@@ -133,6 +164,7 @@ export function useWorkspaceLayout() {
     layoutRef,
     expandedInspector,
     expandedNavigation,
+    rememberSizes,
     compactNavigation,
     closeInspector,
     toggleNavigation,

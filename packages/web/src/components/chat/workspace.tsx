@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { DetailsPanel } from "@/components/details/panel";
 import { WorkspaceNavigation } from "@/components/navigation/sidebar";
 import {
@@ -10,8 +11,8 @@ import {
 import { ChatContent } from "./content";
 import { useChatSession } from "./use-chat-session";
 import { useWorkspaceLayout } from "./use-workspace-layout";
-export function ChatWorkspace() {
-  const layout = useWorkspaceLayout();
+export function ChatWorkspace({ management }: { management?: ReactNode }) {
+  const layout = useWorkspaceLayout(Boolean(management));
   const chat = useChatSession();
 
   return (
@@ -28,6 +29,7 @@ export function ChatWorkspace() {
         <ResizablePanelGroup
           groupRef={layout.layoutRef}
           orientation={layout.compact ? "vertical" : "horizontal"}
+          resizeTargetMinimumSize={{ fine: 12, coarse: 24 }}
           onLayoutChanged={(nextLayout, meta) => {
             if (!meta.isUserInteraction) return;
             if (layout.navigationOpen) {
@@ -35,14 +37,15 @@ export function ChatWorkspace() {
                 layout.compactNavigation.current = nextLayout.navigation;
               else layout.expandedNavigation.current = nextLayout.navigation;
             }
-            if (layout.inspectorOpen && !layout.compact)
+            if (layout.inspectorOpen && !layout.compact && !management)
               layout.expandedInspector.current = nextLayout.details;
+            layout.rememberSizes();
           }}
         >
           <ResizablePanel
             id="navigation"
             collapsible={false}
-            defaultSize={layout.compact ? "40%" : "22%"}
+            defaultSize={`${layout.compact ? layout.compactNavigation.current : layout.expandedNavigation.current}%`}
             minSize={
               layout.navigationOpen
                 ? layout.compact
@@ -56,26 +59,55 @@ export function ChatWorkspace() {
           >
             <WorkspaceNavigation chat={chat} layout={layout} />
           </ResizablePanel>
-          <ResizableHandle
-            aria-label="Resize project and conversation navigation"
-            disabled={!layout.navigationOpen}
-          />
+          {layout.navigationOpen && (
+            <ResizableHandle
+              withHandle
+              aria-label="Resize project and conversation navigation"
+              title="Drag to resize sidebar; use arrow keys when focused"
+            />
+          )}
           <ResizablePanel id="conversation" minSize="30%">
-            <ChatContent chat={chat} layout={layout} />
+            <div
+              className={management ? "hidden" : "flex h-full min-h-0 flex-col"}
+            >
+              <ChatContent chat={chat} layout={layout} />
+            </div>
+            <div
+              className={
+                management
+                  ? "flex h-full min-h-0 flex-col overflow-auto"
+                  : "hidden"
+              }
+            >
+              {management}
+            </div>
           </ResizablePanel>
-          <ResizableHandle
-            disabled={!layout.inspectorOpen || layout.compact}
-            className={layout.inspectorOpen && !layout.compact ? "" : "hidden"}
-            aria-label="Resize details panel"
-          />
+          {layout.inspectorOpen && !layout.compact && !management && (
+            <ResizableHandle
+              withHandle
+              aria-label="Resize details panel"
+              title="Drag to resize details; use arrow keys when focused"
+            />
+          )}
           <ResizablePanel
             id="details"
             defaultSize="0px"
-            minSize={layout.inspectorOpen && !layout.compact ? "320px" : "0px"}
-            maxSize={layout.inspectorOpen && !layout.compact ? "45%" : "0px"}
+            minSize={
+              layout.inspectorOpen && !layout.compact && !management
+                ? "320px"
+                : "0px"
+            }
+            maxSize={
+              layout.inspectorOpen && !layout.compact && !management
+                ? "45%"
+                : "0px"
+            }
             className={layout.compact ? "overflow-visible!" : ""}
           >
-            <DetailsPanel chat={chat} layout={layout} />
+            <DetailsPanel
+              chat={chat}
+              layout={management ? { ...layout, inspectorOpen: false } : layout}
+            />
           </ResizablePanel>
         </ResizablePanelGroup>
       </main>

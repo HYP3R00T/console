@@ -107,7 +107,7 @@ is mounted; reloaded history starts collapsed.
 
 The layout takes structural inspiration from [Durable Pi](https://github.com/disler/durable-pi)
 and its [interface walkthrough](https://www.youtube.com/watch?v=DNDYYHsypZg), while retaining
-Console's shadcn theme and square Lyra controls. The header links to Home, Chat, and Settings; the left tree navigates machines, projects, sessions, and conversations. Agent configuration opens on demand. Conversation provider pickers show only connected providers; the connection-management page still offers other providers through search. On narrow screens the resizable panels stack vertically. Breadcrumbs show the local machine, saved workspace when present, and session.
+Console's shadcn theme with compact rounded composer controls. The header links to Home, Chat, and Settings; the left tree navigates machines, projects, sessions, and conversations. Agent configuration opens on demand. Conversation provider pickers show only connected providers; the connection-management page still offers other providers through search. On narrow screens the resizable panels stack vertically. Breadcrumbs show the local machine, saved workspace when present, and session.
 The composer sends with Enter and inserts a newline with Shift+Enter; IME composition does not
 submit. Text paste works normally. Image/file attachments and transcription are not implemented.
 Conversation controls expose Pi's recorded usage/cost estimates; there is no account-wide billing dashboard.
@@ -116,13 +116,13 @@ Conversation controls expose Pi's recorded usage/cost estimates; there is no acc
 
 Run `mise run dev`, open `http://127.0.0.1:3001`, and follow **Provider settings**. Select OpenAI and **Sign in with ChatGPT** for the subscription flow; API key is a separate explicit choice. Other provider methods come from the installed Pi version. Authorization opens the provider's page; any requested code, selection, or credential is relayed to Pi through Fastify. Console itself has no account sign-in yet.
 
-Return to the dashboard and create or select a named session. Choose a model from the composer list and adjust its discrete thinking slider. Model/thinking choices remain local until Send; changed configuration is confirmed before text admission. Provider setup stays in Settings. Unfinished work must complete or be cancelled before settings can change. Session selection is retained in the URL; unsent drafts and uncertain submissions stay separate per session while the page is open. Partial text and state are polled once per second. Network failure is shown separately from saved run status. An uncertain submission retains its request ID for retry while the page is open; reloading retrieves existing work without resubmitting. After backend restart, use Resume for interrupted work or Cancel to abandon it. New project conversations select native host coding tools. Tool selection is available in Conversation → Tools.
+Return to the dashboard and create or select a named session. Open the combined model/thinking control, choose a model, and adjust its model-specific thinking slider. Model/thinking choices remain local until Send; changed configuration is confirmed before text admission. Provider setup stays in Settings. Unfinished work must complete or be cancelled before settings can change. Session selection is retained in the URL; unsent drafts and uncertain submissions stay separate per session while the page is open. Partial text and state are polled once per second. Network failure is shown separately from saved run status. An uncertain submission retains its request ID for retry while the page is open; reloading retrieves existing work without resubmitting. After backend restart, use Resume for interrupted work or Cancel to abandon it. New project conversations select native host coding tools. Tool selection is available in Conversation details → Tools & extensions.
 
 Provider status means configuration exists, not that credentials or subscription entitlement have been tested. Environment-only providers require machine setup; Refresh models retrieves supported dynamic catalogs. The initial UI does not edit custom provider definitions or machine environment variables.
 
 ## Select tools
 
-Open **Conversation → Tools** to select installed tools and extensions while idle. Native coding
+Open **Conversation details → Tools & extensions** to select installed tools and extensions while idle. Native coding
 tools run directly on the host with the backend account's authority. The project identifies their
 starting directory; it does not restrict access. There are no access presets or sandbox editor.
 Model choice and thinking remain in the composer; machine and project settings retain their scopes.
@@ -174,13 +174,24 @@ until the user selects tools or updates their tool selection. No paid/live infer
 The machine toggle changes its icon without a persistent selected background. Tree action menus
 appear on hover/focus in their own reserved flex space; trailing metadata yields to the menu button. Rename replaces the label with an input;
 Enter/blur saves and Escape cancels.
-`components/chat/model-picker.tsx` uses a compact shadcn Popover with the configured model list and a
-native discrete range control for supported, preferred thinking levels (including the saved level).
-There is no search field or permissions shortcut. The picker is controlled by per-conversation
-client drafts; model clicks and slider adjustments update immediately without network writes,
-global working state or a saving indicator. Polling refreshes saved runtime state without replacing
-an unsent choice. The trigger retains its width and the opening selection remains available until
-reopening, preserving slider steps and model rows. Provider/catalog management stays in Settings.
+`components/chat/model-picker.tsx` renders one compact control showing the actual catalog model
+name and its selected thinking level together. It opens a settings popover with a model-selection
+row and a model-specific slider. The model list replaces the popover's content; selecting a
+thinking-capable model returns to the slider without another click. Off-only models omit the
+thinking suffix and slider; fixed-tier models show their value with an explanation.
+
+The adjacent context ring uses the backend's saved `contextUsage` projection. Opening it shows
+estimated tokens/capacity and a percentage. Unknown/invalid estimates remain unavailable rather
+than becoming a fake zero. Over-capacity counts fill the ring while retaining the true percentage.
+Tiny usage is labeled <0.1%. Cached offline data is identified. Model drafts do not recalculate
+this saved estimate; model changes apply only on Send. This is context occupancy, not billing.
+The popovers keep focus within their controls during model-list/settings navigation.
+
+The rounded composer keeps text primary. Delivery choices render only for running work on a
+backend with queue support. Guide now sends steering guidance; Queue next waits for the current
+run; Keep draft disables submission until idle. Idle conversations have no delivery-mode button.
+Stop remains available for unfinished work. Enter/Shift+Enter/IME and uncertain retries retain
+their existing behavior. `/config` opens the model menu; other commands open the matching section.
 
 On Send, `lib/chat/submission.ts` confirms changed configuration before submitting text. The
 message retains its request ID and a confirmed-configuration flag across uncertain retries;
@@ -199,6 +210,26 @@ Trash offers Delete forever followed by a named confirmation. UI verification mu
 permanent deletion of personal data; erasure tests use temporary fixtures. Main/delegated entries
 explain that their owning session must be deleted. Tool switches control the definitions offered to the model; bash retains host account authority.
 
+## Resizable sidebar
+
+The left navigation combines the existing collapsible sidebar/rail with the shadcn-style
+Resizable primitives. It retains machine/project/conversation organization. A visible grip,
+12px mouse target and 24px coarse-pointer target make the edge discoverable; arrow keys resize
+the focused separator. The center remains chat, with an independently resizable details split.
+Open sidebar/details percentages persist in sessionStorage and restore after collapse/reload,
+subject to viewport constraints. Blocked storage falls back to in-memory resizing. The existing
+compact stacked layout below 768px remains unchanged; this is not a new mobile drawer.
+
+This follows the composition described by [Resizable](https://ui.shadcn.com/docs/components/base/resizable)
+and [Sidebar](https://ui.shadcn.com/docs/components/base/sidebar), without introducing another
+provider/state owner or a generated fixed-width sidebar around the panel group.
+
+Only active separators render. A disabled separator hidden with display:none has zero geometry;
+the installed panel library sorts hit regions by physical position, so that separator can precede
+the left panel and suppress its drag target. Keyboard resizing previously worked while dragging
+failed. Removing the hidden details separator restores pointer resizing without changing backend
+state or remounting chat. Keep closed panel contents mounted, not their unused separators.
+
 ## Conversation switching
 
 `lib/chat/navigation.ts` keeps at most 20 recent snapshots per mounted machine workspace.
@@ -214,27 +245,41 @@ are kept mounted. Cache contents are read projections, not durable state, and ar
 chat unmounts or the machine changes. Conversation components still initialize separately;
 scroll position, expanded activity and paginated older history are not retained across switches.
 Model/text drafts remain separate per conversation while chat is mounted. Cache capacity eviction
-requires a cold read on the next visit. Page navigation remains outside this focused change.
+requires a cold read on the next visit. Same-machine settings and connection navigation retains
+the mounted chat; a machine change still clears its local state.
 
 ## UI responsibilities
 
-`components/layout/console-shell.tsx` owns the icon-only Home, Chat, and Settings navigation. Settings is a real
-`/settings` page with Model choices, Machine defaults, and Providers sections. Its machine selector
-scopes provider credentials and defaults; model menu preferences belong to the web server.
-`components/models/provider-settings.tsx` contains provider UI; `/settings/providers` remains a compatible entry point.
+`components/layout/console-shell.tsx` owns the persistent workspace and its settings/back header.
+`/` and `/chat` render chat; `/settings`, `/machines` and project management use the center pane
+without unmounting the machine tree or chat. Unsent chat text, local model choices and mounted
+conversation disclosures survive same-machine management navigation. `lib/workspace-location.ts`
+remembers the return-to-chat URL per tab. Explicit chat URLs are synchronized into the existing
+hook rather than requiring a new workspace mount. Machine changes still remount client state.
+
+Settings shows machine cards, then Model menu, Providers and Machine defaults sections. Their
+forms remain mounted across section changes and inactive machine/provider reads stop. Credentials
+and defaults belong to the selected machine; menu favorites remain web-server preferences.
+Provider catalogs expand into model rows with context capacity and supported thinking levels.
+`components/models/provider-settings.tsx` owns authentication UI; `/settings/providers` redirects
+to its settings section. Adding a machine opens the existing connection forms in the center pane.
+
 Machine gears open Settings for that machine. Every machine exposes Add project, including when
 it already has projects; this opens the existing repository-clone/directory-registration page.
 
 Chat reserves permanent space only for the machine tree and conversation. The header's Details
 button toggles a resizable desktop split, with an overlay below 768px. Escape closes it and returns
 focus. Opening/closing explicitly sets the group layout after panel constraints register, returning
-space to the conversation rather than growing the tree. User resizing is remembered while mounted.
+space to the conversation rather than growing the tree. Desktop sidebar/details proportions persist per browser tab, including reloads.
 
-The panel identifies its selected entity and offers Conversation, Project and Machine scopes.
-Conversation sections are Overview (reported plan and folded usage/context), Activity (active model/
-tool tasks), Tools (folded tool and extension selection), and Instructions (project
-resources, custom instructions and folded extensions). Machine owns separate operator state and machine-settings
-navigation. Project owns name/path/status and explicit shared memory. A fork/child shows its parent's human-visible name.
+The panel identifies the selected conversation; project/machine settings have scoped entry points.
+The inspector has one conversation scope. Usage & context, Current work, Instructions & resources,
+and Tools & extensions expand on demand. A reported plan appears only when one exists. Instruction
+drafts stay in the shared panel owner across disclosure changes; closed/hidden sections stop reads.
+Project files/skills/prompts are folded separately from the conversation instructions editor.
+Project settings and memory open from the sidebar or footer link, with a back action. Machine
+operator data is under Settings → Machine defaults → Advanced machine data; it is no longer a
+conversation scope selector. A fork/child shows its parent's human-visible name.
 Shared-state JSON editing and long technical details stay behind disclosures. Runtime task dependencies
 explicitly identify that they span the underlying session. They are not a to-do list.
 
@@ -289,7 +334,7 @@ are idle-only and preserve request identity on retry. Active compactions and a s
 are shown. Automatic compaction still uses Pi's defaults; threshold editing remains future work.
 
 The transcript includes expandable tool-call arguments, available live tool status/output, and
-labels for saved compaction summaries and handoff entries. Tasks also exposes session-wide ownership,
+labels for saved compaction summaries and handoff entries. Current work also exposes session-wide ownership,
 wait dependencies, sleep deadlines, cancellation and blocked reasons. Transport remains polling;
 tool output is not a continuous byte stream. See the [Console feature inventory](../features.md).
 
@@ -325,3 +370,51 @@ for an activity shows a completed/total count and per-step states, opens while a
 when complete unless manually overridden. Plan statuses are agent-reported. Existing conversations
 can enable update_plan in Tools or update their tool selection; new conversations include it in
 the coordination tools. The State tab continues to refer to machine-wide shared JSON, not this plan.
+
+## Composer and details design evidence
+
+The redesign uses a text-first composer, compact controls and progressive disclosure. References
+include the public [ChatGPT interface](https://chatgpt.com/), its
+[project settings documentation](https://help.openai.com/en/articles/10169521-projects-in-chatgpt),
+and Anthropic's [official project/artifact screenshots](https://www.anthropic.com/news/projects).
+The Anthropic screenshots date from 2024 and are design references, not evidence of today's
+authenticated application. No competitor account was signed into or inference submitted.
+
+Desktop browser checks verified the absent idle delivery button, separate model/thinking controls,
+new disclosure organization and retained unsaved instruction text across sections. A Low → Medium
+adjustment preserved the thinking popup rectangle `[489,546,224,105.328125]`; Low was restored.
+A compiled React rendering check verifies idle/running/unsupported delivery-control states without
+paid inference. Existing navigation caching, local drafts and sidebar resizing are retained.
+
+## Model-specific thinking capabilities
+
+The backend already exposes `getSupportedThinkingLevels(model)` from installed Pi AI 1.4.0 as
+each catalog model's `thinkingLevels`. The composer now uses that entire ordered list without
+applying global thinking preferences or injecting a saved unsupported tier. A model change keeps
+the current level only if supported, otherwise selects the model's first supported level locally.
+Off-only/unknown models have no thinking control. A single non-off tier opens an explanation with
+its fixed value; multiple tiers use one slider stop per reported value, with all labels visible.
+These are Pi's normalized tiers, not an editor for provider-native token budgets or every API option.
+Model-menu preferences still filter models; their former global thinking checkbox editor is removed.
+Previously stored thinking preferences no longer restrict chat. Selection remains local until Send.
+
+Evidence: the installed Pi AI implementation and
+[upstream thinking documentation](https://github.com/earendil-works/pi/blob/main/packages/ai/README.md#thinkingreasoning).
+Five focused frontend tests cover off-only/unknown catalogs, extended levels, model-switch fallback,
+fixed thinking and catalog labels without a frontend tier vocabulary.
+
+## Combined composer control verification
+
+The supplied interface screenshots informed a combined model/selected-thinking label and an
+adjacent context occupancy ring. These use Console's existing backend estimates and Pi capability
+metadata. Five context tests cover missing/invalid data, zero occupancy, normal saved capacity,
+small nonzero occupancy and over-capacity estimates. No additional backend request or polling
+loop is introduced by either popover. Existing local-until-Send behavior is preserved.
+
+## Unified workspace verification
+
+The composer model/thinking trigger fits its contents rather than reserving 224 px. Every model
+group names its provider, including a single connected provider. Pi metadata controls Off; models
+without it explain required thinking. No catalog override or new inference API is introduced.
+The [installed catalog audit](../model-catalog-audit.md) records why Terra is missing, live browser
+checks, multiple-provider fixture coverage and unverified multi-machine/provider limits.

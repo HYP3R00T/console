@@ -79,12 +79,12 @@ Evidence: [projects](../packages/server/src/projects/workspaces.ts),
 | ID | Feature | Status | Boundary / remaining work |
 | --- | --- | --- | --- |
 | MOD-01 | Built-in providers, supported login and catalog refresh | Implemented | Persisted credentials and disconnect; not every provider live-tested. |
-| MOD-02 | Model/thinking selection and defaults | Implemented | Local per-conversation model/thinking drafts; Send confirms changed configuration before text admission; retry identity and idle-only configuration preserved. |
+| MOD-02 | Model/thinking selection and defaults | Implemented | Combined model/thinking label; complete Pi-reported per-model tiers, off-only/fixed-tier handling; local drafts applied on Send with retry identity and idle-only configuration. |
 | MOD-03 | Custom/local endpoints, headers and model overrides | Missing | No Console configuration API/editor. |
 | MOD-04 | Virtual-model routing | Missing | No routing policy/configuration. |
 | MOD-05 | Attachments and non-text result rendering | Missing | Text admission/projection; no end-to-end attachment path. |
 | MOD-06 | Image generation and classification | Missing | Pi AI services not integrated as Console tools/services. |
-| MOD-07 | Token/cache/cost and context inspection | Implemented | Conversation ledgers/estimates; not account billing totals. |
+| MOD-07 | Token/cache/cost and context inspection | Implemented | Composer context ring with saved-token details and unknown/cached states; conversation ledgers/estimates, not account billing totals. |
 | MOD-08 | Usage aggregation and enforced cost budgets | Missing | No project/machine billing dashboard or spending enforcement. |
 
 Evidence: [providers](../packages/server/src/models/providers.ts),
@@ -188,7 +188,7 @@ Evidence: [coordination](../packages/server/src/runtime/coordination.ts),
 | --- | --- | --- | --- |
 | UI-01 | Markdown/collapsible activity, plans and output | Implemented | Icon actions; raw HTML/automatic remote images disabled; bounded output display. |
 | UI-02 | History anchoring and paused bottom-follow | Implemented | Stable aliases, inspection pauses following, jump to latest. |
-| UI-03 | On-demand inspectors/settings and machine tree | Implemented | Conversation/Project/Machine scopes; responsive split/overlay; hidden reads stop while mounted drafts remain. |
+| UI-03 | On-demand inspectors/settings and machine tree | Implemented | Persistent workspace with center-pane settings/connections; machine cards and scoped forms; remembered resizing and chat drafts across same-machine management routes; machine changes still remount. |
 | UI-04 | Continuous model/tool event delivery | Partial | Polling saved/live snapshots; no event stream or continuous tool-output channel. |
 | UI-05 | Transcript export/import/sharing | Missing | No supported portable archive/import/sharing workflow. |
 | CLI-01 | Reusable client SDK and CLI/TUI | Missing | Internal web helper is not an external client contract. |
@@ -288,3 +288,76 @@ thread changes, and other page navigation remains outside this fix. No inference
 
 Conversation-switch verification passed: 54 server tests and ten frontend tests, workspace
 typechecks, production builds and repository hooks, including explicit new-file checks.
+
+## Resizable sidebar verification
+
+Desktop browser reproduction confirmed keyboard resizing worked while mouse dragging did not.
+Removing the unused, display:none details separator restored dragging. The sidebar now has a
+visible grip and explicit pointer hit targets. A drag changed its width from 281px to 369px;
+collapse/expand restored 369px. The details panel also resized by 45px while sidebar width stayed
+constant. Saved desktop proportions persist per browser tab, subject to viewport constraints.
+The compact stacked layout remains unchanged; mobile hardware behavior was not verified.
+No inference or backend changes were involved.
+
+Reload restored the measured 369px sidebar width. All 64 tests, typechecks, production builds
+and repository hooks passed, including the new changeset check.
+
+## Composer and details refinement
+
+The composer now has separate compact model and thinking menus, a rounded input and active-run-only
+delivery choices. The details panel replaces two levels of scope/section tabs with conversation
+disclosures. Project settings/memory remain contextual; machine operator data moved to machine
+settings. Instruction drafts survive section changes; inactive inspection and folded resource
+discovery stop reads. No tools, saved configuration or inference were changed during UI checks.
+Desktop browser checks verified no idle delivery selector and unchanged thinking-popup geometry.
+Three compiled React render scenarios verified idle/running/unsupported delivery controls.
+
+All 64 tests, workspace typechecks and production builds passed. UI verification also used three
+compiled React render scenarios; no live inference was needed for active-run control checks.
+
+Repository hooks and explicit checks for both new changesets passed. Biome reported only an
+informational CLI/schema patch-version difference; no check was disabled.
+
+## Per-model thinking choices
+
+Composer thinking now uses the full ordered list already exposed by Pi AI's
+getSupportedThinkingLevels(model), rather than filtering through global tier preferences. Off-only
+models hide the control; fixed-thinking models explain their single value; adjustable models show
+all reported tiers. Switching models retains only a supported level. The global thinking filter
+editor is removed, while model-menu preferences and local-until-Send behavior remain intact.
+Five new frontend tests exercise these capability cases; backend implementation is unchanged.
+
+Verification passed: 54 server tests and 15 frontend tests, typechecks, production builds and
+repository hooks, including explicit new-file checks. The live selected model exposed Off, Low,
+Medium, High, Xhigh and Max; Max was selected locally and Low restored without sending.
+
+## Combined model/thinking and context indicator
+
+The composer shows its model name and selected thinking value together. One popover switches
+between model selection and the selected model's thinking slider. The adjacent context ring
+uses the saved backend estimate and explains token counts, capacity, unknown data and offline
+caching. Unsaved model changes do not alter saved-context capacity. It adds no API writes,
+polling loop or backend change. Five context calculation tests cover unavailable, empty, normal,
+tiny and over-capacity cases.
+
+Browser verification selected GPT-6.1 Sol/Medium locally, returned directly to its slider and
+confirmed the visible label; the saved context estimate remained 1,954 / 272,000 tokens (0.7%).
+GPT-6 Luna/Low was restored. No inference or configuration save was submitted. All 74 tests
+(54 server, 20 frontend), typechecks, builds and repository/new-file hooks passed.
+
+## Unified workspace and provider catalog follow-up
+
+UI-03 now retains the machine tree and chat while settings/connections replace the center pane.
+Model-menu provider categories expand into context/thinking metadata; composer groups name each
+provider and its model/thinking trigger fits its label. Off follows Pi capabilities. Favorites remain
+shared web-app preferences; credentials/defaults remain machine-owned. Three multi-provider
+fixture tests exercise provider identity and missing entries. Manual OpenAI browser checks covered
+Off/required thinking and unsent draft retention across management routes. Multiple live providers
+and machines remain unverified. MOD-01 does not imply CLI/npm catalog parity: GPT-6.1 Terra is
+absent from the installed npm catalog while present in the same-version CLI. The
+[catalog audit](model-catalog-audit.md) records the unresolved dependency/catalog discrepancy.
+
+Evidence: [workspace shell](../packages/web/src/components/layout/console-shell.tsx),
+[settings](../packages/web/src/app/settings/page.tsx),
+[model metadata](../packages/web/src/components/models/model-metadata.tsx),
+[provider-group tests](../packages/web/test/model-catalog.test.ts).

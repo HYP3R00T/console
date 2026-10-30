@@ -1,6 +1,7 @@
 "use client";
 
 import { PlusIcon, TerminalSquareIcon } from "lucide-react";
+import { ContextUsage } from "@/components/chat/context-usage";
 import { SessionChat } from "@/components/chat/conversation";
 import { ComposerModelPicker } from "@/components/chat/model-picker";
 import type { InspectorPanel } from "@/components/details/agent-panels";
@@ -31,24 +32,36 @@ export function ChatContent({
             session.conversationId,
           )}
           modelPicker={
-            <ComposerModelPicker
-              value={chat.configuration}
-              providers={chat.providers}
-              disabled={
-                !chat.online ||
-                !chat.detailOnline ||
-                chat.working ||
-                Boolean(chat.pending[chat.draftKey]) ||
-                session.status !== "idle"
-              }
-              onChange={chat.chooseConfiguration}
-            />
+            <div className="flex min-w-0 items-center gap-1">
+              <ContextUsage
+                usage={session.contextUsage}
+                online={chat.online && chat.detailOnline}
+              />
+              <ComposerModelPicker
+                value={chat.configuration}
+                providers={chat.providers}
+                disabled={
+                  !chat.online ||
+                  !chat.detailOnline ||
+                  chat.working ||
+                  Boolean(chat.pending[chat.draftKey]) ||
+                  session.status !== "idle"
+                }
+                onChange={chat.chooseConfiguration}
+              />
+            </div>
           }
           onFork={(entryId) => void chat.fork(entryId)}
           onCommand={(command) => {
             if (command === "new") {
               chat.setWorkspaceId(session.workspaceId ?? "");
               chat.setCreating(true);
+            } else if (command === "config") {
+              document
+                .querySelector<HTMLButtonElement>(
+                  '[aria-label="Choose model and thinking level"]',
+                )
+                ?.click();
             } else if (command === "stop" || command === "resume")
               void chat.operate(session.id, async () => {
                 await api(
@@ -60,9 +73,8 @@ export function ChatContent({
               layout.setContextPanel(command === "state" ? "project" : "");
               if (command === "state" && session.workspaceId)
                 layout.setInspectedProject(session.workspaceId);
-              layout.setPanel(
-                command === "config" ? "session" : (command as InspectorPanel),
-              );
+              if (command !== "state")
+                layout.setPanel(command as InspectorPanel);
               layout.setInspectorOpen(true);
             }
           }}
@@ -71,9 +83,10 @@ export function ChatContent({
             chat.workspaces.find((item) => item.id === session.workspaceId)
               ?.name
           }
-          inspectorOpen={layout.inspectorOpen}
+          inspectorOpen={layout.inspectorOpen && !layout.contextPanel}
           onConfigure={() => {
-            if (layout.inspectorOpen) layout.closeInspector();
+            if (layout.inspectorOpen && !layout.contextPanel)
+              layout.closeInspector();
             else {
               layout.setContextPanel("");
               layout.setPanel("session");

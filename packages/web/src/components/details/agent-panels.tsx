@@ -1,37 +1,50 @@
 "use client";
 
+import {
+  ActivityIcon,
+  ChevronDownIcon,
+  FileTextIcon,
+  WrenchIcon,
+} from "lucide-react";
 import { useEffect, useState } from "react";
-import { SharedState } from "@/components/machines/shared-state";
+import { ProjectResources } from "@/components/projects/resources";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { type AgentInspection, api } from "@/lib/api";
+import { type AgentInspection, api, type Conversation } from "@/lib/api";
 import { startPolling } from "@/lib/poll";
 
-export type InspectorPanel = "session" | "state" | "tasks" | "tools" | "extend";
+export type InspectorPanel = "session" | "tasks" | "tools" | "extend";
 export function AgentPanels({
   path,
   panel,
   idle,
   onChanged,
   active = true,
+  session,
+  onResourcePrompt,
+  onPanelChange,
 }: {
   path: string;
   panel: InspectorPanel;
   idle: boolean;
   onChanged: () => void;
   active?: boolean;
+  session: Conversation;
+  onResourcePrompt: (text: string) => void;
+  onPanelChange: (panel: InspectorPanel) => void;
 }) {
   const [inspection, setInspection] = useState<AgentInspection>();
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [resourcesOpen, setResourcesOpen] = useState(false);
   const [instructions, setInstructions] = useState<string>();
   useEffect(() => {
-    if (!active || panel === "state" || panel === "session") return;
+    if (!active || panel === "session") return;
     return startPolling({
       read: (signal) =>
         api<AgentInspection>(`${path}/inspect`, "GET", undefined, signal),
@@ -79,19 +92,14 @@ export function AgentPanels({
   const enabled =
     inspection?.tools.filter((item) => item.enabled).map((item) => item.name) ??
     [];
-  return (
-    <section
-      className="space-y-4 p-4 text-sm"
-      aria-label={`${panel} inspector`}
-    >
+  const content = (
+    <>
       {(error || loadError) && (
         <p role="alert" className="text-xs text-destructive">
           {error || loadError}
         </p>
       )}
-      {panel === "state" ? (
-        <SharedState active={active} />
-      ) : !inspection ? (
+      {!inspection ? (
         <p className="text-muted-foreground">Loading runtime…</p>
       ) : (
         <>
@@ -122,16 +130,13 @@ export function AgentPanels({
                   </Button>
                 </div>
               )}
-              <details>
-                <summary className="cursor-pointer text-xs font-medium">
-                  Tool selection · {enabled.length}/{inspection.tools.length}
-                </summary>
+              <section className="space-y-2">
                 <p className="py-2 text-xs text-muted-foreground">
                   Enabled for this conversation. Tools execute directly on the
                   host.
                 </p>
                 {inspection.tools.map((tool) => (
-                  <Collapsible key={tool.name} className="border">
+                  <Collapsible key={tool.name} className="rounded-lg border">
                     <div className="flex items-center gap-2 p-3">
                       <input
                         type="checkbox"
@@ -168,12 +173,47 @@ export function AgentPanels({
                     </CollapsibleContent>
                   </Collapsible>
                 ))}
+              </section>
+              <details className="border-b pb-3">
+                <summary className="cursor-pointer text-xs font-medium">
+                  Installed extensions · {inspection.extensions.length}
+                </summary>
+                {inspection.extensions.map((extension) => {
+                  return (
+                    <div
+                      key={extension.name}
+                      className="space-y-2 rounded-lg border p-3 text-xs"
+                    >
+                      <label className="flex gap-2">
+                        <input
+                          type="checkbox"
+                          aria-label={`Enable ${extension.name} extension`}
+                          checked={extension.enabled}
+                          disabled={!idle || working}
+                          onChange={(event) =>
+                            void toggleExtension(
+                              extension.name,
+                              event.target.checked,
+                            )
+                          }
+                        />
+                        <span className="font-mono">{extension.name}</span>
+                      </label>
+                      <p>
+                        {extension.tools.length} tools · {extension.sections}{" "}
+                        prompt sections · {extension.hooks} hooks
+                      </p>
+                      <p className="text-muted-foreground">
+                        Applies to this conversation. Tools run on the host.
+                      </p>
+                    </div>
+                  );
+                })}
               </details>
             </>
           )}
           {panel === "tasks" && (
             <>
-              <h2 className="font-semibold">Conversation activity</h2>
               <p className="text-xs text-muted-foreground">
                 {inspection.tasks.length
                   ? `${inspection.tasks.length} active runtime tasks`
@@ -230,42 +270,6 @@ export function AgentPanels({
           )}
           {panel === "extend" && (
             <>
-              <details className="border-b pb-3">
-                <summary className="cursor-pointer text-xs font-medium">
-                  Installed extensions · {inspection.extensions.length}
-                </summary>
-                {inspection.extensions.map((extension) => {
-                  return (
-                    <div
-                      key={extension.name}
-                      className="space-y-2 border p-3 text-xs"
-                    >
-                      <label className="flex gap-2">
-                        <input
-                          type="checkbox"
-                          aria-label={`Enable ${extension.name} extension`}
-                          checked={extension.enabled}
-                          disabled={!idle || working}
-                          onChange={(event) =>
-                            void toggleExtension(
-                              extension.name,
-                              event.target.checked,
-                            )
-                          }
-                        />
-                        <span className="font-mono">{extension.name}</span>
-                      </label>
-                      <p>
-                        {extension.tools.length} tools · {extension.sections}{" "}
-                        prompt sections · {extension.hooks} hooks
-                      </p>
-                      <p className="text-muted-foreground">
-                        Applies to this conversation. Tools run on the host.
-                      </p>
-                    </div>
-                  );
-                })}
-              </details>
               <form
                 className="space-y-3"
                 onSubmit={(event) => {
@@ -274,9 +278,9 @@ export function AgentPanels({
                 }}
               >
                 <label className="block space-y-2">
-                  Agent instructions
+                  Conversation instructions
                   <textarea
-                    className="min-h-48 w-full border bg-background p-2 text-xs"
+                    className="min-h-40 w-full rounded-lg border bg-background p-3 text-xs"
                     maxLength={16000}
                     value={instructions ?? inspection.instructions}
                     onChange={(event) => setInstructions(event.target.value)}
@@ -284,15 +288,76 @@ export function AgentPanels({
                   />
                 </label>
                 <Button
-                  disabled={!idle || working || instructions === undefined}
+                  disabled={
+                    !idle ||
+                    working ||
+                    instructions === undefined ||
+                    instructions === inspection.instructions
+                  }
                 >
                   Save instructions
                 </Button>
               </form>
+              <details
+                open={resourcesOpen}
+                onToggle={(event) => setResourcesOpen(event.currentTarget.open)}
+                className="border-t pt-3"
+              >
+                <summary className="cursor-pointer text-xs font-medium">
+                  Project files, skills & prompts
+                </summary>
+                <ProjectResources
+                  session={session}
+                  path={path}
+                  active={active && panel === "extend" && resourcesOpen}
+                  onUse={onResourcePrompt}
+                />
+              </details>
             </>
           )}
         </>
       )}
+    </>
+  );
+  return (
+    <section className="space-y-2 px-4 pb-4" aria-label="Conversation controls">
+      {(
+        [
+          { id: "tasks", title: "Current work", icon: ActivityIcon },
+          {
+            id: "extend",
+            title: "Instructions & resources",
+            icon: FileTextIcon,
+          },
+          { id: "tools", title: "Tools & extensions", icon: WrenchIcon },
+        ] as const
+      ).map(({ id, title, icon: Icon }) => (
+        <div
+          key={id}
+          className="overflow-hidden rounded-xl border border-border/60"
+        >
+          <button
+            type="button"
+            aria-expanded={panel === id}
+            aria-controls={`conversation-section-${id}`}
+            className="flex min-h-12 w-full items-center gap-3 px-3 text-left text-xs font-medium hover:bg-accent/60"
+            onClick={() => onPanelChange(panel === id ? "session" : id)}
+          >
+            <Icon className="size-4 text-muted-foreground" />
+            <span className="flex-1">{title}</span>
+            <ChevronDownIcon
+              className={`size-3.5 text-muted-foreground transition-transform ${panel === id ? "rotate-180" : ""}`}
+            />
+          </button>
+          <div
+            id={`conversation-section-${id}`}
+            hidden={panel !== id}
+            className="space-y-4 border-t px-3 py-4 text-xs"
+          >
+            {panel === id && content}
+          </div>
+        </div>
+      ))}
     </section>
   );
 }

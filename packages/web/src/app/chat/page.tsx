@@ -1,5 +1,4 @@
-import { ChatWorkspace } from "@/components/chat/workspace";
-
-export default function ChatPage() {
-  return <ChatWorkspace />;
+// The root shell owns the persistent workspace; secondary routes replace its center pane.
+export default function Page() {
+  return null;
 }

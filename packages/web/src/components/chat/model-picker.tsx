@@ -1,8 +1,9 @@
 "use client";
 
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import { ArrowLeftIcon, CheckIcon, ChevronDownIcon } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { ModelMetadata } from "@/components/models/model-metadata";
 import { useModelPreferences } from "@/components/models/preferences";
 import {
   Popover,
@@ -11,6 +12,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { AgentConfiguration, Provider } from "@/lib/api";
+import { visibleModelGroups } from "@/lib/chat/model-catalog";
+import { modelThinking } from "@/lib/chat/thinking";
 
 export function ComposerModelPicker({
   value,
@@ -24,190 +27,206 @@ export function ComposerModelPicker({
   onChange: (config: AgentConfiguration) => void;
 }) {
   const preferences = useModelPreferences();
-  const [openedSelection, setOpenedSelection] = useState({
-    model: value,
-    level: value?.thinkingLevel ?? "off",
-  });
-  const choices = providers
-    .map((provider) => ({
-      ...provider,
-      models: provider.models.filter(
-        (model) =>
-          preferences.models.includes(`${provider.id}/${model.id}`) ||
-          (value?.provider === provider.id && value.model === model.id) ||
-          (openedSelection.model?.provider === provider.id &&
-            openedSelection.model.model === model.id),
-      ),
-    }))
-    .filter((provider) => provider.models.length);
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<"settings" | "models">("settings");
+  const [opened, setOpened] = useState(value);
+  const slider = useRef<HTMLInputElement>(null);
+  const back = useRef<HTMLButtonElement>(null);
+  const settings = useRef<HTMLButtonElement>(null);
   const provider = providers.find((item) => item.id === value?.provider);
   const model = provider?.models.find((item) => item.id === value?.model);
+  const thinking = modelThinking(model, value?.thinkingLevel);
+  const modelName = model?.name ?? value?.model ?? "Choose model";
+  const choices = visibleModelGroups(
+    providers,
+    preferences.models,
+    value,
+    opened,
+  );
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
-        if (next)
-          setOpenedSelection({
-            model: value,
-            level: value?.thinkingLevel ?? "off",
-          });
+        if (next) {
+          setOpened(value);
+          setView(model ? "settings" : "models");
+        }
         setOpen(next);
       }}
     >
       <PopoverTrigger
-        className="flex w-56 max-w-full min-w-0 items-center justify-between gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent"
+        disabled={disabled}
         aria-label="Choose model and thinking level"
+        title={`${modelName}${thinking.available ? ` · ${thinking.level}` : ""}`}
+        className="flex h-8 min-w-0 max-w-full items-center gap-1.5 rounded-full px-2 text-xs transition-colors hover:bg-accent disabled:opacity-50"
       >
-        <span className="min-w-0 flex-1 truncate text-left">
-          {model?.name ?? value?.model ?? "Choose a model"} ·{" "}
-          {value?.thinkingLevel ?? "off"}
-        </span>
-        <ChevronDownIcon
-          className={`size-3 transition-transform ${open ? "rotate-180" : ""}`}
-        />
+        <span className="min-w-0 truncate text-left">{modelName}</span>
+        {thinking.available && (
+          <span className="shrink-0 capitalize text-muted-foreground">
+            {thinking.level}
+          </span>
+        )}
+        <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent
         side="top"
         align="start"
-        className="w-72 max-w-[calc(100vw-2rem)] gap-3 p-3"
+        className="w-64 max-w-[calc(100vw-2rem)] gap-3 rounded-xl p-3 shadow-xl"
       >
-        <PopoverTitle>Model</PopoverTitle>
-        <section
-          className="max-h-56 overflow-y-auto"
-          aria-label="Available models"
-        >
-          {choices.map((item) => (
-            <section key={item.id}>
-              {choices.length > 1 && (
-                <h3 className="px-2 py-1 text-[10px] uppercase text-muted-foreground">
-                  {item.name}
-                </h3>
-              )}
-              {item.models.map((choice) => {
-                const selected =
-                  provider?.id === item.id && model?.id === choice.id;
-                return (
-                  <button
-                    type="button"
-                    key={choice.id}
-                    aria-pressed={selected}
-                    className={`flex w-full items-center justify-between gap-2 p-2 text-left text-xs hover:bg-accent ${selected ? "bg-accent font-medium" : ""}`}
-                    disabled={disabled}
-                    onClick={() => {
-                      if (!selected)
-                        onChange({
-                          provider: item.id,
-                          model: choice.id,
-                          thinkingLevel: choice.thinkingLevels.includes(
-                            value?.thinkingLevel ?? "off",
-                          )
-                            ? (value?.thinkingLevel ?? "off")
-                            : (choice.thinkingLevels[0] ?? "off"),
-                        });
-                    }}
-                  >
-                    <span className="min-w-0 truncate">{choice.name}</span>
-                    <CheckIcon
-                      className={`size-3 shrink-0 ${selected ? "" : "invisible"}`}
-                      aria-hidden="true"
-                    />
-                  </button>
-                );
-              })}
+        <PopoverTitle className="sr-only">Model and thinking</PopoverTitle>
+        {view === "models" ? (
+          <>
+            <button
+              ref={back}
+              type="button"
+              className="flex h-7 items-center gap-2 px-1 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setView("settings");
+                requestAnimationFrame(() => settings.current?.focus());
+              }}
+              disabled={!model}
+            >
+              <ArrowLeftIcon className="size-3.5" />
+              Choose model
+            </button>
+            <section
+              aria-label="Available models"
+              className="max-h-64 overflow-y-auto"
+            >
+              {choices.map((item) => (
+                <div key={item.id}>
+                  <p className="px-2 py-1 text-[10px] text-muted-foreground">
+                    {item.name}
+                  </p>
+                  {item.models.map((choice) => {
+                    const selected =
+                      item.id === provider?.id && choice.id === model?.id;
+                    return (
+                      <button
+                        key={choice.id}
+                        type="button"
+                        aria-pressed={selected}
+                        disabled={disabled}
+                        className={`flex min-h-12 w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs hover:bg-accent ${selected ? "bg-accent" : ""}`}
+                        onClick={() => {
+                          const next = modelThinking(
+                            choice,
+                            value?.thinkingLevel,
+                          );
+                          onChange({
+                            provider: item.id,
+                            model: choice.id,
+                            thinkingLevel: next.level,
+                          });
+                          setView("settings");
+                          if (!next.available) setOpen(false);
+                          else
+                            requestAnimationFrame(() =>
+                              slider.current?.focus(),
+                            );
+                        }}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">{choice.name}</span>
+                          <ModelMetadata model={choice} />
+                        </span>
+                        <CheckIcon
+                          aria-hidden="true"
+                          className={`size-3.5 shrink-0 ${selected ? "" : "invisible"}`}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
             </section>
-          ))}
-        </section>
-        {!choices.length && (
-          <Link
-            className="text-xs underline"
-            href={
-              providers.length
-                ? "/settings?section=models"
-                : "/settings?section=providers"
-            }
-          >
-            {providers.length
-              ? "Choose models in Settings"
-              : "Connect a provider"}
-          </Link>
-        )}
-        {model && (
-          <ThinkingLevel
-            key={`${provider?.id}/${model.id}`}
-            levels={model.thinkingLevels.filter(
-              (level) =>
-                preferences.thinkingLevels.includes(level) ||
-                level === value?.thinkingLevel ||
-                level === openedSelection.level,
+            {!choices.length && (
+              <Link
+                href={
+                  providers.length
+                    ? "/settings?section=models"
+                    : "/settings?section=providers"
+                }
+                className="px-2 py-2 text-xs underline"
+              >
+                {providers.length
+                  ? "Choose models in Settings"
+                  : "Connect a provider"}
+              </Link>
             )}
-            value={value?.thinkingLevel ?? "off"}
-            disabled={disabled}
-            onChange={(thinkingLevel) =>
-              onChange({
-                provider: provider?.id ?? "",
-                model: model.id,
-                thinkingLevel,
-              })
-            }
-          />
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              ref={settings}
+              aria-label="Choose model"
+              disabled={disabled}
+              className="flex min-h-8 items-center gap-2 rounded-lg px-2 text-left text-xs hover:bg-accent"
+              onClick={() => {
+                setView("models");
+                requestAnimationFrame(() => back.current?.focus());
+              }}
+            >
+              <span className="min-w-0 flex-1 truncate font-medium">
+                {modelName}
+              </span>
+              <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground" />
+            </button>
+            {thinking.available ? (
+              <div className="space-y-3 border-t border-border/60 px-1 pt-3">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Thinking</span>
+                  <span className="capitalize">{thinking.level}</span>
+                </div>
+                {!thinking.levels.includes("off") && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Thinking is required for this model; Off is unavailable.
+                  </p>
+                )}
+                {thinking.adjustable ? (
+                  <>
+                    <input
+                      ref={slider}
+                      aria-label="Thinking level"
+                      aria-valuetext={thinking.level}
+                      type="range"
+                      min={0}
+                      max={thinking.levels.length - 1}
+                      step={1}
+                      value={thinking.levels.indexOf(thinking.level)}
+                      disabled={disabled}
+                      className="block h-4 w-full accent-foreground"
+                      onChange={(event) => {
+                        const thinkingLevel =
+                          thinking.levels[Number(event.target.value)];
+                        if (value && thinkingLevel)
+                          onChange({ ...value, thinkingLevel });
+                      }}
+                    />
+                    <div
+                      aria-hidden="true"
+                      className="flex flex-wrap justify-between gap-1 text-[10px] capitalize text-muted-foreground"
+                    >
+                      {thinking.levels.map((level) => (
+                        <span key={level}>{level}</span>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Thinking is fixed for this model.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="px-2 text-xs text-muted-foreground">
+                This model has no thinking control.
+              </p>
+            )}
+          </>
         )}
-        <p className="h-4 shrink-0 truncate text-xs text-muted-foreground">
-          {disabled ? "Available when this conversation is idle." : ""}
-        </p>
       </PopoverContent>
     </Popover>
-  );
-}
-
-function ThinkingLevel({
-  levels,
-  value,
-  disabled,
-  onChange,
-}: {
-  levels: string[];
-  value: string;
-  disabled: boolean;
-  onChange: (level: string) => void;
-}) {
-  const index = Math.max(0, levels.indexOf(value));
-  return (
-    <div className="min-h-20 space-y-2 border-t pt-3">
-      <label
-        htmlFor="composer-thinking"
-        className="flex justify-between text-xs"
-      >
-        <span>Thinking</span>
-        <span className="font-medium capitalize">{levels[index] ?? value}</span>
-      </label>
-      {levels.length > 1 && (
-        <input
-          id="composer-thinking"
-          aria-label="Thinking level"
-          aria-valuetext={levels[index] ?? value}
-          type="range"
-          min={0}
-          max={levels.length - 1}
-          step={1}
-          value={index}
-          disabled={disabled}
-          className="w-full accent-foreground"
-          onChange={(event) => {
-            const next = levels[Number(event.target.value)];
-            if (next) onChange(next);
-          }}
-        />
-      )}
-      {levels.length > 1 && (
-        <div
-          aria-hidden="true"
-          className="flex justify-between text-[10px] capitalize text-muted-foreground"
-        >
-          <span>{levels[0]}</span>
-          <span>{levels.at(-1)}</span>
-        </div>
-      )}
-    </div>
   );
 }

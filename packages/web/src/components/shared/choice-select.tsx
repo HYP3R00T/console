@@ -30,7 +30,7 @@ export function ChoiceSelect({
       disabled={disabled}
       onValueChange={(next) => onChange(next ?? "")}
     >
-      <SelectTrigger aria-label={label} className="w-full">
+      <SelectTrigger aria-label={label} className="w-full rounded-lg">
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent alignItemWithTrigger={false}>

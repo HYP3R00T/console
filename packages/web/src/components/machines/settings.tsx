@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 
 import { useEffect, useState } from "react";
 import { useBackend } from "@/components/machines/connection-context";
+import { SharedState } from "@/components/machines/shared-state";
 import { ChoiceSelect } from "@/components/shared/choice-select";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,9 +20,10 @@ type Settings = {
   lastConfiguration: AgentConfiguration | null;
   runtime?: { node: string; pi: string; git: boolean };
 };
-export function MachineSettings() {
+export function MachineSettings({ active = true }: { active?: boolean }) {
   const router = useRouter();
   const { id } = useBackend();
+  const [machineStateOpen, setMachineStateOpen] = useState(false);
   const [settings, setSettings] = useState<Settings>();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [followLast, setFollowLast] = useState(true);
@@ -33,6 +35,7 @@ export function MachineSettings() {
   const [message, setMessage] = useState("");
   const [working, setWorking] = useState(false);
   useEffect(() => {
+    if (!active || settings) return;
     const controller = new AbortController();
     Promise.all([
       api<Settings>("/machine-settings", "GET", undefined, controller.signal),
@@ -60,12 +63,12 @@ export function MachineSettings() {
         if (!controller.signal.aborted) setMessage(error.message);
       });
     return () => controller.abort();
-  }, []);
+  }, [active, settings]);
   const provider = providers.find((item) => item.id === config.provider);
   const model = provider?.models.find((item) => item.id === config.model);
   return (
     <section
-      className="space-y-4 border p-5"
+      className="space-y-4 rounded-xl border p-5"
       aria-label="Machine configuration"
     >
       <h2 className="font-semibold">Machine configuration</h2>
@@ -225,6 +228,17 @@ export function MachineSettings() {
           </p>
         </form>
       )}
+      <details
+        className="rounded-xl border p-4"
+        onToggle={(event) => setMachineStateOpen(event.currentTarget.open)}
+      >
+        <summary className="cursor-pointer text-sm font-medium">
+          Advanced machine data
+        </summary>
+        <div className="pt-4">
+          <SharedState active={active && machineStateOpen} />
+        </div>
+      </details>
     </section>
   );
 }
