@@ -19,7 +19,10 @@ export function ChatContent({
   const { session } = chat;
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+    <div
+      className="flex h-full min-h-0 min-w-0 flex-1 flex-col"
+      aria-busy={chat.opening}
+    >
       {session ? (
         <SessionChat
           key={`${session.id}:${session.conversationId}`}
@@ -29,15 +32,16 @@ export function ChatContent({
           )}
           modelPicker={
             <ComposerModelPicker
-              session={session}
+              value={chat.configuration}
               providers={chat.providers}
               disabled={
                 !chat.online ||
                 !chat.detailOnline ||
                 chat.working ||
+                Boolean(chat.pending[chat.draftKey]) ||
                 session.status !== "idle"
               }
-              onSave={chat.saveConfiguration}
+              onChange={chat.chooseConfiguration}
             />
           }
           onFork={(entryId) => void chat.fork(entryId)}
@@ -81,9 +85,10 @@ export function ChatContent({
           online={chat.online && chat.detailOnline}
           working={chat.working}
           configured={Boolean(
-            chat.providers.find(
-              (provider) => provider.id === session.model?.provider,
-            )?.configured,
+            chat.configuration?.model &&
+              chat.providers.find(
+                (provider) => provider.id === chat.configuration?.provider,
+              )?.configured,
           )}
           text={chat.drafts[chat.draftKey] ?? ""}
           uncertain={Boolean(chat.pending[chat.draftKey])}
@@ -115,6 +120,19 @@ export function ChatContent({
             })
           }
         />
+      ) : chat.opening ? (
+        <section
+          role="status"
+          className="flex flex-1 flex-col"
+          aria-label="Opening conversation"
+        >
+          <div className="h-16 shrink-0 border-b" />
+          <div className="mx-auto mt-8 w-full max-w-3xl space-y-3 px-6">
+            <div className="h-3 w-2/3 animate-pulse bg-muted" />
+            <div className="h-3 w-1/2 animate-pulse bg-muted" />
+          </div>
+          <div className="mx-auto mt-auto mb-4 h-32 w-[calc(100%-3rem)] max-w-3xl border bg-muted/20" />
+        </section>
       ) : (
         <section className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
           <div className="rounded-none border bg-muted/30 p-4">

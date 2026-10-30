@@ -207,11 +207,11 @@ export function SessionChat({
                 A conversation with continuity.
               </h3>
               <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-                {configured && session.model
+                {configured
                   ? "Send a message to get started."
                   : "Choose a connected model to get started."}
               </p>
-              {(!configured || !session.model) && (
+              {!configured && (
                 <Button variant="outline" size="sm" onClick={onConfigure}>
                   Choose a model
                 </Button>
@@ -331,7 +331,6 @@ export function SessionChat({
               session.status === "interrupted" ||
               session.status === "unavailable" ||
               !configured ||
-              !session.model ||
               !text.trim()))
         }
         canCancel={online && !working}
@@ -340,7 +339,7 @@ export function SessionChat({
         hint={
           uncertain
             ? "Delivery uncertain. Retry uses the same request."
-            : !configured || !session.model
+            : !configured
               ? "Choose a connected model in Configuration."
               : ""
         }

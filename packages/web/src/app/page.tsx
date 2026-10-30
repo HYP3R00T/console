@@ -67,6 +67,7 @@ export default function Home() {
       clearTimeout(timer);
     };
   }, []);
+
   return (
     <main className="mx-auto w-full max-w-5xl space-y-8 p-5 sm:p-8">
       <header className="space-y-2">

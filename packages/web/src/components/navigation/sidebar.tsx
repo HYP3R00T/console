@@ -109,8 +109,7 @@ export function WorkspaceNavigation({
             conversationId={session?.conversationId}
             onSelect={(id, cid) => {
               layout.setContextPanel("");
-              if (id !== chat.selected) chat.select(id);
-              if (cid) chat.chooseConversation(cid);
+              void chat.openConversation(id, cid);
             }}
             onNew={(id) => {
               chat.setWorkspaceId(id);
