@@ -62,7 +62,7 @@ Evidence: [identity/auth](../packages/server/src/http/console.ts),
 | PRJ-03 | Private repository authentication | Missing | No repository credential onboarding. |
 | PRJ-04 | Protected Default project and model association | Implemented | Project association sets cwd; host tools are not confined. |
 | PRJ-05 | Named/numbered sessions and conversations | Implemented | One hidden Harness/database per project; New conversation uses it; native IDs and idempotent creation. |
-| PRJ-06 | Rename and project/conversation navigation | Implemented | Direct machine/project/conversation tree; no Projects wrapper or session rows; persistent toggles and ancestry. |
+| PRJ-06 | Rename and project/conversation navigation | Implemented | Direct project/conversation tree; persistent toggles; bounded snapshot cache and coordinated switching without welcome-screen replacement. |
 | PRJ-07 | Trash/restore/permanent deletion | Implemented | Idle/dependency checks; source retained; backups not physically erased. |
 | PRJ-08 | Isolated checkouts for concurrent editing | Missing | Conversations/subagents currently share source files. |
 | PRJ-09 | Diff review and verification-evidence workflow | Missing | No dedicated review/completion-evidence interface. |
@@ -79,7 +79,7 @@ Evidence: [projects](../packages/server/src/projects/workspaces.ts),
 | ID | Feature | Status | Boundary / remaining work |
 | --- | --- | --- | --- |
 | MOD-01 | Built-in providers, supported login and catalog refresh | Implemented | Persisted credentials and disconnect; not every provider live-tested. |
-| MOD-02 | Model/thinking selection and defaults | Implemented | Composer list/slider, silent saves with stable feedback layout/options, scoped configuration responses, project/machine defaults. |
+| MOD-02 | Model/thinking selection and defaults | Implemented | Local per-conversation model/thinking drafts; Send confirms changed configuration before text admission; retry identity and idle-only configuration preserved. |
 | MOD-03 | Custom/local endpoints, headers and model overrides | Missing | No Console configuration API/editor. |
 | MOD-04 | Virtual-model routing | Missing | No routing policy/configuration. |
 | MOD-05 | Attachments and non-text result rendering | Missing | Text admission/projection; no end-to-end attachment path. |
@@ -262,3 +262,29 @@ Recommended order, not a newly authorized implementation plan:
 Alternative storage engines, unchanged CLI plugin/config compatibility, terminal-specific widgets
 and automatic adoption of arbitrary CLI processes are not required parity targets. Add them as
 missing product features only after an explicit scope decision.
+
+## Local composer draft verification
+
+Model/thinking selection now stays in per-conversation client state until Send. The existing
+interface and route ownership remain unchanged. Desktop browser checks verified immediate
+Low → Medium updates, an enabled slider, unchanged popup `[414,381,288,272]` and slider
+`[426,570,264,16]` rectangles, and draft isolation/retention across conversation switches.
+Reload without sending restored saved Low. No inference was submitted and no backend code
+was changed. Page navigation and machine switches still reset mounted client drafts; this is
+not a claim that all navigation remounts have been removed.
+
+Verification passed: 54 server tests and five web tests, workspace typechecks, production builds,
+Biome and repository hooks, including explicit new-file checks.
+
+## Conversation navigation verification
+
+The frontend now caches 20 recent snapshots and commits target data/selection together. Browser
+checks switched between saved Conversation #1 and #14 in the current interface, with immediate
+cached return and no welcome/loading replacement. Five new tests verify delayed reads retain the
+previous view, latest-click ownership despite ignored cancellation, runtime cache isolation,
+deletion invalidation, failures/cancellation and bounded eviction. Only selected-thread polling
+continues; inactive React trees are not retained. Scroll/expanded history state still resets on
+thread changes, and other page navigation remains outside this fix. No inference was submitted.
+
+Conversation-switch verification passed: 54 server tests and ten frontend tests, workspace
+typechecks, production builds and repository hooks, including explicit new-file checks.

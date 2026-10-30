@@ -116,7 +116,7 @@ Conversation controls expose Pi's recorded usage/cost estimates; there is no acc
 
 Run `mise run dev`, open `http://127.0.0.1:3001`, and follow **Provider settings**. Select OpenAI and **Sign in with ChatGPT** for the subscription flow; API key is a separate explicit choice. Other provider methods come from the installed Pi version. Authorization opens the provider's page; any requested code, selection, or credential is relayed to Pi through Fastify. Console itself has no account sign-in yet.
 
-Return to the dashboard and create or select a named session. Choose a model from the composer list and adjust its discrete thinking slider. Changes save immediately; provider setup stays in Settings. Unfinished work must complete or be cancelled before settings can change. Session selection is retained in the URL; unsent drafts and uncertain submissions stay separate per session while the page is open. Partial text and state are polled once per second. Network failure is shown separately from saved run status. An uncertain submission retains its request ID for retry while the page is open; reloading retrieves existing work without resubmitting. After backend restart, use Resume for interrupted work or Cancel to abandon it. New project conversations select native host coding tools. Tool selection is available in Conversation → Tools.
+Return to the dashboard and create or select a named session. Choose a model from the composer list and adjust its discrete thinking slider. Model/thinking choices remain local until Send; changed configuration is confirmed before text admission. Provider setup stays in Settings. Unfinished work must complete or be cancelled before settings can change. Session selection is retained in the URL; unsent drafts and uncertain submissions stay separate per session while the page is open. Partial text and state are polled once per second. Network failure is shown separately from saved run status. An uncertain submission retains its request ID for retry while the page is open; reloading retrieves existing work without resubmitting. After backend restart, use Resume for interrupted work or Cancel to abandon it. New project conversations select native host coding tools. Tool selection is available in Conversation → Tools.
 
 Provider status means configuration exists, not that credentials or subscription entitlement have been tested. Environment-only providers require machine setup; Refresh models retrieves supported dynamic catalogs. The initial UI does not edit custom provider definitions or machine environment variables.
 
@@ -176,28 +176,45 @@ appear on hover/focus in their own reserved flex space; trailing metadata yields
 Enter/blur saves and Escape cancels.
 `components/chat/model-picker.tsx` uses a compact shadcn Popover with the configured model list and a
 native discrete range control for supported, preferred thinking levels (including the saved level).
-There is no search field or permissions shortcut. Model selection saves immediately; the slider
-saves on release, keyboard adjustment or blur, with one commit per adjustment. Failures remain
-visible and the slider restores its saved value. The trigger has a stable width so adjacent composer controls do not move as labels change.
-Saves are visually silent; only failures and the idle-only availability hint are shown.
-The popup reserves one feedback line and a
-stable thinking-control area; model labels/checkmarks cannot wrap or resize rows during saves.
-The selection present when opened stays available until reopening, so saving cannot remove a
-slider step or current-model row underneath the user. Provider/catalog management stays in Settings.
+There is no search field or permissions shortcut. The picker is controlled by per-conversation
+client drafts; model clicks and slider adjustments update immediately without network writes,
+global working state or a saving indicator. Polling refreshes saved runtime state without replacing
+an unsent choice. The trigger retains its width and the opening selection remains available until
+reopening, preserving slider steps and model rows. Provider/catalog management stays in Settings.
 
-Configuration saves belong to use-chat-session: the PATCH response updates the addressed
-conversation directly, without a redundant GET. The same mutation epoch used by other controls
-rejects old polls and pauses detail polling during mutations. Navigating away prevents an old
-save from overwriting the newly selected conversation. Inline failures still reach the picker.
-A browser reproduction measured a 28-pixel popup jump before the fix; after the fix, the popup
-and slider positions were unchanged before, during Saving, and after a keyboard adjustment.
-The trigger width and adjacent delivery-mode position also stayed fixed; switching between
-connected models retained popup geometry. The original model/thinking values were restored. This verifies
-that interaction, not every possible layout change across the application.
+On Send, `lib/chat/submission.ts` confirms changed configuration before submitting text. The
+message retains its request ID and a confirmed-configuration flag across uncertain retries;
+retrying already-admitted work does not reconfigure a running conversation. Rejected configuration
+never admits the text. Configuration remains idle-only. These are sequential requests, not an
+atomic transaction, so another client can still cause a conflict. Text and configuration drafts
+survive conversation switches while chat is mounted; reload, page navigation and machine switches
+reset them. Other editors retain their explicit Save actions. This focused fix changes no layout
+or route ownership; it does not claim to eliminate all navigation remounts.
+
+Five frontend tests verify configuration/admission ordering, unchanged settings, configuration
+failure, uncertain retries and busy follow-ups. Desktop interaction verification is recorded in
+the feature inventory after execution.
 
 Trash offers Delete forever followed by a named confirmation. UI verification must not confirm
 permanent deletion of personal data; erasure tests use temporary fixtures. Main/delegated entries
 explain that their owning session must be deleted. Tool switches control the definitions offered to the model; bash retains host account authority.
+
+## Conversation switching
+
+`lib/chat/navigation.ts` keeps at most 20 recent snapshots per mounted machine workspace.
+A warm selection displays its cached snapshot immediately; the selected conversation's existing
+poll refreshes it in the background. Cold selections fetch first and update URL, selected IDs and
+snapshot together, keeping the previous chat visible rather than showing the welcome screen.
+Initial load uses a stable skeleton. Failed navigation retains the current thread and reports an
+error; aborted or superseded responses cannot change selection. Deleted conversation/session
+projections are invalidated from the cache.
+
+Only the selected conversation polls. No inactive conversation trees or background React roots
+are kept mounted. Cache contents are read projections, not durable state, and are discarded when
+chat unmounts or the machine changes. Conversation components still initialize separately;
+scroll position, expanded activity and paginated older history are not retained across switches.
+Model/text drafts remain separate per conversation while chat is mounted. Cache capacity eviction
+requires a cold read on the next visit. Page navigation remains outside this focused change.
 
 ## UI responsibilities
 

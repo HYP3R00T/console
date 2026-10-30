@@ -331,10 +331,14 @@ page with separate Model choices, Machine defaults, and Providers sections. Cred
 defaults belong to the selected execution machine; model/thinking menu preferences belong to the
 web server. Model preferences filter menus only, never change running or saved agents. Empty
 preferences offer only the current model until the user selects more models in Settings.
-Configuration mutations are owned by the chat-state hook. Detail polling pauses while a mutation
-is pending, and epoch/selection checks discard stale poll or save responses. The configuration
-PATCH returns the saved snapshot directly. Picker save/error feedback uses reserved space;
-background state updates must not add/remove layout rows during ordinary control adjustments.
+Model/thinking choices are local per-conversation drafts owned by the chat-state hook. Polling
+updates saved state without overwriting a draft. Only Send applies changed configuration before
+message admission. Confirmed configuration is remembered for uncertain admission retries, which
+retain the same request ID and do not reconfigure running work. Configuration and admission remain
+sequential backend requests, not atomic; competing clients may cause conflicts. Detail polling
+pauses during actual mutations, and epoch/selection checks reject stale responses. Local control
+changes do not set chat-wide working state. Drafts last while chat is mounted; routes still own
+their pages and can remount them. Backend contracts and runtime ownership remain unchanged.
 
 Chat permanently reserves space only for the machine tree and conversation. The tree heading is
 Machines. Project folders sit directly beneath their machine, whose plus button opens a shadcn Dialog
@@ -447,3 +451,13 @@ Jump to latest resumes it. Grouped message aliases preserve history anchors when
 agent report, not proof of verification. Tool results retain historical updates; snapshots expose the
 latest plan. Forks recover the plan at the selected entry and independent conversations start without
 one. The web associates plans with their recorded activity rather than generating progress from prose.
+
+## Client conversation navigation
+
+Conversation selection is coordinated with a bounded, machine-scoped cache of 20 read snapshots.
+Warm visits show cached data and revalidate through the existing selected-thread poll. Cold visits
+retain the displayed conversation until the target snapshot is ready, then commit its identifiers,
+URL and projection together. Abort checks reject late responses even when transport cancellation
+is ignored. Failed navigation leaves the prior view in place. This changes no backend ownership
+or API: cached status is provisional, and mutations remain validated by the server. Components
+are keyed by conversation to isolate history; inactive React trees are not kept alive.

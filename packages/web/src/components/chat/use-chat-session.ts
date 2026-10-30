@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBackend } from "@/components/machines/connection-context";
 import {
   type AgentConfiguration,
@@ -13,8 +13,13 @@ import {
   type SessionSummary,
   type Workspace,
 } from "@/lib/api";
-
-type Submission = { text: string; requestId: string; whenBusy?: MessageMode };
+import { createConversationNavigation } from "@/lib/chat/navigation";
+import {
+  type MessageSubmission as Submission,
+  sameConfiguration,
+  savedConfiguration,
+  submitDraft,
+} from "@/lib/chat/submission";
 export function useChatSession() {
   const { connections, id: machineId, select: selectMachine } = useBackend();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -39,7 +44,17 @@ export function useChatSession() {
   const selectedRef = useRef("");
   const epoch = useRef(0);
   const mutations = useRef(0);
-  const [snapshot, setSnapshot] = useState<Conversation>();
+  const [snapshot, updateSnapshot] = useState<Conversation>();
+  const navigationRef =
+    useRef<ReturnType<typeof createConversationNavigation>>(null);
+  const [opening, setOpening] = useState(false);
+  const setSnapshot = useCallback((value: Conversation) => {
+    navigationRef.current?.remember(value);
+    updateSnapshot(value);
+  }, []);
+  const [configurationDrafts, setConfigurationDrafts] = useState<
+    Record<string, AgentConfiguration | undefined>
+  >({});
   const [online, setOnline] = useState(false);
   const [detailOnline, setDetailOnline] = useState(false);
   const [error, setError] = useState("");
@@ -64,31 +79,58 @@ export function useChatSession() {
       `/sessions/${id}${cid ? `/conversations/${cid}` : ""}`,
     [],
   );
-  const chooseConversation = useCallback((cid: string) => {
-    conversationRef.current = cid;
-    setConversationId(cid);
-    setDetailOnline(false);
-    setDetailError("");
-    const url = new URL(window.location.href);
-    url.searchParams.set("conversation", cid);
-    window.history.replaceState(null, "", url.pathname + url.search);
-  }, []);
-  const select = useCallback((id: string) => {
+  const showConversation = useCallback((value?: Conversation) => {
+    ++epoch.current;
     conversationAttempt.current = undefined;
-    conversationRef.current = "";
-    setConversationId("");
-    setConversations([]);
-    selectedRef.current = id;
-    setSelected(id);
+    if (selectedRef.current !== (value?.id ?? "")) setConversations([]);
+    selectedRef.current = value?.id ?? "";
+    conversationRef.current = value?.conversationId ?? "";
+    setSelected(selectedRef.current);
+    setConversationId(conversationRef.current);
+    updateSnapshot(value);
+    setDetailOnline(Boolean(value));
     setError("");
-    setDetailOnline(false);
     setDetailError("");
     const url = new URL(window.location.href);
-    url.searchParams.set("session", id);
-    for (const key of ["conversation", "workspace", "new"])
+    for (const key of ["session", "conversation", "workspace", "new"])
       url.searchParams.delete(key);
+    if (value) {
+      url.searchParams.set("session", value.id);
+      if (value.conversationId)
+        url.searchParams.set("conversation", value.conversationId);
+    }
     window.history.replaceState(null, "", url.pathname + url.search);
   }, []);
+  const navigation = useMemo(
+    () =>
+      createConversationNavigation({
+        read: (id, cid, signal) =>
+          api<Conversation>(
+            conversationPath(encodeURIComponent(id), cid),
+            "GET",
+            undefined,
+            signal,
+          ),
+        show: showConversation,
+        loading: setOpening,
+        error: (cause) => setError(cause.message),
+      }),
+    [conversationPath, showConversation],
+  );
+  navigationRef.current = navigation;
+  useEffect(() => () => navigation.cancel(), [navigation]);
+  const openConversation = useCallback(
+    (id: string, cid?: string) => navigation.open(id, cid),
+    [navigation],
+  );
+  const chooseConversation = useCallback(
+    (cid: string) => openConversation(selectedRef.current, cid),
+    [openConversation],
+  );
+  const select = useCallback(
+    (id: string) => openConversation(id),
+    [openConversation],
+  );
 
   useEffect(() => {
     if (!creating || !online || creationInFlight.current) return;
@@ -120,9 +162,8 @@ export function useChatSession() {
         creationAttempt.current = undefined;
         ++epoch.current;
         focusNewConversation.current = true;
-        select(created.id);
-        if (created.conversationId) chooseConversation(created.conversationId);
-        setSnapshot(created);
+        navigation.remember(created);
+        await openConversation(created.id, created.conversationId);
         setDetailOnline(true);
         setDetailError("");
         window.dispatchEvent(new Event("console:tree-changed"));
@@ -139,8 +180,8 @@ export function useChatSession() {
     online,
     machineId,
     workspaceId,
-    select,
-    chooseConversation,
+    openConversation,
+    navigation,
     workspaces,
   ]);
 
@@ -156,6 +197,14 @@ export function useChatSession() {
       const { path, machineId } = (
         event as CustomEvent<{ path: string; machineId: string }>
       ).detail;
+      const match = path.match(
+        /^\/sessions\/([^/]+)(?:\/conversations\/([^/]+))?$/,
+      );
+      if (
+        machineId === (sessionStorage.getItem("console.backend") || "local") &&
+        match
+      )
+        navigation.invalidate(match[1], match[2]);
       if (
         machineId === (sessionStorage.getItem("console.backend") || "local") &&
         path ===
@@ -165,7 +214,7 @@ export function useChatSession() {
     };
     window.addEventListener("console:tree-deleted", deleted);
     return () => window.removeEventListener("console:tree-deleted", deleted);
-  }, [chooseConversation]);
+  }, [chooseConversation, navigation]);
   useEffect(() => {
     const open = () => setCreating(true);
     setWorkspaceId(
@@ -219,8 +268,7 @@ export function useChatSession() {
             const cid = new URL(window.location.href).searchParams.get(
               "conversation",
             );
-            select(id);
-            if (cid) chooseConversation(cid);
+            void openConversation(id, cid ?? undefined);
           }
         }
       } catch (cause) {
@@ -236,7 +284,7 @@ export function useChatSession() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [select, chooseConversation]);
+  }, [select, openConversation]);
 
   useEffect(() => {
     if (!selected) return;
@@ -287,7 +335,13 @@ export function useChatSession() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [selected, conversationId, conversationPath, chooseConversation]);
+  }, [
+    selected,
+    conversationId,
+    conversationPath,
+    chooseConversation,
+    setSnapshot,
+  ]);
 
   async function operate(id: string, action: () => Promise<void>) {
     const cid = conversationRef.current;
@@ -311,30 +365,6 @@ export function useChatSession() {
       setWorking(mutations.current > 0);
     }
   }
-  async function saveConfiguration(input: AgentConfiguration) {
-    const id = selectedRef.current;
-    const cid = conversationRef.current;
-    ++mutations.current;
-    ++epoch.current;
-    setWorking(true);
-    try {
-      const current = await api<Conversation>(
-        `${conversationPath(id, cid)}/config`,
-        "PATCH",
-        input,
-      );
-      ++epoch.current;
-      if (selectedRef.current === id && conversationRef.current === cid) {
-        setSnapshot(current);
-        setDetailOnline(true);
-        setDetailError("");
-      }
-    } finally {
-      ++epoch.current;
-      --mutations.current;
-      setWorking(mutations.current > 0);
-    }
-  }
   const forkAttempt = useRef<
     { entryId: string; requestId: string } | undefined
   >(undefined);
@@ -352,7 +382,7 @@ export function useChatSession() {
         input,
       );
       forkAttempt.current = undefined;
-      chooseConversation(row.id);
+      await chooseConversation(row.id);
     });
   }
   async function send(mode?: MessageMode) {
@@ -362,17 +392,40 @@ export function useChatSession() {
     const input = pending[key] ?? {
       text: drafts[key] ?? "",
       requestId: crypto.randomUUID(),
+      configuration: configurationDrafts[key] ?? savedConfiguration(session),
       ...(session.queue === undefined
         ? {}
         : { whenBusy: mode ?? messageModes[key] ?? "steer" }),
     };
+    if (
+      !input.configurationApplied &&
+      input.configuration &&
+      !sameConfiguration(input.configuration, savedConfiguration(session)) &&
+      session.status !== "idle"
+    ) {
+      setError(
+        "Wait for the current work to finish before changing its model or thinking level.",
+      );
+      return;
+    }
     setPending((items) => ({ ...items, [key]: input }));
     await operate(id, async () => {
       try {
-        await api(
-          `${conversationPath(id, session.conversationId)}/messages`,
-          "POST",
+        await submitDraft(
+          conversationPath(id, session.conversationId),
           input,
+          session,
+          (path, method, body) => api(path, method, body),
+          () =>
+            setPending((items) => ({
+              ...items,
+              [key]: { ...input, configurationApplied: true },
+            })),
+        );
+        setConfigurationDrafts((items) =>
+          sameConfiguration(items[key], input.configuration)
+            ? { ...items, [key]: undefined }
+            : items,
         );
       } catch (cause) {
         if (
@@ -411,6 +464,8 @@ export function useChatSession() {
     conversationId,
     chooseConversation,
     creating,
+    opening,
+    openConversation,
     setCreating,
     machine,
     providers,
@@ -433,7 +488,11 @@ export function useChatSession() {
     draftKey,
     conversationPath,
     operate,
-    saveConfiguration,
+    configuration:
+      configurationDrafts[draftKey] ??
+      (session ? savedConfiguration(session) : undefined),
+    chooseConfiguration: (value: AgentConfiguration) =>
+      setConfigurationDrafts((items) => ({ ...items, [draftKey]: value })),
     fork,
     send,
     agentName: selectedConversation?.name,

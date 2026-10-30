@@ -2,7 +2,7 @@
 
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useModelPreferences } from "@/components/models/preferences";
 import {
   Popover,
@@ -10,23 +10,23 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import type { AgentConfiguration, Conversation, Provider } from "@/lib/api";
+import type { AgentConfiguration, Provider } from "@/lib/api";
 
 export function ComposerModelPicker({
-  session,
+  value,
   providers,
   disabled,
-  onSave,
+  onChange,
 }: {
-  session: Conversation;
+  value?: AgentConfiguration;
   providers: Provider[];
   disabled: boolean;
-  onSave: (config: AgentConfiguration) => Promise<void>;
+  onChange: (config: AgentConfiguration) => void;
 }) {
   const preferences = useModelPreferences();
   const [openedSelection, setOpenedSelection] = useState({
-    model: session.model,
-    level: session.thinkingLevel,
+    model: value,
+    level: value?.thinkingLevel ?? "off",
   });
   const choices = providers
     .map((provider) => ({
@@ -34,43 +34,23 @@ export function ComposerModelPicker({
       models: provider.models.filter(
         (model) =>
           preferences.models.includes(`${provider.id}/${model.id}`) ||
-          (session.model?.provider === provider.id &&
-            session.model.modelId === model.id) ||
+          (value?.provider === provider.id && value.model === model.id) ||
           (openedSelection.model?.provider === provider.id &&
-            openedSelection.model.modelId === model.id),
+            openedSelection.model.model === model.id),
       ),
     }))
     .filter((provider) => provider.models.length);
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState("");
-  const [working, setWorking] = useState(false);
-  const provider = providers.find(
-    (item) => item.id === session.model?.provider,
-  );
-  const model = provider?.models.find(
-    (item) => item.id === session.model?.modelId,
-  );
-  async function save(config: AgentConfiguration) {
-    setWorking(true);
-    setError("");
-    try {
-      await onSave(config);
-      return true;
-    } catch (cause) {
-      setError((cause as Error).message);
-      return false;
-    } finally {
-      setWorking(false);
-    }
-  }
+  const provider = providers.find((item) => item.id === value?.provider);
+  const model = provider?.models.find((item) => item.id === value?.model);
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
         if (next)
           setOpenedSelection({
-            model: session.model,
-            level: session.thinkingLevel,
+            model: value,
+            level: value?.thinkingLevel ?? "off",
           });
         setOpen(next);
       }}
@@ -80,8 +60,8 @@ export function ComposerModelPicker({
         aria-label="Choose model and thinking level"
       >
         <span className="min-w-0 flex-1 truncate text-left">
-          {model?.name ?? session.model?.modelId ?? "Choose a model"} ·{" "}
-          {session.thinkingLevel ?? "off"}
+          {model?.name ?? value?.model ?? "Choose a model"} ·{" "}
+          {value?.thinkingLevel ?? "off"}
         </span>
         <ChevronDownIcon
           className={`size-3 transition-transform ${open ? "rotate-180" : ""}`}
@@ -113,16 +93,16 @@ export function ComposerModelPicker({
                     key={choice.id}
                     aria-pressed={selected}
                     className={`flex w-full items-center justify-between gap-2 p-2 text-left text-xs hover:bg-accent ${selected ? "bg-accent font-medium" : ""}`}
-                    disabled={disabled || working}
+                    disabled={disabled}
                     onClick={() => {
                       if (!selected)
-                        void save({
+                        onChange({
                           provider: item.id,
                           model: choice.id,
                           thinkingLevel: choice.thinkingLevels.includes(
-                            session.thinkingLevel,
+                            value?.thinkingLevel ?? "off",
                           )
-                            ? session.thinkingLevel
+                            ? (value?.thinkingLevel ?? "off")
                             : (choice.thinkingLevels[0] ?? "off"),
                         });
                     }}
@@ -158,13 +138,13 @@ export function ComposerModelPicker({
             levels={model.thinkingLevels.filter(
               (level) =>
                 preferences.thinkingLevels.includes(level) ||
-                level === session.thinkingLevel ||
+                level === value?.thinkingLevel ||
                 level === openedSelection.level,
             )}
-            value={session.thinkingLevel ?? "off"}
-            disabled={disabled || working}
-            onSave={(thinkingLevel) =>
-              save({
+            value={value?.thinkingLevel ?? "off"}
+            disabled={disabled}
+            onChange={(thinkingLevel) =>
+              onChange({
                 provider: provider?.id ?? "",
                 model: model.id,
                 thinkingLevel,
@@ -172,17 +152,8 @@ export function ComposerModelPicker({
             }
           />
         )}
-        <p
-          role={error ? "alert" : "status"}
-          aria-live="polite"
-          aria-atomic="true"
-          title={error || undefined}
-          className={`h-4 shrink-0 truncate text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}
-        >
-          {error ||
-            (disabled && !working
-              ? "Available when this conversation is idle."
-              : "")}
+        <p className="h-4 shrink-0 truncate text-xs text-muted-foreground">
+          {disabled ? "Available when this conversation is idle." : ""}
         </p>
       </PopoverContent>
     </Popover>
@@ -193,29 +164,14 @@ function ThinkingLevel({
   levels,
   value,
   disabled,
-  onSave,
+  onChange,
 }: {
   levels: string[];
   value: string;
   disabled: boolean;
-  onSave: (level: string) => Promise<boolean>;
+  onChange: (level: string) => void;
 }) {
-  const [index, setIndex] = useState(Math.max(0, levels.indexOf(value)));
-  const changed = useRef(false);
-  const levelsKey = levels.join(",");
-  useEffect(() => {
-    setIndex(Math.max(0, levelsKey.split(",").indexOf(value)));
-    changed.current = false;
-  }, [value, levelsKey]);
-  function commit() {
-    if (!changed.current || disabled) return;
-    changed.current = false;
-    const next = levels[index];
-    if (next && next !== value)
-      void onSave(next).then((saved) => {
-        if (!saved) setIndex(Math.max(0, levels.indexOf(value)));
-      });
-  }
+  const index = Math.max(0, levels.indexOf(value));
   return (
     <div className="min-h-20 space-y-2 border-t pt-3">
       <label
@@ -238,26 +194,9 @@ function ThinkingLevel({
           disabled={disabled}
           className="w-full accent-foreground"
           onChange={(event) => {
-            changed.current = true;
-            setIndex(Number(event.target.value));
+            const next = levels[Number(event.target.value)];
+            if (next) onChange(next);
           }}
-          onPointerUp={commit}
-          onKeyUp={(event) => {
-            if (
-              [
-                "ArrowLeft",
-                "ArrowRight",
-                "ArrowUp",
-                "ArrowDown",
-                "Home",
-                "End",
-                "PageUp",
-                "PageDown",
-              ].includes(event.key)
-            )
-              commit();
-          }}
-          onBlur={commit}
         />
       )}
       {levels.length > 1 && (
