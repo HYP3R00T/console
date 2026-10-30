@@ -24,6 +24,10 @@ export function ComposerModelPicker({
   onSave: (config: AgentConfiguration) => Promise<void>;
 }) {
   const preferences = useModelPreferences();
+  const [openedSelection, setOpenedSelection] = useState({
+    model: session.model,
+    level: session.thinkingLevel,
+  });
   const choices = providers
     .map((provider) => ({
       ...provider,
@@ -31,7 +35,9 @@ export function ComposerModelPicker({
         (model) =>
           preferences.models.includes(`${provider.id}/${model.id}`) ||
           (session.model?.provider === provider.id &&
-            session.model.modelId === model.id),
+            session.model.modelId === model.id) ||
+          (openedSelection.model?.provider === provider.id &&
+            openedSelection.model.modelId === model.id),
       ),
     }))
     .filter((provider) => provider.models.length);
@@ -58,12 +64,22 @@ export function ComposerModelPicker({
     }
   }
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (next)
+          setOpenedSelection({
+            model: session.model,
+            level: session.thinkingLevel,
+          });
+        setOpen(next);
+      }}
+    >
       <PopoverTrigger
-        className="flex min-w-0 items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent"
+        className="flex w-56 max-w-full min-w-0 items-center justify-between gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent"
         aria-label="Choose model and thinking level"
       >
-        <span className="max-w-48 truncate">
+        <span className="min-w-0 flex-1 truncate text-left">
           {model?.name ?? session.model?.modelId ?? "Choose a model"} ·{" "}
           {session.thinkingLevel ?? "off"}
         </span>
@@ -77,11 +93,6 @@ export function ComposerModelPicker({
         className="w-72 max-w-[calc(100vw-2rem)] gap-3 p-3"
       >
         <PopoverTitle>Model</PopoverTitle>
-        {error && (
-          <p role="alert" className="text-xs text-destructive">
-            {error}
-          </p>
-        )}
         <section
           className="max-h-56 overflow-y-auto"
           aria-label="Available models"
@@ -116,10 +127,11 @@ export function ComposerModelPicker({
                         });
                     }}
                   >
-                    {choice.name}
-                    {selected && (
-                      <CheckIcon className="size-3" aria-hidden="true" />
-                    )}
+                    <span className="min-w-0 truncate">{choice.name}</span>
+                    <CheckIcon
+                      className={`size-3 shrink-0 ${selected ? "" : "invisible"}`}
+                      aria-hidden="true"
+                    />
                   </button>
                 );
               })}
@@ -146,7 +158,8 @@ export function ComposerModelPicker({
             levels={model.thinkingLevels.filter(
               (level) =>
                 preferences.thinkingLevels.includes(level) ||
-                level === session.thinkingLevel,
+                level === session.thinkingLevel ||
+                level === openedSelection.level,
             )}
             value={session.thinkingLevel ?? "off"}
             disabled={disabled || working}
@@ -159,11 +172,18 @@ export function ComposerModelPicker({
             }
           />
         )}
-        {(working || disabled) && (
-          <p role="status" className="text-xs text-muted-foreground">
-            {working ? "Saving…" : "Available when this conversation is idle."}
-          </p>
-        )}
+        <p
+          role={error ? "alert" : "status"}
+          aria-live="polite"
+          aria-atomic="true"
+          title={error || undefined}
+          className={`h-4 shrink-0 truncate text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}
+        >
+          {error ||
+            (disabled && !working
+              ? "Available when this conversation is idle."
+              : "")}
+        </p>
       </PopoverContent>
     </Popover>
   );
@@ -197,7 +217,7 @@ function ThinkingLevel({
       });
   }
   return (
-    <div className="space-y-2 border-t pt-3">
+    <div className="min-h-20 space-y-2 border-t pt-3">
       <label
         htmlFor="composer-thinking"
         className="flex justify-between text-xs"

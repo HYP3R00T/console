@@ -10,7 +10,6 @@ import {
   fauxProvider,
 } from "@earendil-works/pi-ai/providers/faux";
 import { createApp } from "../src/app.ts";
-import { openConversation } from "../src/runtime/session.ts";
 
 const headers = { "x-console-request": "1" };
 
@@ -138,28 +137,30 @@ test("permanent deletion erases trashed leaf history, protects fork dependencies
   await app.close();
 });
 
-test("permanently deleting legacy Main removes its database without touching machine credentials", async (t) => {
+test("permanently deleting project history removes its database without touching machine credentials", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "console-purge-legacy-"));
   const faux = fauxProvider();
   const models = createModels();
   models.setProvider(faux.provider);
-  const legacy = await openConversation(models, directory);
-  await legacy.close();
   let app = createApp({}, { dataDirectory: directory, models: () => models });
   t.after(async () => {
     await app.close();
     await rm(directory, { recursive: true });
   });
-  assert.ok(
-    (await app.inject("/v1/sessions"))
-      .json()
-      .some((item: { id: string }) => item.id === "default"),
-  );
+  const created = await app.inject({
+    method: "POST",
+    url: "/v1/sessions",
+    headers,
+    payload: { requestId: "project" },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  const id = created.json().id;
+  const projectId = created.json().workspaceId;
   assert.equal(
     (
       await app.inject({
         method: "DELETE",
-        url: "/v1/sessions/default",
+        url: `/v1/sessions/${id}`,
         headers,
       })
     ).statusCode,
@@ -169,17 +170,24 @@ test("permanently deleting legacy Main removes its database without touching mac
     (
       await app.inject({
         method: "DELETE",
-        url: "/v1/sessions/default/permanent",
+        url: `/v1/sessions/${id}/permanent`,
         headers,
       })
     ).statusCode,
     204,
   );
-  await assert.rejects(access(join(directory, "conversation.sqlite")));
+  await assert.rejects(
+    access(join(directory, "sessions", id, "conversation.sqlite")),
+  );
   await access(join(directory, "credentials.sqlite"));
   await access(join(directory, "catalog.sqlite"));
   await app.close();
   app = createApp({}, { dataDirectory: directory, models: () => models });
   assert.deepEqual((await app.inject("/v1/sessions")).json(), []);
   assert.equal((await app.inject("/v1/providers")).statusCode, 200);
+  assert.ok(
+    (await app.inject("/v1/workspaces"))
+      .json()
+      .some((item: { id: string }) => item.id === projectId),
+  );
 });

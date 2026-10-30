@@ -16,7 +16,11 @@ import { httpError } from "../http/errors.ts";
 import { projectExtension } from "../projects/context.ts";
 import { agentConfiguration } from "./configuration.ts";
 import { assertIdle, type Runtime } from "./context.ts";
-import { agentExtension, type openAgentState } from "./coordination.ts";
+import {
+  agentExtension,
+  readProjectMemory,
+  saveProjectMemory,
+} from "./coordination.ts";
 import { ConversationInfo } from "./documents.ts";
 import { conversationInput } from "./input.ts";
 import { conversationSummary, conversationView } from "./view.ts";
@@ -24,8 +28,6 @@ export async function openConversation(
   models: Models,
   directory: string,
   cwd = process.cwd(),
-  sharedState?: ReturnType<typeof openAgentState>,
-  sessionId = directory,
 ) {
   const storage = await openNodeSqliteStorage(
     join(directory, "conversation.sqlite"),
@@ -34,10 +36,8 @@ export async function openConversation(
   const registry = createRegistry();
   registry.install(CodingTools);
   registry.install(project);
-  const coordination = sharedState
-    ? agentExtension(sharedState, sessionId)
-    : undefined;
-  if (coordination) registry.install(coordination);
+  const coordination = agentExtension();
+  registry.install(coordination);
   const harness = await Harness.open(
     storage,
     {
@@ -140,7 +140,7 @@ export async function openConversation(
             info?.name ||
             (row.id === main.id
               ? "Main"
-              : `${row.owner ? "Subagent" : row.parent ? "Fork" : "Root"} #${row.id}`),
+              : `${row.owner ? "Subagent" : row.parent ? "Fork" : "Conversation"} #${row.id}`),
           parentId: row.owner
             ? String(row.owner.conversationId)
             : row.parent
@@ -172,6 +172,9 @@ export async function openConversation(
       };
     },
     conversations,
+    memory: () => main.commit(readProjectMemory, context),
+    saveMemory: (value: Record<string, unknown>, revision: number) =>
+      main.commit((tx) => saveProjectMemory(tx, value, revision), context),
     preparePurge(id?: string) {
       return serialize(async () => {
         if ((await harness.inspect(context)).tasks.length)
@@ -183,7 +186,7 @@ export async function openConversation(
           if (id === String(main.id))
             throw httpError(
               409,
-              "Main owns the session. Permanently delete the session to erase Main.",
+              "The initial conversation anchors this project runtime. Erase the complete project history to remove it permanently.",
             );
           const row = (await conversations(true)).find(
             (item) => item.id === id,
@@ -197,7 +200,7 @@ export async function openConversation(
           if (record?.owner)
             throw httpError(
               409,
-              "Delegated history belongs to its owning task. Permanently delete the session to erase it.",
+              "Delegated history belongs to its owning task. Erase the complete project history to remove it permanently.",
             );
           const all = [
             ...(await conversations()),
@@ -240,7 +243,7 @@ export async function openConversation(
         throw httpError(404, "Conversation not found.");
       return bind(handle);
     },
-    createConversation(name: string, requestId: string) {
+    createConversation(name: string, requestId: string, reuseMain = false) {
       return serialize(async () => {
         const existing = [
           ...(await conversations()),
@@ -252,6 +255,21 @@ export async function openConversation(
             "Restore the deleted conversation instead of creating it again.",
           );
         if (existing) return existing;
+        if (
+          reuseMain &&
+          !(await harness.snapshot(ConversationInfo, main.id, context))
+            ?.requestId &&
+          !(await main.context(context)).entries.length &&
+          !(await harness.inspect(context)).tasks.length
+        ) {
+          await main.commit(async (tx) => {
+            Object.assign(await tx.doc(ConversationInfo, main.id), {
+              requestId,
+              name: name || "Conversation #1",
+            });
+          }, context);
+          return bind(main).summary();
+        }
         const agent = await harness.snapshot(AgentDoc, main.id, context);
         const current = await main.agent(context);
         const created = await harness.createConversation(
@@ -286,18 +304,13 @@ export async function openConversation(
         );
         return {
           ...(await bind(created).summary()),
-          name: name || `Root #${created.id}`,
+          name: name || `Conversation #${created.id}`,
         };
       });
     },
     async trashConversation(id: string) {
       return serialize(async () => {
         const visible = await conversations();
-        if (visible.length < 2)
-          throw httpError(
-            409,
-            "Delete the session to remove its last conversation.",
-          );
         const item = visible.find((row) => row.id === id);
         if (!item) throw httpError(404, "Conversation not found.");
         if (item.status !== "idle")

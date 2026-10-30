@@ -5,9 +5,12 @@ import {
   AgentDoc,
   AssistantEntry,
   configure,
+  defineDoc,
   defineExtension,
   defineTool,
+  type JsonObject,
   section,
+  type Tx,
 } from "@earendil-works/pi-durable";
 import { httpError } from "../http/errors.ts";
 import { updatePlan } from "./plan.ts";
@@ -68,18 +71,68 @@ export function openAgentState(directory: string) {
   return { get, save, close: () => db.close() };
 }
 
-export function agentExtension(
-  state: ReturnType<typeof openAgentState>,
-  sessionId: string,
+export type MemoryState = { revision: number; value: JsonObject };
+export const ProjectMemory = defineDoc<MemoryState>({
+  kind: "console.project-memory",
+  version: 1,
+  scope: "session",
+  initial: () => ({ revision: 0, value: {} }),
+  checkpointWhen: () => true,
+});
+const MemoryReceipts = defineDoc<{ results: Record<string, MemoryState> }>({
+  kind: "console.memory-receipts",
+  version: 1,
+  scope: "session",
+  initial: () => ({ results: {} }),
+  checkpointWhen: () => true,
+});
+export async function readProjectMemory(tx: Tx): Promise<MemoryState> {
+  const saved = await tx.doc(ProjectMemory);
+  return JSON.parse(JSON.stringify(saved));
+}
+export async function saveProjectMemory(
+  tx: Tx,
+  value: Record<string, unknown>,
+  revision: number,
+  receipt?: string,
 ) {
+  if (
+    !value ||
+    Array.isArray(value) ||
+    typeof value !== "object" ||
+    JSON.stringify(value).length > 65536
+  )
+    throw httpError(400, "Memory must be a JSON object up to 64 KiB.");
+  const receipts = receipt ? await tx.doc(MemoryReceipts) : undefined;
+  if (receipt && receipts?.results[receipt])
+    return JSON.parse(JSON.stringify(receipts.results[receipt])) as MemoryState;
+  const saved = await tx.doc(ProjectMemory);
+  if (saved.revision !== revision)
+    throw httpError(409, "Memory changed. Reload it before saving.");
+  saved.value = JSON.parse(JSON.stringify(value));
+  saved.revision++;
+  const result: MemoryState = {
+    value: JSON.parse(JSON.stringify(saved.value)),
+    revision: saved.revision,
+  };
+  if (receipt && receipts) receipts.results[receipt] = result;
+  return result;
+}
+
+export function agentExtension() {
   const read = defineTool({
     name: "read_state",
     description:
-      "Read machine-wide shared JSON state and its revision. Shared across projects, sessions and conversations. Never store credentials here.",
+      "Read shared project memory and its revision. All conversations in this project can use it; other projects have separate memory. This is explicit memory, not other conversation transcripts. Never store credentials here.",
     parameters: Type.Object({}, { additionalProperties: false }),
     replay: "safe",
-    execute: async () => ({
-      output: [{ type: "text", text: JSON.stringify(state.get()) }],
+    execute: async (_args, api, context) => ({
+      output: [
+        {
+          type: "text",
+          text: JSON.stringify(await api.commit(readProjectMemory, context)),
+        },
+      ],
     }),
   });
   const update = defineTool({
@@ -94,15 +147,20 @@ export function agentExtension(
       { additionalProperties: false },
     ),
     replay: "safe",
-    execute: async (args, api) => ({
+    execute: async (args, api, context) => ({
       output: [
         {
           type: "text",
           text: JSON.stringify(
-            state.save(
-              JSON.parse(args.value_json),
-              args.revision,
-              `${sessionId}:${api.taskId}`,
+            await api.commit(
+              (tx) =>
+                saveProjectMemory(
+                  tx,
+                  JSON.parse(args.value_json),
+                  args.revision,
+                  String(api.taskId),
+                ),
+              context,
             ),
           ),
         },
@@ -178,7 +236,7 @@ export function agentExtension(
       section(
         "coordination",
         async () =>
-          "Shared state belongs to this machine, not just this project. Read before writing, preserve unrelated fields, and never store secrets. For multi-step work, use update_plan when available to record a short plan and keep actual statuses current. Simple questions do not need a plan. Delegate only when requested. Child conversations share the project files and the host execution environment; they are not separate checkouts.",
+          "Shared memory belongs to this project. Conversations keep separate histories; explicitly read or update memory to share facts. Other projects have separate memory. Read before writing, preserve unrelated fields, and never store secrets. For multi-step work, use update_plan when available to record a short plan and keep actual statuses current. Simple questions do not need a plan. Delegate only when requested. Child conversations share the project files and the host execution environment; they are not separate checkouts.",
       ),
     ],
   });

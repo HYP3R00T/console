@@ -200,8 +200,9 @@ export function MachineSettings() {
             />
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground sm:col-span-2">
-            New sessions prefer the last model used in their project, then the
-            machine default. New conversations inherit Main's saved settings.{" "}
+            A project starts with its last model, then the machine default.
+            Additional conversations initially inherit the project's first
+            conversation settings.{" "}
             <button
               type="button"
               className="underline"

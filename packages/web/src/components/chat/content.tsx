@@ -37,27 +37,12 @@ export function ChatContent({
                 chat.working ||
                 session.status !== "idle"
               }
-              onSave={async (input) => {
-                chat.setWorking(true);
-                try {
-                  await api(
-                    `${chat.conversationPath(session.id)}/config`,
-                    "PATCH",
-                    input,
-                  );
-                  chat.setSnapshot(
-                    await api(chat.conversationPath(session.id)),
-                  );
-                } finally {
-                  chat.setWorking(false);
-                }
-              }}
+              onSave={chat.saveConfiguration}
             />
           }
           onFork={(entryId) => void chat.fork(entryId)}
           onCommand={(command) => {
-            if (command === "new") void chat.newAgent();
-            else if (command === "new-session") {
+            if (command === "new") {
               chat.setWorkspaceId(session.workspaceId ?? "");
               chat.setCreating(true);
             } else if (command === "stop" || command === "resume")
@@ -68,7 +53,9 @@ export function ChatContent({
                 );
               });
             else {
-              layout.setContextPanel(command === "state" ? "machine" : "");
+              layout.setContextPanel(command === "state" ? "project" : "");
+              if (command === "state" && session.workspaceId)
+                layout.setInspectedProject(session.workspaceId);
               layout.setPanel(
                 command === "config" ? "session" : (command as InspectorPanel),
               );
@@ -138,13 +125,13 @@ export function ChatContent({
           </p>
           <h2 className="text-2xl font-semibold tracking-tight">
             {chat.selected
-              ? "Opening session…"
+              ? "Opening conversation…"
               : "A conversation with continuity."}
           </h2>
           <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
             {chat.selected
               ? "Loading saved history from this machine."
-              : "Create a conversation, connect a provider, and give your agent something to work on."}
+              : "Choose a project, start a conversation, and give your agent something to work on."}
           </p>
           {!chat.selected && (
             <Button

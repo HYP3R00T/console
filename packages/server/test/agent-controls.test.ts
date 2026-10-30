@@ -68,7 +68,7 @@ test("numbered agents, real tool controls, native forks and task-owned subagents
     payload: { requestId: "numbered" },
   });
   assert.equal(created.statusCode, 201, created.body);
-  assert.equal(created.json().name, "Conversation #1");
+  assert.equal(created.json().name, "Default");
   const base = `/v1/sessions/${created.json().id}`;
   const next = await app.inject({
     method: "POST",
@@ -76,7 +76,7 @@ test("numbered agents, real tool controls, native forks and task-owned subagents
     headers,
     payload: { requestId: "numbered-2" },
   });
-  assert.equal(next.json().name, "Conversation #2");
+  assert.equal(next.json().id, created.json().id);
   const unnamed = {
     method: "POST" as const,
     url: `${base}/conversations`,
@@ -85,7 +85,7 @@ test("numbered agents, real tool controls, native forks and task-owned subagents
   };
   const root = await app.inject(unnamed);
   assert.equal(root.statusCode, 201, root.body);
-  assert.equal(root.json().name, `Root #${root.json().id}`);
+  assert.equal(root.json().name, `Conversation #${root.json().id}`);
   assert.equal((await app.inject(unnamed)).json().id, root.json().id);
   const inspection = (await app.inject(`${base}/inspect`)).json();
   assert.ok(
@@ -245,9 +245,14 @@ test("numbered agents, real tool controls, native forks and task-owned subagents
       value.status === "idle" &&
       value.messages.at(-1)?.text === "Delegation done",
   );
-  assert.deepEqual((await app.inject("/v1/state")).json().value, {
-    delegation: "started",
-  });
+  assert.deepEqual(
+    (
+      await app.inject(`/v1/workspaces/${created.json().workspaceId}/memory`)
+    ).json().value,
+    {
+      delegation: "started",
+    },
+  );
   const agents = (await app.inject(`${base}/conversations`)).json();
   const child = agents.find(
     (item: { kind: string }) => item.kind === "subagent",

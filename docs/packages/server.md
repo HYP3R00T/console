@@ -63,13 +63,13 @@ All routes below use `/v1`; mutations require `X-Console-Request: 1`. JSON bodie
 - `POST /connections/:id/answer`: submit `{ "promptId": "...", "value": "..." }`.
 - `DELETE /connections/:id`: cancel a pending flow; `DELETE /providers/:id`: remove saved credentials. Ambient credentials are unaffected.
 - `GET /sessions`: named sessions and their current status; unavailable databases are reported individually. `?include=conversations` adds active conversation summaries to each healthy session for batched navigation. The default response remains unchanged; Trash is excluded. Project membership is read once per list, and each runtime reuses one task inspection across its conversation summaries.
-- `POST /sessions`: create `{ "requestId": "unique-creation-id", "workspaceId": "optional-project-id" }`; retries return the same session.
+- `POST /sessions`: internal ensure `{ "requestId": "unique-creation-id", "workspaceId": "optional-project-id" }`; all requests for a project return its one runtime. User creation uses the project conversation route below.
 - `GET /sessions/:id`: recent history, partial answer, saved configuration, and lifecycle state. Assistant messages include visible `reasoning` blocks; `partialReasoning` carries live blocks with a `streaming` flag. Redacted content and thinking signatures are omitted.
 - `PATCH /sessions/:id/config`: save `{ "provider": "...", "model": "...", "thinkingLevel": "high" }`. The provider must be connected and the level supported by that model. Unfinished work returns 409.
 - `POST /sessions/:id/messages`: submit `{ "text": "...", "requestId": "unique-input-id" }` using saved settings; returns an admission identity with HTTP 202. Duplicate IDs identify the original input within that session.
 - `POST /sessions/:id/cancel` and `POST /sessions/:id/resume`: explicit lifecycle controls.
 
-The former unscoped `/conversation` and `/messages` development routes have been replaced. Existing conversation data is registered in place as the `default` session; no transcript or credential files are moved.
+There is no legacy root conversation import or session-layout migration. Experimental histories were reset at the maintainer's request; project folders and provider credentials were retained.
 
 `CONSOLE_DATA_DIR` selects persistent storage and must be absolute. Machine names, project directories, and model defaults are edited under Machines and persisted in the catalog; the initial name is the OS hostname. `.env.example` records these options. Mise loads the ignored `.env`; restart the backend after changing it. The dashboard at `/machines` exposes the effective paths. Changing storage selects a different database set and does not move history or credentials. To retain data, stop the backend and copy its complete data directory before switching. Tests always use temporary directories and Pi's scripted test provider; they never use personal credentials or paid inference. Live subscription login and inference require the user to complete provider authorization and are not verified by those tests.
 
@@ -135,6 +135,25 @@ for clone boundaries, host execution, cancellation and retention.
 Lifecycle tests cover restart persistence, cloning failure/retry, Trash/Restore, and an actual Pi
 command-tool call running an offline pnpm install. Native tests cover host tool execution and command cancellation. Tests use scripted inference and disposable directories.
 
+## Project runtime and memory
+
+A project has one lazily initialized Harness/database, enforced by a unique workspaceId index.
+The UI hides sessions. `POST /workspaces/:id/conversations` accepts `{name?, requestId}` and
+returns the selected conversation snapshot with its internal runtime ID and conversation ID.
+The first request reuses unused Main; later requests create separate conversations. Retries select
+the original thread, including across reopening. Existing session-addressed execution endpoints
+remain internal routing; they no longer create independent work groups within the same project.
+
+`GET/PUT /workspaces/:id/memory` reads/replaces `{revision,value}`. Stale revisions return 409;
+value is a JSON object capped at 64 KiB. This is a native session-scoped Pi document, shared across
+project conversations, not a concatenated transcript. read_state/update_state use it; updates and
+task receipts commit atomically in Pi. Forks see current project memory rather than rewinding it.
+`/state` remains separate operator-managed machine JSON and is not used by the agent tools.
+Deleting the last visible conversation is allowed; project memory and the hidden runtime remain.
+
+`project-runtime.test.ts` verifies one Harness, concurrent creation/retry identity, native tool
+reads/writes, revision conflicts, separate histories, cross-project isolation and reopening.
+
 ## Agent controls
 
 - `GET/PUT /state`: machine-wide JSON and revision; PUT requires `{ value, revision }` and rejects
@@ -144,7 +163,7 @@ command-tool call running an offline pnpm install. Native tests cover host tool 
 - `PATCH .../agent`: select `{ tools: string[], instructions?: string }` while idle. Unknown tool names are rejected. This controls model selection, not host authority.
 - `POST .../fork`: `{ entryId, requestId }`; native history fork with idempotent creation.
 - Session and conversation creation accept an optional nonblank name. Omit it for automatic
-  `Session #N` or `Root #N`. Main remains the first conversation; names never change identity.
+  the project name (internal runtime) or `Conversation #N`. Main remains the first conversation; names never change identity.
 
 `runtime/coordination.ts` owns shared state storage and coordination tools. `subagent` creates a native
 task-owned child with inherited model and cwd and no recursive delegation. `agent-controls.test.ts` proves

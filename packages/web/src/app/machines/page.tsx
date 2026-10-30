@@ -82,7 +82,7 @@ export default function Machines() {
           </header>
           <dl className="grid grid-cols-3 gap-4 border-y py-4">
             {[
-              ["Sessions", machine.sessions],
+              ["Projects with activity", machine.sessions],
               ["Unfinished", machine.activeSessions],
               ["Unavailable", machine.unavailableSessions],
             ].map(([label, value]) => (

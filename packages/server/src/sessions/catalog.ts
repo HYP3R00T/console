@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { Models } from "@earendil-works/pi-ai";
@@ -25,47 +25,13 @@ export async function openSessions(
 ) {
   const db = new DatabaseSync(join(directory, "catalog.sqlite"));
   db.exec(
-    "CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, name TEXT NOT NULL, createdAt TEXT NOT NULL, requestId TEXT UNIQUE)",
+    "CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, name TEXT NOT NULL, createdAt TEXT NOT NULL, requestId TEXT UNIQUE, workspaceId TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)",
   );
-  if (
-    !db
-      .prepare("PRAGMA table_info(sessions)")
-      .all()
-      .some((column) => column.name === "workspaceId")
-  )
-    db.exec("ALTER TABLE sessions ADD COLUMN workspaceId TEXT");
-  if (
-    !db
-      .prepare("PRAGMA table_info(sessions)")
-      .all()
-      .some((column) => column.name === "deleted")
-  )
-    db.exec(
-      "ALTER TABLE sessions ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0",
-    );
   const workspaces = openWorkspaces(directory, machine);
   const state = openAgentState(directory);
-  try {
-    // Register the original database in place. No transcript or credential files move.
-    await stat(join(directory, "conversation.sqlite"));
-    db.prepare(
-      "INSERT OR IGNORE INTO sessions (id, name, createdAt, requestId) VALUES ('default', 'Original conversation', ?, NULL)",
-    ).run(new Date().toISOString());
-  } catch (error) {
-    if (
-      !(error instanceof Error && "code" in error && error.code === "ENOENT")
-    ) {
-      db.close();
-      throw error;
-    }
-  }
   const defaultProject = await workspaces.ensureDefault();
-  // Associate legacy sessions without moving their databases or rewriting conversation history.
-  db.prepare(
-    "UPDATE sessions SET workspaceId=? WHERE workspaceId IS NULL OR workspaceId=''",
-  ).run(defaultProject.id);
   db.exec(
-    "CREATE TABLE IF NOT EXISTS counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL); INSERT OR IGNORE INTO counters SELECT 'session', COALESCE(MAX(rowid),0) FROM sessions",
+    "CREATE UNIQUE INDEX IF NOT EXISTS one_session_per_project ON sessions(workspaceId)",
   );
   const maintenance = new Set<string>();
   const opened = new Map<string, ReturnType<typeof openConversation>>();
@@ -90,8 +56,7 @@ export async function openSessions(
       throw httpError(409, "Session maintenance in progress.");
     let promise = opened.get(id);
     if (!promise) {
-      const path =
-        id === "default" ? directory : join(directory, "sessions", id);
+      const path = join(directory, "sessions", id);
       promise = mkdir(path, { recursive: true, mode: 0o700 }).then(() =>
         openConversation(
           models,
@@ -104,8 +69,6 @@ export async function openSessions(
                   .get(id)?.workspaceId || defaultProject.id,
               ),
             ).path,
-          state,
-          id,
         ),
       );
       opened.set(id, promise);
@@ -148,25 +111,27 @@ export async function openSessions(
     },
     create(name: string, requestId: string, workspaceId?: string) {
       const next = pending.then(async () => {
-        const existing = db
-          .prepare("SELECT id FROM sessions WHERE requestId = ?")
-          .get(requestId);
-        if (existing) return record(String(existing.id));
         const workspace = workspaces.get(workspaceId || defaultProject.id);
-        if (workspace && workspace.state !== "ready")
+        if (workspace.state !== "ready")
           throw httpError(
             409,
             "Wait for the project clone to finish, or retry a failed clone.",
           );
-        const number = db
-          .prepare(
-            "UPDATE counters SET value=value+1 WHERE name='session' RETURNING value",
-          )
-          .get()?.value;
+        const existing = db
+          .prepare("SELECT id,deleted FROM sessions WHERE workspaceId=?")
+          .get(workspace.id);
+        if (existing) {
+          if (existing.deleted)
+            throw httpError(
+              409,
+              "Restore the project history before adding a conversation.",
+            );
+          return record(String(existing.id));
+        }
         const row = {
           workspaceId: workspace.id,
           id: randomUUID(),
-          name: name.trim() || `Conversation #${number}`,
+          name: name.trim() || workspace.name,
           createdAt: new Date().toISOString(),
         };
         const runtime = await open(row.id, false, workspace.path);
@@ -214,6 +179,29 @@ export async function openSessions(
       });
       pending = next.catch(() => {});
       return next;
+    },
+    async projectMemory(
+      workspaceId: string,
+      input?: { value: Record<string, unknown>; revision: number },
+    ) {
+      const row = await this.create("", `project:${workspaceId}`, workspaceId);
+      const runtime = await open(row.id);
+      return input
+        ? runtime.saveMemory(input.value, input.revision)
+        : runtime.memory();
+    },
+    async startConversation(
+      workspaceId: string,
+      name: string,
+      requestId: string,
+    ) {
+      const row = await this.create("", `project:${workspaceId}`, workspaceId);
+      const conversation = await (await open(row.id)).createConversation(
+        name,
+        requestId,
+        true,
+      );
+      return this.get(row.id, conversation.id);
     },
     async get(id: string, conversationId?: string) {
       const row = record(id);
@@ -322,8 +310,7 @@ export async function openSessions(
         }
         await runtime?.preparePurge(conversationId);
         opened.delete(id);
-        const path =
-          id === "default" ? directory : join(directory, "sessions", id);
+        const path = join(directory, "sessions", id);
         if (conversationId)
           purgeConversationDatabase(
             join(path, "conversation.sqlite"),
@@ -334,8 +321,7 @@ export async function openSessions(
             await rm(join(path, `conversation.sqlite${suffix}`), {
               force: true,
             });
-          if (id !== "default")
-            await rm(path, { recursive: true, force: true });
+          await rm(path, { recursive: true, force: true });
           db.prepare("DELETE FROM sessions WHERE id=? AND deleted=1").run(id);
         }
       } finally {

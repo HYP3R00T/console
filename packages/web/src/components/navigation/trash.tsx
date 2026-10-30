@@ -41,7 +41,7 @@ export function Trash({
       <p className="my-3">
         Restore items or delete them permanently. Permanent deletion erases
         saved history; project source files stay on disk. Main and delegated
-        history must be erased with their session.
+        history must be erased with the complete project history.
       </p>
       {error && <p role="alert">{error}</p>}
       {items.map((item) => (
@@ -69,7 +69,7 @@ export function Trash({
             </Button>
             {kind === "conversations" &&
             (item.id === "1" || item.kind === "subagent") ? (
-              <span className="text-xs">Erase through its session</span>
+              <span className="text-xs">Erase with project history</span>
             ) : (
               <ConfirmDelete
                 label={`Permanently delete ${item.name}; cannot be undone`}

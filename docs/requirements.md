@@ -19,21 +19,27 @@ understandable and controllable without requiring continuous supervision.
 ## Product model
 
 - A **machine** identifies where execution and project files live.
-- A **workspace** identifies an approved project directory on that machine.
-- A **session** is a named, persistent working context users can reopen.
-- A **conversation** contains agent interactions; a session starts with a main conversation.
-- A **run** is an execution attempt within that context, with its own status and result.
+- A **project** (workspace in the API) identifies a working directory on that machine.
+- A **conversation** is the user-visible thread, with its own history, instructions and model settings.
+- Each project has **one hidden session**: a Pi Harness, SQLite database and scheduler, initialized
+  on first use. Sessions are implementation details, not another user-created grouping.
+- A **task** is tracked runtime work: generation, a tool call, delegation or compaction.
 
-These are product concepts, not a finalized database schema. Forks and subagents can extend
-the conversation model later. Separate conversations do not automatically isolate filesystem edits.
+Use **New conversation** under a project. Typing adds a message to the selected conversation.
+Forks keep a history prefix; delegated conversations receive explicit instructions and return results.
+All project conversations can read/update explicit project memory. Their full transcripts are not
+combined automatically. Other projects have separate runtime memory. Conversations share project
+files, not isolated checkouts. A project runtime interruption affects all its conversations' scheduler.
+
+The maintainer authorized resetting experimental histories rather than migrating old session layouts.
 
 ## Initial delivery boundary
 
 Begin with one user, one local backend, a web client, and manually submitted work in an existing
 workspace. Prove this path before adding remote hosts, additional clients, or automatic triggers.
-The current integration provides named persistent sessions and configurable conversations. Users can create, select and reopen sessions, save model/thinking settings, and select installed tools. Native read/write/edit/bash run through NodeExecutionEnv in the backend process environment. Project paths are starting directories, not access boundaries. Native history forks and task-owned subagents are implemented.
+The current integration provides one durable runtime per project and configurable conversations. Users create, select and reopen conversations, save model/thinking settings, and select installed tools. Native read/write/edit/bash run through NodeExecutionEnv in the backend process environment. Project paths are starting directories, not access boundaries. Native history forks and task-owned subagents are implemented.
 
-Machine settings persist a readable name, default project directory, and model defaults. Projects can register directories or clone public GitHub repositories. Sessions receive automatic numbers; additional agents use Pi conversation IDs and can be renamed. Native forks and delegated child agents appear beneath their parent. Shared machine state, active-task inspection, tool selection, and installed extension controls are available. Sessions and conversations have recoverable deletion; project files and databases are retained. Home shows an overview; Chat provides a resizable machine/project/conversation tree. Session containers remain internal. Each machine has a persistent Default project for unassigned conversations, with an independent working directory. Agent controls open on demand; Settings is a full page for machine defaults, providers, and model preferences.
+Machine settings persist a readable name, default project directory, and model defaults. Projects can register directories or clone public GitHub repositories. Conversations use native Pi IDs for default names and can be renamed. Native forks and delegated child agents appear beneath their parent. Explicit project memory, separate operator-managed machine state, active-task inspection, tool selection, and installed extension controls are available. Sessions and conversations have recoverable deletion; project files and databases are retained. Home shows an overview; Chat provides a resizable machine/project/conversation tree. The project runtime stays hidden. Each machine has a persistent Default project for unassigned conversations, with an independent working directory. Agent controls open on demand; Settings is a full page for machine defaults, providers, and model preferences.
 
 Connection onboarding is explicit: the web app can start with no machine, validates a server's
 identity/API before saving a connection, and supports disconnect/reconnect without stopping work
@@ -73,7 +79,8 @@ Controls must identify machine, project or conversation scope. Fork/delegation a
 readable without shifting same-level labels. Expandable navigation rows toggle when clicked and
 retain their expansion choices across reloads. Conversation details toggle a resizable desktop split;
 long technical controls stay collapsed until requested. Model selection uses a compact list and
-supported discrete thinking levels without a search requirement.
+supported discrete thinking levels without a search requirement. Saving a control must preserve
+its position; stale background responses must not briefly roll back confirmed choices.
 
 - Start with a dependable single-user path; no supported concurrency or throughput target has been measured.
 - Model access must be supported and verified for the chosen provider and account. Prefer the intended

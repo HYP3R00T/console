@@ -118,13 +118,6 @@ export function WorkspaceNavigation({
             }}
           />
         </div>
-        <Trash
-          key={`sessions-${layout.trashRevision}`}
-          kind="sessions"
-          onRestore={() => {
-            window.dispatchEvent(new Event("console:tree-changed"));
-          }}
-        />
         {session && (
           <Trash
             key={`${session.id}:${layout.trashRevision}`}

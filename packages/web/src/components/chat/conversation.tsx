@@ -118,9 +118,9 @@ export function SessionChat({
             type="button"
             className="truncate text-left text-sm font-medium text-foreground hover:underline"
             onClick={onConfigure}
-            title={session.name}
+            title={`Conversation: ${agentName ?? "Main"}`}
           >
-            {agentName ?? session.name}
+            {agentName ?? "Main"}
           </button>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -150,7 +150,7 @@ export function SessionChat({
               disabled={!online || working}
               onClick={() => onControl("resume")}
             >
-              Resume
+              Resume project work
             </Button>
           )}
         </div>

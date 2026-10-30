@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { createModels } from "@earendil-works/pi-ai/models";
 import {
   type FauxResponseFactory,
@@ -51,6 +51,28 @@ function fixture(directory: string, slow = false) {
       thinkingLevel: "high",
     },
   };
+}
+
+async function projectFor(
+  t: TestContext,
+  app: ReturnType<typeof createApp>,
+  name: string,
+) {
+  const path = await mkdtemp(join(tmpdir(), "console-test-project-"));
+  t.after(() => rm(path, { recursive: true, force: true }));
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/workspaces",
+    headers,
+    payload: {
+      name,
+      path,
+      createDirectory: true,
+      requestId: `project:${name}`,
+    },
+  });
+  assert.equal(response.statusCode, 201, response.body);
+  return response.json().id as string;
 }
 
 async function waitFor<T>(
@@ -256,7 +278,11 @@ test("sessions isolate transcripts and pass the saved thinking level to Pi", asy
         method: "POST",
         url: "/v1/sessions",
         headers,
-        payload: { name, requestId: name },
+        payload: {
+          name,
+          requestId: name,
+          workspaceId: await projectFor(t, app, name),
+        },
       })
     ).json();
     ids.push(created.id);
@@ -319,7 +345,11 @@ test("active work blocks configuration changes without blocking another session"
         method: "POST",
         url: "/v1/sessions",
         headers,
-        payload: { name, requestId: name },
+        payload: {
+          name,
+          requestId: name,
+          workspaceId: await projectFor(t, app, name),
+        },
       })
     ).json().id;
     const endpoint = `/v1/sessions/${id}`;
@@ -378,7 +408,7 @@ test("active work blocks configuration changes without blocking another session"
   await app.inject({ method: "POST", url: `${endpoints[1]}/cancel`, headers });
 });
 
-test("the original conversation is registered once without moving its database", async (t) => {
+test("a project runtime starts fresh instead of importing an unassigned legacy database", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "console-import-"));
   const { models, faux, app, config } = fixture(directory);
   t.after(async () => {
@@ -395,11 +425,16 @@ test("the original conversation is registered once without moving its database",
   );
   await original.close();
   const list = (await app.inject("/v1/sessions")).json();
-  assert.equal(list.length, 1);
-  assert.equal(list[0].id, "default");
-  const view = (await app.inject("/v1/sessions/default")).json();
-  assert.equal(view.messages.at(-1).text, "Original answer");
-  assert.equal(view.thinkingLevel, "high");
+  assert.equal(list.length, 0);
+  const created = await app.inject({
+    method: "POST",
+    url: "/v1/sessions",
+    headers,
+    payload: { requestId: "fresh" },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  assert.notEqual(created.json().id, "default");
+  assert.deepEqual(created.json().messages, []);
   assert.equal((await app.inject("/v1/sessions")).json().length, 1);
 });
 
@@ -418,7 +453,11 @@ test("one damaged session does not hide healthy sessions", async (t) => {
           method: "POST",
           url: "/v1/sessions",
           headers,
-          payload: { name, requestId: name },
+          payload: {
+            name,
+            requestId: name,
+            workspaceId: await projectFor(t, app, name),
+          },
         })
       ).json().id,
     );
@@ -465,7 +504,10 @@ test("batched session summaries preserve conversation hierarchy and exclude Tras
       method: "POST",
       url: "/v1/sessions",
       headers,
-      payload: { requestId },
+      payload: {
+        requestId,
+        workspaceId: await projectFor(t, app, requestId),
+      },
     });
     assert.equal(created.statusCode, 201);
     const base = `/v1/sessions/${created.json().id}`;
