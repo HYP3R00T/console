@@ -1,5 +1,7 @@
 # Backend hub, workspace identities, and Pi conversations
 
+Historical scope: The backend hub is superseded by [web-owned connections](0008-explicit-web-connections.md); current ownership is described in [architecture](../architecture.md).
+
 Status: accepted through the maintainer's request to implement configuration for all four levels.
 
 ## Context
