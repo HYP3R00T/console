@@ -25,14 +25,14 @@ The source tree is organized by responsibility. Start at the owning domain, not 
 of unrelated implementation files. `src/main.ts` remains the development/production entry point;
 `src/app.ts` constructs Fastify without opening a port.
 
-| Folder | Owns | Starting points |
-| --- | --- | --- |
-| `src/http/` | Application composition, authentication/error boundary | `console.ts`, `errors.ts` |
-| `src/models/` | Pi provider authentication, catalogs and persisted credentials | `providers.ts`, `credentials.ts` |
-| `src/platform/` | Data-directory resolution and machine defaults | `configuration.ts`, `machine-settings.ts` |
-| `src/projects/` | Workspace catalog, directory registration and clone lifecycle | `workspaces.ts`, `context.ts`, `resources.ts` |
-| `src/sessions/` | Session catalog and HTTP operations | `catalog.ts`, lifecycle `routes.ts`, `conversation-routes.ts`, `schemas.ts` |
-| `src/runtime/` | One Harness, its conversations and durable operations | `session.ts` assembles `configuration.ts`, `input.ts` and read-only `view.ts` |
+| Folder          | Owns                                                           | Starting points                                                               |
+| --------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `src/http/`     | Application composition, authentication/error boundary         | `console.ts`, `errors.ts`                                                     |
+| `src/models/`   | Pi provider authentication, catalogs and persisted credentials | `providers.ts`, `credentials.ts`                                              |
+| `src/platform/` | Data-directory resolution and machine defaults                 | `configuration.ts`, `machine-settings.ts`                                     |
+| `src/projects/` | Workspace catalog, directory registration and clone lifecycle  | `workspaces.ts`, `context.ts`, `resources.ts`                                 |
+| `src/sessions/` | Session catalog and HTTP operations                            | `catalog.ts`, lifecycle `routes.ts`, `conversation-routes.ts`, `schemas.ts`   |
+| `src/runtime/`  | One Harness, its conversations and durable operations          | `session.ts` assembles `configuration.ts`, `input.ts` and read-only `view.ts` |
 
 `runtime/context.ts` describes shared session resources and the mutation queue. Configuration and
 input operations use that same queue; extracted files do not create independent locks or Harnesses.

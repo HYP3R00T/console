@@ -1,7 +1,5 @@
 # Console requirements
 
-Status: local providers, persistent sessions, model controls, projects, forks and subagents are implemented. Pi Durable native tools execute directly on the host under the backend account. There is no filesystem, network or credential confinement; a project sets the working directory only. The maintainer explicitly removed nono and all access presets to study the minimal Durable backend.
-
 This document records what Console is intended to do and why. [Architecture](architecture.md)
 describes how we intend to provide it, including choices that remain unresolved. Requirements
 below are targets, not claims of existing behavior or automatic approval to implement every feature.
@@ -35,34 +33,26 @@ The maintainer authorized resetting experimental histories rather than migrating
 
 ## Initial delivery boundary
 
-Begin with one user, one local backend, a web client, and manually submitted work in an existing
-workspace. Prove this path before adding remote hosts, additional clients, or automatic triggers.
-The current integration provides one durable runtime per project and configurable conversations. Users create, select and reopen conversations, save model/thinking settings, and select installed tools. Native read/write/edit/bash run through NodeExecutionEnv in the backend process environment. Project paths are starting directories, not access boundaries. Native history forks and task-owned subagents are implemented.
-
-Machine settings persist a readable name, default project directory, and model defaults. Projects can register directories or clone public GitHub repositories. Conversations use native Pi IDs for default names and can be renamed. Native forks and delegated child agents appear beneath their parent. Explicit project memory, separate operator-managed machine state, active-task inspection, tool selection, and installed extension controls are available. Sessions and conversations have recoverable deletion; project files and databases are retained. Home shows an overview; Chat provides a collapsible, resizable machine/project/conversation sidebar with a visible drag grip and remembered width, plus the conversation and optional details split. The project runtime stays hidden. Each machine has a persistent Default project for unassigned conversations, with an independent working directory. Conversation controls use expandable sections with project/machine settings kept separate; Settings is a full page for machine defaults, providers, and model preferences. Conversation switching must retain the current view until uncached data is ready and show cached visits without a welcome/loading flash. Thinking controls must follow the selected model's Pi-reported capabilities, hiding for off-only models and exposing every supported tier. The composer shows the selected model and thinking level together, with a backend-estimated context usage ring, and shows delivery choices only during running work. Composer model/thinking choices update local client drafts and apply only on Send; polling must not overwrite unsent choices. Other editors keep their explicit Save actions.
-
-Connection onboarding is explicit: the web app can start with no machine, validates a server's
-identity/API before saving a connection, and supports disconnect/reconnect without stopping work
-or erasing backend data. A running local backend is never auto-enrolled. An explicit loopback check can fill its address.
-Disconnected machines retain recent address/name metadata for reconnection; tokens are cleared.
-Managed SSH connections use existing trusted keys and forward to an already-running remote server. Extension controls select
-actual installed Pi extensions, including prompt sections/hooks.
+Prioritize one owner manually submitting work to a selected project through the web client.
+Connections must be explicit; disconnecting must retain backend execution and data. Projects can
+attach existing source directories so other development tools can use the same files.
+The feature inventory records which local, remote and runtime paths are implemented.
 
 ## Required target behavior
 
 - **REQ-1 — Workspace selection:** users can identify the backend and workspace in which work
   will execute. Selecting a workspace does not implicitly copy files to another machine.
-- **REQ-2 — Session navigation:** users can create, name, list, and reopen sessions without
+- **REQ-2 — Conversation navigation:** users can create, name, list, and reopen conversations without
   remembering opaque identifiers. Reopening selects existing work rather than creating a duplicate.
 - **REQ-3 — Assignment and visibility:** users can submit instructions and inspect agent output,
   tool activity, results, errors, and execution status. Unknown or disconnected state must be visible.
 - **REQ-4 — Client independence:** closing or disconnecting the client must not itself cancel
-  backend work. Reconnecting must restore the same session without resubmitting the assignment.
+  backend work. Reconnecting must restore the same conversation without resubmitting the assignment.
 - **REQ-5 — Persistence and recovery:** conversations and execution state must survive client
   disconnects. Recovery after backend interruption must have explicit, tested eligibility and replay
   rules; it must not silently restart cancelled work or blindly repeat an uncertain external action.
-- **REQ-6 — Explicit controls:** cancellation, completion, archiving, and deletion must remain
-  distinct. Exact controls included in the first implementation must be settled in its issue.
+- **REQ-6 — Explicit controls:** cancellation, completion, recoverable Trash and permanent
+  deletion must remain distinct.
 - **REQ-7 — Execution clarity:** runs start in the selected project using configured tools with
   the backend account's host authority. No sandbox or human approval gate is implemented. Starting an assignment does not imply authority to merge, deploy, or publish.
 - **REQ-8 — Reviewable results:** users can distinguish the agent's completion claim from recorded
@@ -92,26 +82,11 @@ its position; stale background responses must not briefly roll back confirmed ch
 
 ## Later capabilities
 
-The [Console feature inventory](features.md) tracks implemented, partial, missing and deferred
-capabilities across the whole product, including execution authority and the requested Pi expansion.
-[Pi integration scope](pi-capabilities.md) records the compatibility boundary. Inventory status
-is not complete verification or authorization to implement deferred work. Steering and queued follow-ups,
-withdrawal, usage/context inspection, manual compaction, and reset with an optional handoff are
-implemented. Restart still requires explicit Resume; new input must not implicitly resume saved work.
-Project Markdown instructions, discoverable skills and parameterized templates are also integrated
-inside the saved workspace policy. Existing Pi CLI plugins/config files need not load unchanged;
-Console provides equivalent features on its Durable runtime.
-
-Code-change review and durable approvals,
-schedules, authenticated event triggers, CLI/TUI clients, and collaboration have been discussed.
-They are extensions to refine separately, not dependencies of the initial manual workflow.
-
-Automatic triggers should eventually submit bounded assignments through the same execution path.
-Automatic initiation and permission to merge or deploy remain independent choices.
-
-Future team access should allow multiple authenticated people to connect to the same backend.
-The backend must enforce each user's access; session visibility and concurrent-control behavior
-need explicit design. Selecting Next.js for the client does not implement these capabilities.
+[Features](features.md) owns statuses and remaining integration gaps. Future work includes code
+review, retrievable output, durable approvals, automation/triggers and broader client access.
+[Architecture](architecture.md#pi-compatibility-and-resource-boundary) defines Pi compatibility;
+existing CLI plugins/configuration do not need to load unchanged. Dependency support alone does
+not make a Console feature implemented.
 
 ## Outside the initial scope
 
@@ -123,8 +98,8 @@ need explicit design. Selecting Next.js for the client does not implement these 
 
 ## Acceptance scenarios to refine into issues
 
-1. Create a local workspace session, submit a harmless bounded task, and inspect its activity and result.
-2. Close the browser during execution; reconnect to the same session without duplicate submission.
+1. Create a conversation in a local project, submit a harmless bounded task, and inspect its activity and result.
+2. Close the browser during execution; reconnect to the same conversation without duplicate submission.
 3. Restart the backend with the same persistent state; recover eligible work or show an accurate
    interrupted state, according to the agreed recovery contract.
 4. Cancel work and restart the backend; verify that cancellation remains effective.
@@ -135,26 +110,17 @@ settle consequential choices, and identify executable checks as implementation m
 
 ## Decisions still needed
 
-- First user workflow and proof task, including read-only versus code-editing tools.
-- Expand the initial Pi Durable/SQLite conversation into workspace-bound sessions. Next.js is the client. Provider settings expose the installed Pi catalog and its supported authentication methods; subscription access is the intended OpenAI path, with no automatic change to API-key billing.
-- Supported lifecycle states, recovery/replay boundaries, cancellation, retention, and concurrency limits.
-- Access control, resource/cost limits, and the first deployment environment.
+- Supported deployment/access boundary beyond private single-owner use.
+- Retention, backup/restore and abrupt-crash/external-effect recovery proof.
+- Resource/cost limits, concurrency targets and policies for future executable integrations.
 
-Keep these questions here only while they shape the product baseline; link concrete implementation
-issues when they exist. GitHub remains the task/status tracker. Update this document when product
-expectations change rather than copying individual issue progress into it.
+Keep implementation assignments and test outcomes in issues/PRs, not duplicated here.
 
-## Unified workspace and model clarity
+## Interface expectations
 
-Chat, settings and machine connection management share the persistent machine tree and resizable
-workspace. Settings and Add machine replace the center pane; Home is no longer a separate dashboard.
-Returning to chat on the same machine preserves unsent text and model/thinking drafts. Settings
-identifies the selected machine through cards, then separates model-menu choices, providers and
-machine defaults. Provider credentials and defaults remain machine-owned; model-menu favorites
-remain shared by this web app. Changing machines may discard unsent client state.
-
-Both composer and settings group models under their provider names. Settings expands provider
-catalogs and exposes context capacity and supported thinking levels. The composer control fits its
-label. Off is selectable only when Pi reports support; required-thinking models explain its absence.
-The frontend cannot supply a model missing from the machine's catalog; see the
-[installed catalog audit](model-catalog-audit.md) for the unresolved CLI/package Terra discrepancy.
+Settings and connection management should preserve the current chat and its unsent drafts on
+the same machine. Configuration must identify its scope: client preferences, machine providers
+and defaults, project memory, or conversation agent settings. Model/thinking choices stay local
+until Send; other editors retain explicit Save actions. Picker options must reflect Pi's actual
+model capabilities and provider identity, without inventing unsupported tiers or missing models.
+Current rendering, navigation and catalog limits belong in the [web guide](packages/web.md).

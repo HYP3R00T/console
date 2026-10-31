@@ -1,5 +1,7 @@
 # Give each session its own Pi harness and saved configuration
 
+Historical scope: The visible session hierarchy is superseded by one hidden runtime per project; see the [current hierarchy](../architecture.md#product-hierarchy).
+
 Status: proposed; implemented on the task branch for maintainer review.
 
 ## Context
