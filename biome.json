@@ -17,5 +17,13 @@
     "rules": {
       "preset": "recommended"
     }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "tailwind": {
+    "stylesheet": "./packages/web/src/app/globals.css"
   }
 }
