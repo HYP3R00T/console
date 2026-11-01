@@ -1,0 +1,420 @@
+diff --git a/dist/providers/amazon-bedrock.models.d.ts b/dist/providers/amazon-bedrock.models.d.ts
+index c3ffdcfadc7fa48fe8875e88398f7f9961708705..8e17081c9f648280066241b2753dea10be5f962c 100644
+--- a/dist/providers/amazon-bedrock.models.d.ts
++++ b/dist/providers/amazon-bedrock.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/amazon-bedrock.json";
++import values from "./data/amazon-bedrock.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const AMAZON_BEDROCK_MODELS: ChatModelCatalog<typeof values, "amazon-bedrock">;
+ export declare const AMAZON_BEDROCK_IMAGE_MODELS: ImageModelCatalog<typeof values, "amazon-bedrock">;
+diff --git a/dist/providers/ant-ling.models.d.ts b/dist/providers/ant-ling.models.d.ts
+index f2dbb93a6c110faa452cc74daa387f666e953eae..ce984cd8a5b2da74aa87ec891bded30aafc59596 100644
+--- a/dist/providers/ant-ling.models.d.ts
++++ b/dist/providers/ant-ling.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/ant-ling.json";
++import values from "./data/ant-ling.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const ANT_LING_MODELS: ChatModelCatalog<typeof values, "ant-ling">;
+ export declare const ANT_LING_IMAGE_MODELS: ImageModelCatalog<typeof values, "ant-ling">;
+diff --git a/dist/providers/anthropic.models.d.ts b/dist/providers/anthropic.models.d.ts
+index 46d7307e97bdfae97c6ae39c7f30fb0cc5c4d0e9..aa1d220855fefbed6bcabbb10708ee0301e97169 100644
+--- a/dist/providers/anthropic.models.d.ts
++++ b/dist/providers/anthropic.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/anthropic.json";
++import values from "./data/anthropic.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const ANTHROPIC_MODELS: ChatModelCatalog<typeof values, "anthropic">;
+ export declare const ANTHROPIC_IMAGE_MODELS: ImageModelCatalog<typeof values, "anthropic">;
+diff --git a/dist/providers/azure.models.d.ts b/dist/providers/azure.models.d.ts
+index 3d9360ca298ba5e96b28651131b34dca3326c04d..1e99e7fc21351e93b4e44a76dce8be675c45eb42 100644
+--- a/dist/providers/azure.models.d.ts
++++ b/dist/providers/azure.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/azure.json";
++import values from "./data/azure.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const AZURE_MODELS: ChatModelCatalog<typeof values, "azure">;
+ export declare const AZURE_IMAGE_MODELS: ImageModelCatalog<typeof values, "azure">;
+diff --git a/dist/providers/baseten.models.d.ts b/dist/providers/baseten.models.d.ts
+index 3b752e4d2d0ba39ad0a619b6b37de93e4ffbe790..b05dba11706843e6ef5f8771af1c96ca96f382cb 100644
+--- a/dist/providers/baseten.models.d.ts
++++ b/dist/providers/baseten.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/baseten.json";
++import values from "./data/baseten.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const BASETEN_MODELS: ChatModelCatalog<typeof values, "baseten">;
+ export declare const BASETEN_IMAGE_MODELS: ImageModelCatalog<typeof values, "baseten">;
+diff --git a/dist/providers/cerebras.models.d.ts b/dist/providers/cerebras.models.d.ts
+index 7f8cddb155a63a9b353a5f1c7ba7333eae306539..45686797055c4a24c47267a28a5d0d90c61b71f1 100644
+--- a/dist/providers/cerebras.models.d.ts
++++ b/dist/providers/cerebras.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/cerebras.json";
++import values from "./data/cerebras.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const CEREBRAS_MODELS: ChatModelCatalog<typeof values, "cerebras">;
+ export declare const CEREBRAS_IMAGE_MODELS: ImageModelCatalog<typeof values, "cerebras">;
+diff --git a/dist/providers/cloudflare-ai-gateway.models.d.ts b/dist/providers/cloudflare-ai-gateway.models.d.ts
+index 839dfd57ef63fb38e932c4994e9c491bffc38c75..cf7c30e51eebe2a8f3be99c15289351f57d15156 100644
+--- a/dist/providers/cloudflare-ai-gateway.models.d.ts
++++ b/dist/providers/cloudflare-ai-gateway.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/cloudflare-ai-gateway.json";
++import values from "./data/cloudflare-ai-gateway.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const CLOUDFLARE_AI_GATEWAY_MODELS: ChatModelCatalog<typeof values, "cloudflare-ai-gateway">;
+ export declare const CLOUDFLARE_AI_GATEWAY_IMAGE_MODELS: ImageModelCatalog<typeof values, "cloudflare-ai-gateway">;
+diff --git a/dist/providers/cloudflare-workers-ai.models.d.ts b/dist/providers/cloudflare-workers-ai.models.d.ts
+index 3d3c018859a74a827882c3a6852bb15256c6ac9e..d0882ab9c5b49fe614ccc5068ee4d2ce55ac6a1f 100644
+--- a/dist/providers/cloudflare-workers-ai.models.d.ts
++++ b/dist/providers/cloudflare-workers-ai.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/cloudflare-workers-ai.json";
++import values from "./data/cloudflare-workers-ai.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const CLOUDFLARE_WORKERS_AI_MODELS: ChatModelCatalog<typeof values, "cloudflare-workers-ai">;
+ export declare const CLOUDFLARE_WORKERS_AI_IMAGE_MODELS: ImageModelCatalog<typeof values, "cloudflare-workers-ai">;
+diff --git a/dist/providers/deepseek.models.d.ts b/dist/providers/deepseek.models.d.ts
+index 8cb9adeb717aa898c5666c732a2f81a0d716e76d..07ae84c6b90a6f04573da474d7b266ce047303ee 100644
+--- a/dist/providers/deepseek.models.d.ts
++++ b/dist/providers/deepseek.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/deepseek.json";
++import values from "./data/deepseek.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const DEEPSEEK_MODELS: ChatModelCatalog<typeof values, "deepseek">;
+ export declare const DEEPSEEK_IMAGE_MODELS: ImageModelCatalog<typeof values, "deepseek">;
+diff --git a/dist/providers/fireworks.models.d.ts b/dist/providers/fireworks.models.d.ts
+index 44671499a0e19c2bb8782e545b172bd183853c90..8a5a9071454f1a9618cad5f2654a4a6ec88ef208 100644
+--- a/dist/providers/fireworks.models.d.ts
++++ b/dist/providers/fireworks.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/fireworks.json";
++import values from "./data/fireworks.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const FIREWORKS_MODELS: ChatModelCatalog<typeof values, "fireworks">;
+ export declare const FIREWORKS_IMAGE_MODELS: ImageModelCatalog<typeof values, "fireworks">;
+diff --git a/dist/providers/github-copilot.models.d.ts b/dist/providers/github-copilot.models.d.ts
+index 6307659e498f2faca558d2e2dc759d20ed9ef5bf..b8d239c2bdb73fb78f1e12f9b052ff2475e3d199 100644
+--- a/dist/providers/github-copilot.models.d.ts
++++ b/dist/providers/github-copilot.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/github-copilot.json";
++import values from "./data/github-copilot.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const GITHUB_COPILOT_MODELS: ChatModelCatalog<typeof values, "github-copilot">;
+ export declare const GITHUB_COPILOT_IMAGE_MODELS: ImageModelCatalog<typeof values, "github-copilot">;
+diff --git a/dist/providers/google-vertex.models.d.ts b/dist/providers/google-vertex.models.d.ts
+index c0c4403504bb6057cc80d93a601d539ed20b95ad..810e244404434bfd5cbcb3987716257bff06bd6c 100644
+--- a/dist/providers/google-vertex.models.d.ts
++++ b/dist/providers/google-vertex.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/google-vertex.json";
++import values from "./data/google-vertex.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const GOOGLE_VERTEX_MODELS: ChatModelCatalog<typeof values, "google-vertex">;
+ export declare const GOOGLE_VERTEX_IMAGE_MODELS: ImageModelCatalog<typeof values, "google-vertex">;
+diff --git a/dist/providers/google.models.d.ts b/dist/providers/google.models.d.ts
+index 6cc935846cfc769ccf3438b894d5038ad1cf216c..be2838488aace4245ca22549e451f089880ba128 100644
+--- a/dist/providers/google.models.d.ts
++++ b/dist/providers/google.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/google.json";
++import values from "./data/google.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const GOOGLE_MODELS: ChatModelCatalog<typeof values, "google">;
+ export declare const GOOGLE_IMAGE_MODELS: ImageModelCatalog<typeof values, "google">;
+diff --git a/dist/providers/groq.models.d.ts b/dist/providers/groq.models.d.ts
+index ddd62ccdf0d316305288c88290721a228999c0af..1bb5e195b80d878ea67a60a2d9fa9b7d8b35fb05 100644
+--- a/dist/providers/groq.models.d.ts
++++ b/dist/providers/groq.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/groq.json";
++import values from "./data/groq.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const GROQ_MODELS: ChatModelCatalog<typeof values, "groq">;
+ export declare const GROQ_IMAGE_MODELS: ImageModelCatalog<typeof values, "groq">;
+diff --git a/dist/providers/huggingface.models.d.ts b/dist/providers/huggingface.models.d.ts
+index c3d0f93a9f1abdfe5cfe2095238563c5b418875b..a5774964bb1d97e4a671751df479b7b5b02d15b0 100644
+--- a/dist/providers/huggingface.models.d.ts
++++ b/dist/providers/huggingface.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/huggingface.json";
++import values from "./data/huggingface.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const HUGGINGFACE_MODELS: ChatModelCatalog<typeof values, "huggingface">;
+ export declare const HUGGINGFACE_IMAGE_MODELS: ImageModelCatalog<typeof values, "huggingface">;
+diff --git a/dist/providers/kimi-coding.models.d.ts b/dist/providers/kimi-coding.models.d.ts
+index 9b6396db50cc120102373002b961376b74c7a8ec..9b743f9157c0500e6cfddbe9298e7bcc2f6ceab0 100644
+--- a/dist/providers/kimi-coding.models.d.ts
++++ b/dist/providers/kimi-coding.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/kimi-coding.json";
++import values from "./data/kimi-coding.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const KIMI_CODING_MODELS: ChatModelCatalog<typeof values, "kimi-coding">;
+ export declare const KIMI_CODING_IMAGE_MODELS: ImageModelCatalog<typeof values, "kimi-coding">;
+diff --git a/dist/providers/meta.models.d.ts b/dist/providers/meta.models.d.ts
+index a1a4ff489728f4cc7a2ee317814b200d0c01267e..7cebb3ab731bdb0c2e70217cf7c3bcf55b59203e 100644
+--- a/dist/providers/meta.models.d.ts
++++ b/dist/providers/meta.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/meta.json";
++import values from "./data/meta.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const META_MODELS: ChatModelCatalog<typeof values, "meta">;
+ export declare const META_IMAGE_MODELS: ImageModelCatalog<typeof values, "meta">;
+diff --git a/dist/providers/minimax-cn.models.d.ts b/dist/providers/minimax-cn.models.d.ts
+index b496f23fed05bedcf10705369c1f3d4d209d95b7..5927dcd56ee80fdbfc9e219eec60b4c7b2d93e28 100644
+--- a/dist/providers/minimax-cn.models.d.ts
++++ b/dist/providers/minimax-cn.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/minimax-cn.json";
++import values from "./data/minimax-cn.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const MINIMAX_CN_MODELS: ChatModelCatalog<typeof values, "minimax-cn">;
+ export declare const MINIMAX_CN_IMAGE_MODELS: ImageModelCatalog<typeof values, "minimax-cn">;
+diff --git a/dist/providers/minimax.models.d.ts b/dist/providers/minimax.models.d.ts
+index bea3adc011bce6c11a14a3243e17914b8e1bd77d..bc589b6d909e6fc2ba71bb6bf134f6aefa2e3e4d 100644
+--- a/dist/providers/minimax.models.d.ts
++++ b/dist/providers/minimax.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/minimax.json";
++import values from "./data/minimax.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const MINIMAX_MODELS: ChatModelCatalog<typeof values, "minimax">;
+ export declare const MINIMAX_IMAGE_MODELS: ImageModelCatalog<typeof values, "minimax">;
+diff --git a/dist/providers/mistral.models.d.ts b/dist/providers/mistral.models.d.ts
+index 4d2db7ef77e957615e380f264aa19a683cde3af8..4c9a9cb526279c99dc270f7fd392c8b496203134 100644
+--- a/dist/providers/mistral.models.d.ts
++++ b/dist/providers/mistral.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/mistral.json";
++import values from "./data/mistral.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const MISTRAL_MODELS: ChatModelCatalog<typeof values, "mistral">;
+ export declare const MISTRAL_IMAGE_MODELS: ImageModelCatalog<typeof values, "mistral">;
+diff --git a/dist/providers/moonshotai-cn.models.d.ts b/dist/providers/moonshotai-cn.models.d.ts
+index 18747217bf7a914f6d9ed977a8c034fdf18f07db..84400a56c5d5e90f844a44631536bfbb7acbc0d1 100644
+--- a/dist/providers/moonshotai-cn.models.d.ts
++++ b/dist/providers/moonshotai-cn.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/moonshotai-cn.json";
++import values from "./data/moonshotai-cn.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const MOONSHOTAI_CN_MODELS: ChatModelCatalog<typeof values, "moonshotai-cn">;
+ export declare const MOONSHOTAI_CN_IMAGE_MODELS: ImageModelCatalog<typeof values, "moonshotai-cn">;
+diff --git a/dist/providers/moonshotai.models.d.ts b/dist/providers/moonshotai.models.d.ts
+index 9eee0db3f345858935198bc9c8985c343e5f1f89..b8801d6e176c887661ed99a3fde8a42fff8918c9 100644
+--- a/dist/providers/moonshotai.models.d.ts
++++ b/dist/providers/moonshotai.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/moonshotai.json";
++import values from "./data/moonshotai.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const MOONSHOTAI_MODELS: ChatModelCatalog<typeof values, "moonshotai">;
+ export declare const MOONSHOTAI_IMAGE_MODELS: ImageModelCatalog<typeof values, "moonshotai">;
+diff --git a/dist/providers/nvidia.models.d.ts b/dist/providers/nvidia.models.d.ts
+index 28fd3dfebb30b41c5ab80143591dbc4de903dac5..ad407fceed015e176728cfc6293561229acb33ec 100644
+--- a/dist/providers/nvidia.models.d.ts
++++ b/dist/providers/nvidia.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/nvidia.json";
++import values from "./data/nvidia.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const NVIDIA_MODELS: ChatModelCatalog<typeof values, "nvidia">;
+ export declare const NVIDIA_IMAGE_MODELS: ImageModelCatalog<typeof values, "nvidia">;
+diff --git a/dist/providers/openai-codex.models.d.ts b/dist/providers/openai-codex.models.d.ts
+index b7d4531f0b787b5574f52692fdb1f304d33c9996..8b287bc0f2c9e0bdd56a24eb923fd5da75819cb4 100644
+--- a/dist/providers/openai-codex.models.d.ts
++++ b/dist/providers/openai-codex.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/openai-codex.json";
++import values from "./data/openai-codex.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const OPENAI_CODEX_MODELS: ChatModelCatalog<typeof values, "openai-codex">;
+ export declare const OPENAI_CODEX_IMAGE_MODELS: ImageModelCatalog<typeof values, "openai-codex">;
+diff --git a/dist/providers/openai.models.d.ts b/dist/providers/openai.models.d.ts
+index 731e6de0c1170b71c0a8d22827fb44fcffbd98fb..5a4280e613da50621b2991ef67ab9405eae2d523 100644
+--- a/dist/providers/openai.models.d.ts
++++ b/dist/providers/openai.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/openai.json";
++import values from "./data/openai.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const OPENAI_MODELS: ChatModelCatalog<typeof values, "openai">;
+ export declare const OPENAI_IMAGE_MODELS: ImageModelCatalog<typeof values, "openai">;
+diff --git a/dist/providers/opencode-go.models.d.ts b/dist/providers/opencode-go.models.d.ts
+index 34645ea42705d9b48f2d8bc6a4b755fbc8368f6b..d91acf0d678980e34f2408eeb87fced021596192 100644
+--- a/dist/providers/opencode-go.models.d.ts
++++ b/dist/providers/opencode-go.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/opencode-go.json";
++import values from "./data/opencode-go.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const OPENCODE_GO_MODELS: ChatModelCatalog<typeof values, "opencode-go">;
+ export declare const OPENCODE_GO_IMAGE_MODELS: ImageModelCatalog<typeof values, "opencode-go">;
+diff --git a/dist/providers/opencode.models.d.ts b/dist/providers/opencode.models.d.ts
+index 67b6d7293b07670b28d81dd4b5f6a96d0940b687..30437f4a21da9e2a180d08bd26b6fd0e7137c890 100644
+--- a/dist/providers/opencode.models.d.ts
++++ b/dist/providers/opencode.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/opencode.json";
++import values from "./data/opencode.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const OPENCODE_MODELS: ChatModelCatalog<typeof values, "opencode">;
+ export declare const OPENCODE_IMAGE_MODELS: ImageModelCatalog<typeof values, "opencode">;
+diff --git a/dist/providers/openrouter.models.d.ts b/dist/providers/openrouter.models.d.ts
+index b36a5139ffba8055c5e582eb277aff46c17904dc..9d18b66c4c2d8ca30ca390a4803ab7d235cbab4a 100644
+--- a/dist/providers/openrouter.models.d.ts
++++ b/dist/providers/openrouter.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/openrouter.json";
++import values from "./data/openrouter.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const OPENROUTER_MODELS: ChatModelCatalog<typeof values, "openrouter">;
+ export declare const OPENROUTER_IMAGE_MODELS: ImageModelCatalog<typeof values, "openrouter">;
+diff --git a/dist/providers/qwen-token-plan-cn.models.d.ts b/dist/providers/qwen-token-plan-cn.models.d.ts
+index f4343031d3738b4c8d6f4aa924410967f29ddd84..14792dd0e4cdeb48b24a11d7ad7c151cfd84a7af 100644
+--- a/dist/providers/qwen-token-plan-cn.models.d.ts
++++ b/dist/providers/qwen-token-plan-cn.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/qwen-token-plan-cn.json";
++import values from "./data/qwen-token-plan-cn.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const QWEN_TOKEN_PLAN_CN_MODELS: ChatModelCatalog<typeof values, "qwen-token-plan-cn">;
+ export declare const QWEN_TOKEN_PLAN_CN_IMAGE_MODELS: ImageModelCatalog<typeof values, "qwen-token-plan-cn">;
+diff --git a/dist/providers/qwen-token-plan-individual.models.d.ts b/dist/providers/qwen-token-plan-individual.models.d.ts
+index bc899810b192cc79ebf4e46ef77e4b072b8d3886..21aa20fd81b1d190b921d5a2cb86efade66614de 100644
+--- a/dist/providers/qwen-token-plan-individual.models.d.ts
++++ b/dist/providers/qwen-token-plan-individual.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/qwen-token-plan-individual.json";
++import values from "./data/qwen-token-plan-individual.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS: ChatModelCatalog<typeof values, "qwen-token-plan-individual">;
+ export declare const QWEN_TOKEN_PLAN_INDIVIDUAL_IMAGE_MODELS: ImageModelCatalog<typeof values, "qwen-token-plan-individual">;
+diff --git a/dist/providers/qwen-token-plan.models.d.ts b/dist/providers/qwen-token-plan.models.d.ts
+index 542dae037ed503b6c7d1be0dde9182561ef75261..97ce44534fc3e8d12b8cd90bf0faa18976e4359d 100644
+--- a/dist/providers/qwen-token-plan.models.d.ts
++++ b/dist/providers/qwen-token-plan.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/qwen-token-plan.json";
++import values from "./data/qwen-token-plan.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const QWEN_TOKEN_PLAN_MODELS: ChatModelCatalog<typeof values, "qwen-token-plan">;
+ export declare const QWEN_TOKEN_PLAN_IMAGE_MODELS: ImageModelCatalog<typeof values, "qwen-token-plan">;
+diff --git a/dist/providers/radius.models.d.ts b/dist/providers/radius.models.d.ts
+index c2391f018f394f88c0cc31c7af46072a4c95fc3c..59fda4a58bb743614c048cc0f37f3a8c45418e25 100644
+--- a/dist/providers/radius.models.d.ts
++++ b/dist/providers/radius.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/radius.json";
++import values from "./data/radius.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const RADIUS_MODELS: ChatModelCatalog<typeof values, "radius">;
+ export declare const RADIUS_IMAGE_MODELS: ImageModelCatalog<typeof values, "radius">;
+diff --git a/dist/providers/together.models.d.ts b/dist/providers/together.models.d.ts
+index e508bd1e1bf7bc551a3d3700ed282b310598950f..8c6eb1add83e2f5023b5d2ec0594201c66f9c96a 100644
+--- a/dist/providers/together.models.d.ts
++++ b/dist/providers/together.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/together.json";
++import values from "./data/together.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const TOGETHER_MODELS: ChatModelCatalog<typeof values, "together">;
+ export declare const TOGETHER_IMAGE_MODELS: ImageModelCatalog<typeof values, "together">;
+diff --git a/dist/providers/typesafe.models.d.ts b/dist/providers/typesafe.models.d.ts
+index 3c997a24d6526b7a10dd3c6962efd0ea9f05c679..d7d247d8ee449efdee2f2a58bf148e3c9f01f368 100644
+--- a/dist/providers/typesafe.models.d.ts
++++ b/dist/providers/typesafe.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/typesafe.json";
++import values from "./data/typesafe.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const TYPESAFE_MODELS: ChatModelCatalog<typeof values, "typesafe">;
+ export declare const TYPESAFE_IMAGE_MODELS: ImageModelCatalog<typeof values, "typesafe">;
+diff --git a/dist/providers/vercel-ai-gateway.models.d.ts b/dist/providers/vercel-ai-gateway.models.d.ts
+index 574e85fd82244277a68e103af4314d87383190c8..86ab7571215b9bd345aa494842ab558ff9f613d3 100644
+--- a/dist/providers/vercel-ai-gateway.models.d.ts
++++ b/dist/providers/vercel-ai-gateway.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/vercel-ai-gateway.json";
++import values from "./data/vercel-ai-gateway.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const VERCEL_AI_GATEWAY_MODELS: ChatModelCatalog<typeof values, "vercel-ai-gateway">;
+ export declare const VERCEL_AI_GATEWAY_IMAGE_MODELS: ImageModelCatalog<typeof values, "vercel-ai-gateway">;
+diff --git a/dist/providers/xai.models.d.ts b/dist/providers/xai.models.d.ts
+index a38f3dc2629f763ae5c1601e19b28dbb7755ee20..0d0a4004ae437e833f3e55ea4c5b4b46a73ed742 100644
+--- a/dist/providers/xai.models.d.ts
++++ b/dist/providers/xai.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/xai.json";
++import values from "./data/xai.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const XAI_MODELS: ChatModelCatalog<typeof values, "xai">;
+ export declare const XAI_IMAGE_MODELS: ImageModelCatalog<typeof values, "xai">;
+diff --git a/dist/providers/xiaomi-token-plan-ams.models.d.ts b/dist/providers/xiaomi-token-plan-ams.models.d.ts
+index 22bd0a0a2e2dfef8b9cc5bdf1c9b274312de0dc4..62a82b12f9df1f75b8a81afc7df375a64fa0553e 100644
+--- a/dist/providers/xiaomi-token-plan-ams.models.d.ts
++++ b/dist/providers/xiaomi-token-plan-ams.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/xiaomi-token-plan-ams.json";
++import values from "./data/xiaomi-token-plan-ams.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const XIAOMI_TOKEN_PLAN_AMS_MODELS: ChatModelCatalog<typeof values, "xiaomi-token-plan-ams">;
+ export declare const XIAOMI_TOKEN_PLAN_AMS_IMAGE_MODELS: ImageModelCatalog<typeof values, "xiaomi-token-plan-ams">;
+diff --git a/dist/providers/xiaomi-token-plan-cn.models.d.ts b/dist/providers/xiaomi-token-plan-cn.models.d.ts
+index 0a42a179fc72f5562d7cd83427cd689cd9489cdb..816a399dc17fc91679411b55f9bfcc53bef89419 100644
+--- a/dist/providers/xiaomi-token-plan-cn.models.d.ts
++++ b/dist/providers/xiaomi-token-plan-cn.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/xiaomi-token-plan-cn.json";
++import values from "./data/xiaomi-token-plan-cn.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const XIAOMI_TOKEN_PLAN_CN_MODELS: ChatModelCatalog<typeof values, "xiaomi-token-plan-cn">;
+ export declare const XIAOMI_TOKEN_PLAN_CN_IMAGE_MODELS: ImageModelCatalog<typeof values, "xiaomi-token-plan-cn">;
+diff --git a/dist/providers/xiaomi-token-plan-sgp.models.d.ts b/dist/providers/xiaomi-token-plan-sgp.models.d.ts
+index b33c5876acbb09a4d4038b65acc81f9cabc4d657..04618c08d9cb8dd1d68e4dfed314686df40f490e 100644
+--- a/dist/providers/xiaomi-token-plan-sgp.models.d.ts
++++ b/dist/providers/xiaomi-token-plan-sgp.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/xiaomi-token-plan-sgp.json";
++import values from "./data/xiaomi-token-plan-sgp.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const XIAOMI_TOKEN_PLAN_SGP_MODELS: ChatModelCatalog<typeof values, "xiaomi-token-plan-sgp">;
+ export declare const XIAOMI_TOKEN_PLAN_SGP_IMAGE_MODELS: ImageModelCatalog<typeof values, "xiaomi-token-plan-sgp">;
+diff --git a/dist/providers/xiaomi.models.d.ts b/dist/providers/xiaomi.models.d.ts
+index ff1edad2bc65260f035ec0d41d4ec63f8e154d90..eb2c8119e80a28e8ee1a52bce6ea281891ac2897 100644
+--- a/dist/providers/xiaomi.models.d.ts
++++ b/dist/providers/xiaomi.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/xiaomi.json";
++import values from "./data/xiaomi.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const XIAOMI_MODELS: ChatModelCatalog<typeof values, "xiaomi">;
+ export declare const XIAOMI_IMAGE_MODELS: ImageModelCatalog<typeof values, "xiaomi">;
+diff --git a/dist/providers/zai-coding-cn.models.d.ts b/dist/providers/zai-coding-cn.models.d.ts
+index 4f43e4138436985ec18d24d6ba2d1fcc2cd243ee..adac0df9f0ea0184f00dcdb958f49e90851c4c4e 100644
+--- a/dist/providers/zai-coding-cn.models.d.ts
++++ b/dist/providers/zai-coding-cn.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/zai-coding-cn.json";
++import values from "./data/zai-coding-cn.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const ZAI_CODING_CN_MODELS: ChatModelCatalog<typeof values, "zai-coding-cn">;
+ export declare const ZAI_CODING_CN_IMAGE_MODELS: ImageModelCatalog<typeof values, "zai-coding-cn">;
+diff --git a/dist/providers/zai.models.d.ts b/dist/providers/zai.models.d.ts
+index 702f7b3d958fba867144dd39b94b1d6c582e56fe..35036713cbc142106c3c553054969dc87e482d87 100644
+--- a/dist/providers/zai.models.d.ts
++++ b/dist/providers/zai.models.d.ts
+@@ -1,4 +1,4 @@
+-import values from "./data/zai.json";
++import values from "./data/zai.json" with { type: "json" };
+ import { type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";
+ export declare const ZAI_MODELS: ChatModelCatalog<typeof values, "zai">;
+ export declare const ZAI_IMAGE_MODELS: ImageModelCatalog<typeof values, "zai">;

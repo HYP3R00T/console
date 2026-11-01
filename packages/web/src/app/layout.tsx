@@ -5,6 +5,7 @@ import { ConnectionProvider } from "@/components/connection-provider";
 import { DeviceProvider } from "@/components/devices/device-provider";
 import { AppShell } from "@/components/layout/app-shell";
 import { ThemeProvider } from "@/components/layout/theme-provider";
+import { ProvidersProvider } from "@/components/providers/providers-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
@@ -27,9 +28,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         >
           <ConnectionProvider>
             <DeviceProvider>
-              <TooltipProvider>
-                <AppShell>{children}</AppShell>
-              </TooltipProvider>
+              <ProvidersProvider>
+                <TooltipProvider>
+                  <AppShell>{children}</AppShell>
+                </TooltipProvider>
+              </ProvidersProvider>
             </DeviceProvider>
           </ConnectionProvider>
         </ThemeProvider>

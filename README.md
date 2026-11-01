@@ -30,10 +30,12 @@ native terminal output. No environment file or application configuration is requ
 ## Connect
 
 Open [Connections](http://127.0.0.1:3001/settings/connections), add a named device at `http://127.0.0.1:3000`,
-then open Device settings and select Connect. The left rail lists devices; the adjacent panel shows
+then expand the first column and the device disclosure and select Connect. The left rail lists devices; the adjacent panel shows
 the selected device's navigation. Selecting a device alone does not connect.
 This increment uses URL-only connections on the same machine; no authentication is implemented.
 Disconnect leaves the backend running. Reload keeps saved device bookmarks but starts disconnected.
+Once connected, open Machine settings → Providers to sign in and choose favorite models.
+Provider credentials/favorites live on the backend; the website never stores provider secrets.
 
 ## Checks
 

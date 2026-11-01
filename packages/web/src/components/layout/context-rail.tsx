@@ -1,8 +1,11 @@
 "use client";
 
 import {
+  ArrowLeft,
   ChevronRight,
   Folder,
+  FolderClock,
+  KeyRound,
   Monitor,
   Palette,
   Settings2,
@@ -17,6 +20,9 @@ export function ContextRail() {
   const { deviceId } = useParams<{ deviceId?: string }>();
   const pathname = usePathname();
   const preferences = pathname.startsWith("/settings");
+  const deviceSettings =
+    !!deviceId &&
+    pathname.startsWith(`/devices/${encodeURIComponent(deviceId)}/settings`);
   const expand = () => (isMobile ? setOpenMobile(true) : setOpen(true));
   return (
     <nav
@@ -54,27 +60,71 @@ export function ContextRail() {
         </>
       ) : deviceId ? (
         <>
-          <SidebarAction
-            compact
-            aria-label="Show projects"
-            title="Show projects"
-            onClick={expand}
-          >
-            <Folder />
-          </SidebarAction>
+          {deviceSettings ? (
+            <SidebarAction
+              compact
+              nativeButton={false}
+              render={
+                <Link
+                  href={`/devices/${encodeURIComponent(deviceId)}/settings/providers`}
+                />
+              }
+              aria-label="Providers"
+              title="Providers"
+              aria-current="page"
+              className="bg-sidebar-accent"
+            >
+              <KeyRound />
+            </SidebarAction>
+          ) : (
+            <>
+              <SidebarAction
+                compact
+                nativeButton={false}
+                render={
+                  <Link
+                    href={`/devices/${encodeURIComponent(deviceId)}/preview/main`}
+                  />
+                }
+                aria-label="Example project"
+                title="Example project"
+              >
+                <Folder />
+              </SidebarAction>
+              <SidebarAction
+                compact
+                nativeButton={false}
+                render={
+                  <Link
+                    href={`/devices/${encodeURIComponent(deviceId)}/preview/recent-idea`}
+                  />
+                }
+                aria-label="Recents"
+                title="Recents"
+              >
+                <FolderClock />
+              </SidebarAction>
+            </>
+          )}
           <SidebarAction
             compact
             nativeButton={false}
             render={
               <Link
-                href={`/devices/${encodeURIComponent(deviceId)}/settings`}
+                href={
+                  deviceSettings
+                    ? `/devices/${encodeURIComponent(deviceId)}`
+                    : `/devices/${encodeURIComponent(deviceId)}/settings`
+                }
               />
             }
-            aria-label="Device settings"
-            title="Device settings"
+            aria-label={
+              deviceSettings ? "Back to workspace" : "Machine settings"
+            }
+            title={deviceSettings ? "Back to workspace" : "Machine settings"}
             className="mt-auto"
           >
-            <Settings2 />
+            {deviceSettings ? <ArrowLeft /> : <Settings2 />}
           </SidebarAction>
         </>
       ) : null}

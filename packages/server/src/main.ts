@@ -1,6 +1,12 @@
 import { createApp } from "./app.ts";
 
-const app = createApp({ logger: true });
+import { ProviderService } from "./providers/service.ts";
+import { ProviderStore, providerDatabasePath } from "./providers/store.ts";
+
+const providers = new ProviderService(
+  new ProviderStore(providerDatabasePath()),
+);
+const app = createApp({ logger: true }, providers);
 let stopping = false;
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
