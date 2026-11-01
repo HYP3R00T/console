@@ -1,6 +1,13 @@
 "use client";
 
-import { ChevronLeft, Monitor, Palette, Settings2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  KeyRound,
+  Monitor,
+  Palette,
+  Settings2,
+} from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { useDevices } from "@/components/devices/device-provider";
@@ -21,10 +28,13 @@ export function AppSidebar() {
   const { setOpenMobile, isMobile, setOpen } = useSidebar();
   const device = registry.devices.find((item) => item.id === params.deviceId);
   const preferences = pathname.startsWith("/settings");
+  const deviceSettings =
+    !!device &&
+    pathname.startsWith(`/devices/${encodeURIComponent(device.id)}/settings`);
   const closeMobile = () => setOpenMobile(false);
   return (
     <Sidebar collapsible={isMobile ? "offcanvas" : "none"} className="w-full!">
-      <SidebarHeader className="px-0 py-2">
+      <SidebarHeader className="px-0 pb-3 pt-2">
         <div className="flex w-[55px] shrink-0 justify-center">
           <SidebarAction
             compact
@@ -35,13 +45,8 @@ export function AppSidebar() {
             <ChevronLeft />
           </SidebarAction>
         </div>
-        <h2 className="truncate px-3 text-sm font-semibold">
-          {preferences ? "Preferences" : (device?.name ?? "Workspace")}
-        </h2>
-        {device && (
-          <span className="truncate px-3 font-mono text-[10px] text-muted-foreground">
-            {device.url}
-          </span>
+        {preferences && (
+          <h2 className="truncate px-3 text-sm font-semibold">Preferences</h2>
         )}
       </SidebarHeader>
       <SidebarContent>
@@ -73,6 +78,23 @@ export function AppSidebar() {
               </SidebarAction>
             ))}
           </nav>
+        ) : deviceSettings && device ? (
+          <nav aria-label="Device setting categories" className="px-2">
+            <SidebarAction
+              nativeButton={false}
+              render={
+                <Link
+                  href={`/devices/${encodeURIComponent(device.id)}/settings/providers`}
+                  onClick={closeMobile}
+                />
+              }
+              aria-current="page"
+              className="bg-sidebar-accent"
+            >
+              <KeyRound />
+              <span>Providers</span>
+            </SidebarAction>
+          </nav>
         ) : device ? (
           <ProjectTree
             key={device.id}
@@ -91,16 +113,19 @@ export function AppSidebar() {
             nativeButton={false}
             render={
               <Link
-                href={`/devices/${encodeURIComponent(device.id)}/settings`}
+                href={
+                  deviceSettings
+                    ? `/devices/${encodeURIComponent(device.id)}`
+                    : `/devices/${encodeURIComponent(device.id)}/settings`
+                }
                 onClick={closeMobile}
               />
             }
-            className={
-              pathname.endsWith("/settings") ? "bg-sidebar-accent" : undefined
-            }
           >
-            <Settings2 />
-            <span>Device settings</span>
+            {deviceSettings ? <ArrowLeft /> : <Settings2 />}
+            <span>
+              {deviceSettings ? "Back to workspace" : "Machine settings"}
+            </span>
           </SidebarAction>
         </SidebarFooter>
       )}

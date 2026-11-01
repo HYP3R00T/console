@@ -17,7 +17,9 @@ The master implementation checklist. Verification describes specific checks, not
 | --- | --- | --- |
 | NET-01 | Connection handshake | Unauthenticated Console API version check; no persistent server identity. Server/client tests. |
 | NET-02 | Device selection and connection lifecycle | Browser-local named URL bookmarks, visible device rail, search/add/forget, route selection separate from explicit connect and monitoring; reload disconnects. No remote connections or cross-tab merging. Tests and browser checks. |
-| UI-03 | Settings and device navigation | Two independently collapsible columns: client/device list and backend context. Home shows saved-device status; independently collapsible device rows show real connection metadata and Connect/Disconnect/Cancel in shaded, borderless cards with vertical animation. The primary column selects Home/device/Preferences; contextual device navigation or preference categories occupy the second column, initially collapsed on context entry. Dashed, terminated tree connectors include main/subagent/fork conversations; selection and hover are independent of disclosure state. The hierarchy is a frontend preview only; no real projects, sessions, agents, provider settings, uptime/client-count metrics or split workspace. |
+| UI-03 | Settings and device navigation | Two independently collapsible columns: client/device list and backend context. Home shows saved-device status; independently collapsible device rows show real connection metadata and Connect/Disconnect/Cancel in shaded, borderless cards with vertical animation. The primary column selects Home/device/Preferences; contextual device navigation or preference categories occupy the second column, initially collapsed on context entry. Dashed, terminated tree connectors include main/subagent/fork conversations; selection and hover are independent of disclosure state. Projects and Recents separate project-bound and standalone conversation examples; New conversation opens a preview without creating data. The sidebar omits its Preview badge while content retains the notice. The hierarchy is a frontend preview only; no real projects, sessions, agents, uptime/client-count metrics or split workspace. Backend-scoped provider settings are real. Machine settings replaces the conversation tree with Providers and Back to workspace; device identity and connections remain in the first column. |
+| MOD-01 | Built-in providers, supported login and catalog refresh | Pi AI catalog and generic API-key/OAuth prompt flows, private SQLite storage, disable/reconnect/remove, explicit catalog refresh. Fake-provider integration tests cover API-key/OAuth lifecycle, cancellation, persistence and redaction; live catalog/UI prompt checks. Real credential/OAuth completion and upstream entitlement unverified. |
+| MOD-02 | Model selection and metadata | Backend-persisted favorites, model search, context/output/input/pricing/thinking metadata; favorites API excludes disabled/unavailable providers. Provider/model names share typography, with a 320px desktop provider catalog. Provider/model lists use shadcn Scroll Area and fill remaining desktop height; borderless rows/searches, favorites first and name-aligned details grouped into limits, capabilities and catalog/cache pricing. Catalog scrollbars hide until hover/focus; provider counts have extra right padding. Manual desktop/mobile layout checks; no chat selector, session defaults or execution yet. |
 
 ## Historical IDs: not implemented
 
@@ -41,8 +43,6 @@ committed to a roadmap. Earlier implementation and test claims do not apply to t
 | PRJ-07 | Trash/restore/permanent deletion |
 | PRJ-08 | Isolated checkouts for concurrent editing |
 | PRJ-09 | Diff review and verification-evidence workflow |
-| MOD-01 | Built-in providers, supported login and catalog refresh |
-| MOD-02 | Model/thinking selection and defaults |
 | MOD-03 | Custom/local endpoints, headers and model overrides |
 | MOD-04 | Virtual-model routing |
 | MOD-05 | Attachments and non-text result rendering |
@@ -104,3 +104,7 @@ committed to a roadmap. Earlier implementation and test claims do not apply to t
 | OPS-04 | Crash/reconnect/backpressure/browser regressions |
 | OPS-05 | Measured scale and retention policy |
 | OPS-07 | Publishing/deployment/release automation |
+
+The workspace New conversation action aligns vertically with Home in the primary column.
+Collapsed workspace navigation exposes direct project/Recents folder shortcuts; only the top
+chevron expands the panel. The footer uses the label Machine settings.

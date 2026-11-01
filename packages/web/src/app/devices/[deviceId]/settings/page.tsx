@@ -1,4 +1,10 @@
-import { DeviceWorkspace } from "@/components/workspace/device-workspace";
-export default function DeviceSettings() {
-  return <DeviceWorkspace view="settings" />;
+import { redirect } from "next/navigation";
+
+export default async function DeviceSettings({
+  params,
+}: {
+  params: Promise<{ deviceId: string }>;
+}) {
+  const { deviceId } = await params;
+  redirect(`/devices/${encodeURIComponent(deviceId)}/settings/providers`);
 }

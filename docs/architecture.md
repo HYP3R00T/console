@@ -42,7 +42,7 @@ protocol, not a cryptographically authenticated server identity.
 
 Fastify permits only `http://127.0.0.1:3001` and `http://localhost:3001` as browser origins.
 Requests with other Origin headers are rejected; nonbrowser clients without Origin remain allowed.
-There is no authentication or persistence. Future API authentication belongs at the backend request
+There is no Console client authentication. Provider persistence is described below. Future API authentication belongs at the backend request
 boundary; a website sign-in library alone would not protect Fastify. SSH would be a transport,
 while the connection client remains the single browser request boundary.
 
@@ -81,7 +81,7 @@ workspace and toggles that device's metadata, with a 200ms height transition (re
 Compact device icons remain navigation links. Metadata shows the stored URL,
 client connection state and last successful check, with Connect/Disconnect/Cancel as appropriate.
 The card calls the existing DeviceProvider/ConnectionProvider lifecycle; it adds no new backend API. No
-uptime or connected-client metric is available. Device settings remain in backend context navigation.
+uptime or connected-client metric is available. Machine settings remain in backend context navigation.
 `useDeviceStatus` keeps rail and Home status labels consistent.
 
 Navigation surfaces use client/context tokens, with content retaining the base background. The
@@ -102,13 +102,15 @@ failed, and gray means not connected in this client. These are not independent f
 connection is supported. Route selection determines the viewed device independently of connection state.
 
 The primary column selects Home, a device or Preferences. The adjacent panel shows either that
-device's projects/Device settings or Preferences categories (Appearance and saved bookmarks).
-Device settings currently owns connection checks/connect/disconnect; provider/model configuration
-is not implemented. Future backend-owned preferences belong in that scope, not browser appearance.
+device's projects/Machine settings or Preferences categories (Appearance and saved bookmarks).
+First-column device disclosures own connect/disconnect. Machine settings replaces the project tree
+with a Providers category and Back to workspace; it owns AI provider configuration. Provider
+credentials and favorite models belong to that backend, not browser appearance.
 
 - `/`: cross-device overview of saved devices and the current connection state.
 - `/devices/[deviceId]`: selected device workspace.
-- `/devices/[deviceId]/settings`: connection actions for that bookmark.
+- `/devices/[deviceId]/settings`: redirects to the Providers category.
+- `/devices/[deviceId]/settings/providers`: provider sign-in, enable/remove controls, models and favorites.
 - `/devices/[deviceId]/preview/[conversationId]`: clearly marked frontend examples.
 - `/settings`: redirects to `/settings/connections`.
 - `/settings/connections`: search/open/forget browser-local bookmarks and Add device.
@@ -134,3 +136,73 @@ Geist comes from `next/font`, and the theme radius is overridden to zero. `next-
 appearance with a system default. Tailwind/PostCSS and `shadcn/tailwind.css` supply styling.
 The installed UI source is formatted to repository conventions, with small semantic/lint fixes;
 the sidebar's unused cookie write is omitted. No global lint rules are disabled for generated code.
+
+## Provider management
+
+`packages/server/src/providers/store.ts` owns `~/.local/share/console/providers.sqlite` (directory
+created with mode 0700, file 0600). Credentials are plaintext protected by filesystem permissions,
+not encrypted or an OS keychain. SQLite transactions and a mutation queue serialize credential
+updates, including Pi-owned token refresh; favorites, enabled state, installation identity and
+dynamic catalog cache share this store. `modify` checks cancellation before committing. Reads of
+provider metadata never return credential values. Earlier Console databases and Pi auth.json are untouched.
+
+`service.ts` composes Pi AI 1.4.0's `Models`, `CredentialStore` and `ModelsStore`. Built-in factories
+own provider login prompts and model catalogs. Console supplies a nonambient auth context: no env
+credential lookup or automatic discovery of credential files. Some provider-owned login methods
+can explicitly ask for backend-side profiles/paths; this is local, trusted configuration today.
+
+`routes.ts` owns HTTP schema validation, cache prevention and sanitized errors. Sign-in is a
+bounded backend operation: POST starts it, GET observes it, POST answers a prompt and DELETE
+cancels it. Prompts/events are memory-only, expire after ten minutes, and terminal results remain
+for sixty seconds. One active login per provider is allowed. Disconnect/remove cancels and waits
+for pending login before changing storage, preventing a late login from restoring removed keys.
+A per-provider update guard rejects overlapping login/configuration/catalog mutations while a
+provider update is in progress, including a new login arriving during removal.
+Backend shutdown aborts pending logins before closing storage. Restart requires restarting a pending
+login; completed credentials/favorites persist. There is no durable agent runtime or event SSE yet.
+
+Configured/enabled status means credentials exist and are enabled, not that upstream access was
+verified. Pi handles model availability filtering and thinking-level metadata. Explicit catalog
+refresh invokes only that provider's refresh implementation; static catalogs are no-ops. Cached
+dynamic catalogs are restored by the provider refresh path; a restart may require Refresh catalog
+before dynamic-only favorites become available. Disabling retains favorites; removing clears local
+configuration/cache. Neither action revokes an upstream OAuth grant. Future execution must enforce
+enabled state and use the same filtered favorites boundary; catalog presence alone grants no access.
+
+`packages/web/src/components/providers/` owns backend-scoped metadata, settings
+and sign-in dialogs. The connection origin scopes requests and state; switching/disconnecting aborts
+obsolete requests. Overview refreshes use a sequence guard; stale responses cannot overwrite newer
+mutation results. Login polling runs sequentially; secret input is scoped to the current prompt and
+never written to browser storage. The page lists provider methods, searches models and stars favorites;
+`GET /v1/models/favorites` is the contract for a future chat picker, not an implemented chat selector.
+
+The implementation follows [Pi Pocket's provider flow](https://github.com/TannerMidd/pi-pocket/blob/db1e531d492f9ce231ba7a9761c52c0ebc7becc0/src/server/providers.ts)
+and [Pi AI's provider/auth API](https://github.com/earendil-works/pi/tree/main/packages/ai). Unlike
+Pi Pocket, Console owns a separate credential store rather than sharing Pi's auth.json.
+A pnpm patch adds missing JSON import attributes to Pi AI's published declaration files, preserving
+strict NodeNext checks. The Google SDK's optional MCP type peer is a development dependency;
+no MCP capability is exposed. Reviewed Google/protobuf lifecycle scripts are explicitly approved.
+
+Provider settings use shadcn Scroll Area for both catalogs. On desktop, each list fills the
+remaining content-pane height and scrolls independently; smaller screens stack the catalogs.
+Model rows are contiguous and borderless. Search fields use shaded backgrounds
+without borders, retaining keyboard focus indicators.
+
+Catalog scrollbars hide when idle and appear on hover or keyboard focus. The provider list
+reserves extra right padding so model counts remain clear of the scrollbar.
+
+Starred models sort first within the selected provider, preserving catalog order within each group.
+Expanded details align with the model name and group prominent token limits, capabilities and
+secondary catalog pricing (input/output/cache read/cache write). Model rows have no separators.
+
+The desktop provider catalog is 320px wide. Provider and model names share the same text size
+and weight; metadata remains secondary.
+
+Workspace navigation separates Projects from Recents (conversations outside projects), with a
+New conversation entry. These entries open frontend examples only: they create no conversations,
+folders or files. The sidebar omits the Preview badge; the content view retains its explicit
+preview notice. Recents does not represent a live activity feed or persisted history yet.
+
+The workspace New conversation action aligns vertically with Home in the primary column.
+Collapsed workspace navigation exposes direct project/Recents folder shortcuts; only the top
+chevron expands the panel. The footer uses the label Machine settings.

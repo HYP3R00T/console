@@ -6,7 +6,8 @@ A Next.js/React client at `http://127.0.0.1:3001/` with a full-width shadcn Base
 
 - `/`: cross-device overview showing saved devices, current connection state and Add device.
 - `/devices/[deviceId]`: selected device workspace.
-- `/devices/[deviceId]/settings`: explicit connect, check and disconnect.
+- `/devices/[deviceId]/settings`: redirects to provider settings.
+- `/devices/[deviceId]/settings/providers`: provider sign-in/enable/remove, model metadata and favorites.
 - `/devices/[deviceId]/preview/[conversationId]`: simulated conversation/subagent/fork view.
 - `/settings`: redirects to saved devices.
 - `/settings/connections`: browser-local bookmarks, search, open, forget and Add device.
@@ -72,3 +73,46 @@ Client tests cover connection policy and bookmark validation. Types/build check 
 Manual browser checks cover saved-device navigation/search/connect, reload persistence, pointer/keyboard resizing,
 independent column collapse, route-dependent context visibility, initially collapsed context entry, inline device disclosures, Home overview, width restoration, project preview collapse, client/device scope switching, category navigation, theme controls and mobile navigation. There is no automated browser suite or cross-tab merge protocol.
 See [README](../../README.md#checks) for shared checks.
+
+## AI provider settings
+
+Expand the first column and a device disclosure to connect/disconnect. Machine settings switches
+second-column content from the project tree to Providers; Back to workspace restores projects.
+The settings route opens Providers directly. Device identity/URL and provider-count shortcuts are
+not duplicated in the second column.
+
+Search the catalog and choose a provider. Its API-key/subscription buttons start the methods Pi AI
+actually offers. A dialog renders backend-owned secret/text/choice/code prompts and external HTTPS
+sign-in links. Cancel stops the pending operation; no credential is stored in localStorage. Secrets
+are never populated back into the page. Disconnect provider retains credentials/favorites; Remove
+clears local backend configuration and does not revoke an upstream grant.
+
+Models show catalog context/output sizes, inputs, thinking levels and token pricing. Stars persist
+on the backend; only available favorites from enabled providers are returned by the future-picker
+API. No chat picker exists yet. Metadata and configured status do not verify account entitlement.
+The provider overview polls every ten seconds; login steps poll sequentially with cancellation and
+backend-origin scoping. Real provider credentials/OAuth completion require user verification.
+
+Provider settings use shadcn Scroll Area for both catalogs. On desktop, each list fills the
+remaining content-pane height and scrolls independently; smaller screens stack the catalogs.
+Model rows are contiguous and borderless. Search fields use shaded backgrounds
+without borders, retaining keyboard focus indicators.
+
+Catalog scrollbars hide when idle and appear on hover or keyboard focus. The provider list
+reserves extra right padding so model counts remain clear of the scrollbar.
+
+Starred models sort first within the selected provider, preserving catalog order within each group.
+Expanded details align with the model name and group prominent token limits, capabilities and
+secondary catalog pricing (input/output/cache read/cache write). Model rows have no separators.
+
+The desktop provider catalog is 320px wide. Provider and model names share the same text size
+and weight; metadata remains secondary.
+
+Workspace navigation separates Projects from Recents (conversations outside projects), with a
+New conversation entry. These entries open frontend examples only: they create no conversations,
+folders or files. The sidebar omits the Preview badge; the content view retains its explicit
+preview notice. Recents does not represent a live activity feed or persisted history yet.
+
+The workspace New conversation action aligns vertically with Home in the primary column.
+Collapsed workspace navigation exposes direct project/Recents folder shortcuts; only the top
+chevron expands the panel. The footer uses the label Machine settings.
