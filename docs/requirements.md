@@ -1,21 +1,13 @@
-# Console requirements
+# Requirements
 
-The current baseline is intentionally limited to a health endpoint and a Hello World website.
-Product functionality will be designed and delivered in separate increments.
+Console currently provides only a local Hello World baseline:
 
-## Implemented scope
+- Fastify: `GET /health` returns HTTP 200 and `{"status":"ok"}`.
+- Next.js: `/` displays "Hello, world!" with browser-default styles.
+- Server and web run independently on loopback ports 3000 and 3001.
+- Both use native terminal output and require no application configuration.
 
-- A Fastify server listening on `127.0.0.1:3000`.
-- `GET /health` returns HTTP 200 and `{"status":"ok"}`.
-- A Next.js website on `127.0.0.1:3001`, displaying "Hello, world!" at `/`.
-- Type checking, a server HTTP smoke test, builds and repository quality checks.
-
-There is no connection between the website and server. There are no application components,
-providers, agent runtime, projects, sessions, storage, authentication or proxy routes.
-No environment file, environment-variable configuration, CLI options or data directory is required.
-
-## Reset boundary
-
-Earlier application code, tests, UI dependencies and obsolete design records have been removed.
-Existing user data outside the source tree is untouched; this baseline neither reads nor migrates it.
-Historical feature IDs remain in the feature inventory for reference, not as an approved roadmap.
+The website does not connect to the server. Agent execution, projects, sessions, authentication,
+persistence and remote access are not implemented. Existing data from earlier experiments is
+untouched and unused. Future capabilities require separate design and implementation decisions;
+the historical feature inventory is not an approved roadmap.

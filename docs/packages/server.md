@@ -1,27 +1,24 @@
 # Server
 
-A minimal Node.js/TypeScript Fastify application. Its only application route is:
+A Node.js/TypeScript Fastify application, listening on `127.0.0.1:3000`.
 
 | Method | Path | Response |
 | --- | --- | --- |
 | GET | `/health` | HTTP 200, `{"status":"ok"}` |
 
-Health means the HTTP process can answer. No dependency readiness or agent functionality is implied.
-Other application paths return Fastify's normal 404 response.
+Other application paths return 404. Health indicates HTTP liveness only.
 
-## Run
+## Commands
 
-From the repository root, install tools with `mise install` and dependencies with
-`pnpm install --frozen-lockfile`. Use `pnpm dev:server` for development, or `pnpm build`
-then `pnpm --filter @console/server start` for the compiled server.
-The server listens on `127.0.0.1:3000`. There are no custom startup flags, environment settings or storage.
+Run from the repository root after the [shared setup](../../README.md#development):
 
-`src/app.ts` constructs the app; `src/main.ts` owns listening and shutdown.
-`test/app.test.ts` exercises the HTTP contract using Fastify injection without a listening socket.
+```bash
+mise run dev:server
+```
 
-## Verification
+For production, run `pnpm build`, then `pnpm --filter @console/server start`.
+Fastify provides native JSON logs. Ctrl+C closes the server; development uses Node watch mode.
+No custom flags, configuration or storage are provided.
 
-Run root `pnpm typecheck`, `pnpm test`, `pnpm build` and `prek run --all-files`.
-New files also require `prek run --files` with explicit paths.
-Use the owner's running development servers; do not start, stop or restart them without permission.
-After this reset the owner should restart existing development processes to unload removed code.
+See [architecture](../architecture.md) for the source map and the [README](../../README.md#checks)
+for checks. The HTTP test uses Fastify injection and does not start a listening server.

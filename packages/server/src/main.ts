@@ -1,9 +1,12 @@
 import { createApp } from "./app.ts";
 
-const app = createApp();
+const app = createApp({ logger: true });
+let stopping = false;
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
+    if (stopping) return;
+    stopping = true;
     void app.close().catch((error: unknown) => {
       app.log.error(error);
       process.exitCode = 1;
@@ -16,4 +19,5 @@ try {
 } catch (error) {
   app.log.error(error);
   process.exitCode = 1;
+  await app.close();
 }

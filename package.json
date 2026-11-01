@@ -6,7 +6,6 @@
     "changeset": "changeset",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "dev": "mise run dev",
     "dev:server": "pnpm --filter @console/server dev",
     "dev:web": "pnpm --filter @console/web dev",
     "test": "pnpm -r --if-present test",

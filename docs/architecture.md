@@ -1,31 +1,23 @@
-# Console architecture
+# Architecture
 
-Two independent applications share workspace tooling. There is no application integration yet.
+Two independent applications share workspace tooling:
 
 ```text
 Browser → Next.js (127.0.0.1:3001) → Hello World page
 HTTP client → Fastify (127.0.0.1:3000) → GET /health
 ```
 
-## Server
+| File | Responsibility |
+| --- | --- |
+| `packages/server/src/app.ts` | Construct Fastify and register health; accepts native Fastify options. |
+| `packages/server/src/main.ts` | Listen, enable native logging and close on SIGINT/SIGTERM. |
+| `packages/server/test/app.test.ts` | Check health and a missing route without opening a port. |
+| `packages/web/src/app/layout.tsx` | Required HTML/body layout and page metadata. |
+| `packages/web/src/app/page.tsx` | Render the home page. |
 
-- `packages/server/src/app.ts` constructs Fastify and registers the health endpoint.
-- `packages/server/src/main.ts` starts the listener and handles graceful shutdown on SIGINT/SIGTERM.
-- `packages/server/test/app.test.ts` checks health and the absence of the former project endpoint.
+There is no application integration, database, domain layer, custom UI library or launcher.
+Node watch mode restarts the backend after source edits; Next.js owns web hot reload.
+The root `dev:server` and `dev:web` scripts are also exposed as separate Mise tasks.
 
-The app factory allows HTTP tests without opening a port. There are no domain modules,
-services, repositories, external runtimes or persistence layers.
-
-## Website
-
-- `packages/web/src/app/layout.tsx` supplies the required HTML/body layout and page metadata.
-- `packages/web/src/app/page.tsx` renders the Hello World heading.
-
-There are no custom styles, fonts, UI components, state stores, settings, API clients or proxies.
-Next.js and React remain; Tailwind and the previous component system are removed.
-
-## Future changes
-
-Start each increment with one user operation, its state owner and its failure cases.
-Add modules only when implemented responsibilities require them. Update requirements and the
-feature inventory with concrete implementation and verification evidence.
+For each future increment, identify one user operation, its state owner and failure cases before
+adding modules. Keep requirements and the feature inventory aligned with implemented behavior.
