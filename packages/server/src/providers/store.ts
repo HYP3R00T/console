@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { chmodSync, closeSync, mkdirSync, openSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { join } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import type {
   AuthOperationOptions,
   Credential,
@@ -10,6 +9,7 @@ import type {
   ModelsStore,
   ModelsStoreEntry,
 } from "@earendil-works/pi-ai";
+import { openDatabase } from "../storage/database.ts";
 
 export const providerDatabasePath = () =>
   join(homedir(), ".local", "share", "console", "providers.sqlite");
@@ -18,13 +18,7 @@ export class ProviderStore implements CredentialStore {
   readonly db: DatabaseSync;
   private tail: Promise<unknown> = Promise.resolve();
   constructor(path = ":memory:") {
-    if (path !== ":memory:") {
-      mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-      const fd = openSync(path, "a", 0o600);
-      closeSync(fd);
-      chmodSync(path, 0o600);
-    }
-    this.db = new DatabaseSync(path);
+    this.db = openDatabase(path);
     this.db.exec(`PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS providers (id TEXT PRIMARY KEY, credential TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1);
       CREATE TABLE IF NOT EXISTS favorites (provider TEXT NOT NULL, model TEXT NOT NULL, PRIMARY KEY(provider,model));

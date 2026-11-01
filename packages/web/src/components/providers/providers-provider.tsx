@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useConnection } from "@/components/connection-provider";
+import { useBackendRequest } from "@/hooks/use-backend-request";
 import type { ProviderOverview } from "@/lib/providers";
 
 type State = {
@@ -21,7 +21,7 @@ type State = {
 };
 const Context = createContext<State | null>(null);
 export function ProvidersProvider({ children }: { children: ReactNode }) {
-  const { origin } = useConnection();
+  const { origin, request } = useBackendRequest();
   const refreshVersion = useRef(0);
   const latest = useRef(origin);
   latest.current = origin;
@@ -31,38 +31,6 @@ export function ProvidersProvider({ children }: { children: ReactNode }) {
     overview?: ProviderOverview;
     error?: string;
   }>();
-  const request = useCallback(
-    async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
-      if (!origin) throw new Error("Connect this backend first.");
-      const signal = AbortSignal.any([
-        AbortSignal.timeout(20000),
-        ...(scope.current ? [scope.current.signal] : []),
-        ...(init.signal ? [init.signal] : []),
-      ]);
-      const response = await fetch(`${origin}${path}`, {
-        ...init,
-        headers: {
-          ...(init.body ? { "Content-Type": "application/json" } : {}),
-          ...init.headers,
-        },
-        credentials: "omit",
-        redirect: "error",
-        cache: "no-store",
-        signal,
-      });
-      const data = await response.json();
-      if (latest.current !== origin)
-        throw new Error("The backend connection changed.");
-      if (!response.ok)
-        throw new Error(
-          typeof data.error === "string"
-            ? data.error
-            : `Backend returned HTTP ${response.status}.`,
-        );
-      return data as T;
-    },
-    [origin],
-  );
   const refresh = useCallback(async () => {
     if (!origin) return;
     const version = ++refreshVersion.current;

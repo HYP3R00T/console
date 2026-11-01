@@ -22,9 +22,9 @@ connection state, last successful check and Connect/Disconnect/Cancel. Row and d
 borderless card background; selected cards are shaded. Compact device icons navigate.
 Selecting a device never connects automatically.
 
-The adjacent backend panel shows its collapsible project/session/conversation preview and Device
+The adjacent backend panel shows its registered project list and standalone conversation previews and Device
 settings. Selecting Preferences instead places saved-device and Appearance categories in the second column.
-Projects and agent relationships are examples; no backend workspace APIs exist yet. Uptime and
+Projects are real directory registrations; sessions and agent relationships remain examples. Uptime and
 connected-client metrics are unavailable and are not simulated.
 
 The context column is absent on Home, animating its occupied width to zero without translating
@@ -56,7 +56,7 @@ The official CLI installed the user-selected preset `bddBUJXM`: Base UI Lyra, Zi
 Lucide. The theme radius is set to zero. `components.json` configures future component installs;
 use library components from `src/components/ui` before creating a custom primitive.
 
-`src/components/layout` owns the shell/sidebar, `devices` owns bookmark state, `workspace` owns device views and the project preview,
+`src/components/layout` owns the shell/sidebar, `devices` owns bookmark state, `workspace` owns machine views and project navigation,
 and `settings` owns saved-device management, Add device and Appearance views. `connection-provider.tsx` owns connection lifecycle. Shared validation
 lives in `src/lib/connection.ts` and `src/lib/devices.ts`. See [architecture](../architecture.md).
 
@@ -71,13 +71,13 @@ Next.js provides native output. Do not start, stop or restart the owner's develo
 
 Client tests cover connection policy and bookmark validation. Types/build check integration.
 Manual browser checks cover saved-device navigation/search/connect, reload persistence, pointer/keyboard resizing,
-independent column collapse, route-dependent context visibility, initially collapsed context entry, inline device disclosures, Home overview, width restoration, project preview collapse, client/device scope switching, category navigation, theme controls and mobile navigation. There is no automated browser suite or cross-tab merge protocol.
+independent column collapse, route-dependent context visibility, initially collapsed context entry, inline device disclosures, Home overview, width restoration, project registration/navigation, client/device scope switching, category navigation, theme controls and mobile navigation. There is no automated browser suite or cross-tab merge protocol.
 See [README](../../README.md#checks) for shared checks.
 
 ## AI provider settings
 
 Expand the first column and a device disclosure to connect/disconnect. Machine settings switches
-second-column content from the project tree to Providers; Back to workspace restores projects.
+second-column content from the project tree to Providers/Projects categories; Back to workspace restores projects.
 The settings route opens Providers directly. Device identity/URL and provider-count shortcuts are
 not duplicated in the second column.
 
@@ -109,10 +109,43 @@ The desktop provider catalog is 320px wide. Provider and model names share the s
 and weight; metadata remains secondary.
 
 Workspace navigation separates Projects from Recents (conversations outside projects), with a
-New conversation entry. These entries open frontend examples only: they create no conversations,
-folders or files. The sidebar omits the Preview badge; the content view retains its explicit
+New conversation entry. New conversation and Recents open frontend examples only: they create no conversations,
+folders or files; Project rows expand in place; their gear opens settings. The sidebar omits the Preview badge; the content view retains its explicit
 preview notice. Recents does not represent a live activity feed or persisted history yet.
 
 The workspace New conversation action aligns vertically with Home in the primary column.
 Collapsed workspace navigation exposes direct project/Recents folder shortcuts; only the top
 chevron expands the panel. The footer uses the label Machine settings.
+
+## Register a project
+
+Connect a machine using its first-column disclosure. Use Add project beside Projects (or the plus
+in the compact workspace rail), enter a name and an absolute existing directory path on that machine,
+and register it. Both sidebar modes show real registrations. Expand a project row for its sessions (currently empty); use its gear for name/icon/color, an inline path/status dot, metadata refresh and Git inspection. Remove registration asks for confirmation and leaves all files untouched; registering
+the directory again restores a new registry entry, not the old ID. Missing directories are retained
+as unavailable. Reload keeps registrations on the backend but still requires explicit reconnection.
+
+Project routes: `/devices/[deviceId]/projects/new` and `/devices/[deviceId]/projects/[projectId]`.
+Project appearance settings are implemented; sessions and agent execution are not. The shared backend
+request hook handles provider and project requests; project state is isolated by connected origin.
+
+## Add project modes
+
+Machine settings → Projects configures the machine projects folder (backend `~/Projects` initially).
+The Add project screen uses shadcn Tabs: Existing directory registers a path; New project initializes
+Git under the default folder; Clone repository accepts a public HTTPS Git URL and clones there.
+Names/folder names are suggested, editable, and previewed as the final destination. Existing paths
+can live outside the default root. Create missing parent folders is an explicit checkbox; collisions
+show errors rather than overwrite. Clone uses no ambient machine credentials; private Git login is
+future work. Cancel setup aborts the HTTP operation. Closing/reloading can interrupt setup, so check
+the destination before retrying. No initial commit, submodule setup or Git pull is offered.
+
+Project settings use `/devices/[deviceId]/projects/[projectId]/settings`. Name, icon and color persist on the backend; directory paths cannot be changed here. The Add project desktop form/destination columns use a 2:1 ratio.
+
+Project settings loads a read-only Git snapshot on entry and explicit refresh: current branch, collapsible local branch list/count and worktree paths/branches/count. The status square beside the Directory label is green for accessible and red for unavailable, with an accessible label and hover description. It does not imply Git health. Git state is not polled with project registration lists. No remote branch discovery or history is shown.
+
+Project settings spans the content pane. Its top-right removal action retains confirmation and preserves files. Name/icon editing occupies the first column beside directory details; narrow content panes stack these columns; the name input uses a shaded surface and one inset focus indicator. The picker provides 32 searchable icons and eight colors. Git branches and worktrees use separate shaded sections (side by side on desktop), with blue squares marking current items, heading-sized counts and one explicit Refresh action.
+
+The project header shows only the project name and a red Delete action with a trash icon. Delete removes the registration only; confirmation states that files stay on the machine. The main worktree uses the display label Main; linked worktrees use directory names. The compact list omits per-worktree branch lines. Redundant Git summary/current-branch lines are omitted. Current list items retain accessible current-state semantics.
+
+Save changes appears in the header immediately before Delete only when the name/icon/color differs from the last saved values; reverting an edit hides it. The header button submits the associated form, preserving keyboard validation. The refresh icon beside the project name reloads directory and Git metadata and is disabled while that snapshot loads. Current worktrees use the same shaded background and blue square as current branches.

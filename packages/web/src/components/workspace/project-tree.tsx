@@ -1,16 +1,18 @@
 "use client";
-
 import {
-  Bot,
   ChevronRight,
-  Folder,
-  GitBranch,
-  Layers,
+  type Folder,
+  FolderClock,
   MessageSquare,
+  Plus,
+  Settings,
   SquarePen,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { SidebarAction } from "@/components/layout/sidebar-action";
+import { ProjectIcon } from "@/components/projects/project-icon";
+import { useMachineProjects } from "@/components/projects/projects-provider";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -21,100 +23,146 @@ import { cn } from "@/lib/utils";
 
 export function ProjectTree({
   deviceId,
-  closeMobile,
+  closeMobile = () => {},
+  compact = false,
 }: {
   deviceId: string;
-  closeMobile: () => void;
+  closeMobile?: () => void;
+  compact?: boolean;
 }) {
-  const base = `/devices/${encodeURIComponent(deviceId)}/preview`;
+  const { projects, connected, error } = useMachineProjects(deviceId);
+  const base = `/devices/${encodeURIComponent(deviceId)}`;
   const pathname = usePathname();
-  function conversation(id: string, label: string, Icon: typeof MessageSquare) {
-    const href = `${base}/${id}`;
+  function link(href: string, label: string, Icon: typeof Folder) {
     return (
-      <Button
+      <SidebarAction
+        key={href}
+        compact={compact}
         nativeButton={false}
-        variant="ghost"
+        render={<Link href={href} onClick={closeMobile} />}
+        aria-label={label}
+        title={compact ? label : undefined}
+        aria-current={pathname === href ? "page" : undefined}
         className={cn(
-          "navigation-row h-9 w-full justify-start gap-2 px-2",
+          "navigation-row",
           pathname === href && "bg-sidebar-accent",
         )}
-        render={<Link href={href} onClick={closeMobile} />}
-        aria-current={pathname === href ? "page" : undefined}
       >
-        <Icon className="size-4" />
-        <span className="truncate">{label}</span>
-      </Button>
+        <Icon />
+        {!compact && <span className="truncate">{label}</span>}
+      </SidebarAction>
     );
   }
+  const projectLinks = projects?.map((p) => {
+    const href = `${base}/projects/${encodeURIComponent(p.id)}`;
+    if (compact)
+      return (
+        <SidebarAction
+          key={p.id}
+          compact
+          nativeButton={false}
+          render={<Link href={href} onClick={closeMobile} />}
+          aria-label={p.name}
+          title={p.name}
+        >
+          <ProjectIcon icon={p.icon} color={p.color} />
+        </SidebarAction>
+      );
+    return (
+      <Collapsible key={p.id} className="group/project">
+        <div
+          className={cn(
+            "flex items-center",
+            pathname.startsWith(href) && "bg-sidebar-accent",
+          )}
+        >
+          <CollapsibleTrigger className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-sm hover:bg-sidebar-accent [&[aria-expanded=true]>svg:first-child]:rotate-90">
+            <ChevronRight className="size-3 shrink-0 transition-transform" />
+            <ProjectIcon icon={p.icon} color={p.color} />
+            <span className="truncate">{p.name}</span>
+            {!p.available && (
+              <span
+                className="size-1.5 shrink-0 bg-destructive"
+                title="Directory unavailable"
+              />
+            )}
+          </CollapsibleTrigger>
+          <Button
+            nativeButton={false}
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0"
+            aria-label={`Settings for ${p.name}`}
+            title="Project settings"
+            render={<Link href={`${href}/settings`} onClick={closeMobile} />}
+          >
+            <Settings className="size-3.5" />
+          </Button>
+        </div>
+        <CollapsibleContent className="overflow-hidden">
+          <p className="py-3 pl-11 text-xs text-muted-foreground">
+            No sessions yet.
+          </p>
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  });
+  if (compact)
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+        {link(`${base}/projects/new`, "Add project", Plus)}
+        {projectLinks}
+        {link(`${base}/preview/recent-idea`, "Recents", FolderClock)}
+      </div>
+    );
   return (
     <div className="min-w-0 space-y-6 px-2">
-      {conversation("new", "New conversation", SquarePen)}
+      {link(`${base}/preview/new`, "New conversation", SquarePen)}
       <section aria-label="Projects">
-        <div className="mb-2 flex items-center justify-between px-3">
+        <div className="mb-2 flex items-center justify-between pl-3">
           <h3 className="text-xs font-medium text-muted-foreground">
             Projects
           </h3>
-        </div>
-        <Collapsible defaultOpen className="group/project">
-          <CollapsibleTrigger
+          <Button
+            nativeButton={false}
+            variant="ghost"
+            size="icon"
+            aria-label="Add project"
+            title="Add project"
             render={
-              <Button
-                variant="ghost"
-                className="navigation-row h-9 w-full justify-start gap-2 px-2"
-              />
+              <Link href={`${base}/projects/new`} onClick={closeMobile} />
             }
           >
-            <ChevronRight className="size-3 transition-transform group-data-open/project:rotate-90" />
-            <Folder className="size-4" />
-            <span className="truncate">Example project</span>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <ul className="tree-children">
-              <li className="tree-branch">
-                <Collapsible defaultOpen className="group/session">
-                  <CollapsibleTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        className="navigation-row h-9 w-full justify-start gap-2 px-2"
-                      />
-                    }
-                  >
-                    <ChevronRight className="size-3 transition-transform group-data-open/session:rotate-90" />
-                    <Layers className="size-4" />
-                    <span className="truncate">Example session</span>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <ul className="tree-children">
-                      <li className="tree-branch">
-                        {conversation(
-                          "main",
-                          "Main conversation",
-                          MessageSquare,
-                        )}
-                        <ul className="tree-children">
-                          <li className="tree-branch">
-                            {conversation("subagent", "Subagent preview", Bot)}
-                          </li>
-                        </ul>
-                      </li>
-                      <li className="tree-branch">
-                        {conversation("fork", "Fork preview", GitBranch)}
-                      </li>
-                    </ul>
-                  </CollapsibleContent>
-                </Collapsible>
-              </li>
-            </ul>
-          </CollapsibleContent>
-        </Collapsible>
+            <Plus className="size-4" />
+          </Button>
+        </div>
+        {projectLinks}
+        {!connected ? (
+          <p className="px-3 text-xs text-muted-foreground">
+            Connect this machine to see projects.
+          </p>
+        ) : error ? (
+          <p role="alert" className="px-3 text-xs text-destructive">
+            {error}
+          </p>
+        ) : !projects ? (
+          <p className="px-3 text-xs text-muted-foreground">
+            Loading projects…
+          </p>
+        ) : !projects.length ? (
+          <p className="px-3 text-xs text-muted-foreground">No projects yet.</p>
+        ) : null}
       </section>
       <section aria-label="Recents">
         <h3 className="mb-2 px-3 text-xs font-medium text-muted-foreground">
           Recents
         </h3>
-        {conversation("recent-idea", "Explore an idea", MessageSquare)}
-        {conversation("recent-question", "Quick question", MessageSquare)}
+        {link(`${base}/preview/recent-idea`, "Explore an idea", MessageSquare)}
+        {link(
+          `${base}/preview/recent-question`,
+          "Quick question",
+          MessageSquare,
+        )}
       </section>
     </div>
   );

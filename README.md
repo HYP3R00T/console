@@ -53,3 +53,12 @@ prek run --all-files
 - [Server](docs/packages/server.md) and [Web](docs/packages/web.md): application commands and contracts.
 - [Feature inventory](docs/features.md): implementation status and historical IDs.
 - [Releases](docs/releases.md): versions and Changesets.
+
+Register existing project directories from Add project in the workspace sidebar. Registrations live
+on the selected backend; removing one preserves its directory and files. Sessions and execution are
+not implemented yet.
+
+Machine settings → Projects sets the default projects folder (initially backend `~/Projects`).
+Add project supports existing directories, new Git repositories, and public HTTPS clones.
+Install Git on the backend for new/clone setup; no personal Git credentials/configuration is needed.
+Private repository authentication and SSH cloning are not implemented yet.

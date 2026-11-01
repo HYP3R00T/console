@@ -1,6 +1,7 @@
 import cors from "@fastify/cors";
 import Fastify, { type FastifyServerOptions } from "fastify";
-
+import { registerProjectRoutes } from "./projects/routes.ts";
+import type { ProjectService } from "./projects/service.ts";
 import { registerProviderRoutes } from "./providers/routes.ts";
 import type { ProviderService } from "./providers/service.ts";
 
@@ -9,8 +10,12 @@ const webOrigins = ["http://127.0.0.1:3001", "http://localhost:3001"];
 export function createApp(
   options: FastifyServerOptions = {},
   providers?: ProviderService,
+  projects?: ProjectService,
 ) {
-  const app = Fastify(options);
+  const app = Fastify({
+    ajv: { customOptions: { removeAdditional: false } },
+    ...options,
+  });
   app.addHook("onRequest", async (request, reply) => {
     const origin = request.headers.origin;
     if (origin !== undefined && !webOrigins.includes(origin)) {
@@ -31,6 +36,10 @@ export function createApp(
   if (providers) {
     registerProviderRoutes(app, providers);
     app.addHook("onClose", () => providers.close());
+  }
+  if (projects) {
+    registerProjectRoutes(app, projects);
+    app.addHook("onClose", async () => projects.close());
   }
   return app;
 }
