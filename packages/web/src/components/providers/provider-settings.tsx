@@ -62,7 +62,9 @@ function ProviderSettingsContent() {
         (selectedId ?? providers.find((p) => p.configured)?.id ?? "openai"),
     ) ?? providers[0];
   const models =
-    modelData?.provider === selected?.id ? modelData.models : undefined;
+    modelData && modelData.provider === selected?.id
+      ? modelData.models
+      : undefined;
   useEffect(() => {
     if (!selected) return;
     const controller = new AbortController();
