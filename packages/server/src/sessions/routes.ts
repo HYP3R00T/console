@@ -1,234 +1,160 @@
+import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { FastifyInstance } from "fastify";
-import type { openSessions } from "./catalog.ts";
-import { registerConversationRoutes } from "./conversation-routes.ts";
-import { nameBody, params, string } from "./schemas.ts";
+import type { sessionService } from "./service.ts";
+
+const name = { type: "string", minLength: 1, maxLength: 80, pattern: "\\S" };
+const requestId = {
+  type: "string",
+  minLength: 1,
+  maxLength: 200,
+  pattern: "\\S",
+};
+const params = {
+  type: "object",
+  required: ["id"],
+  additionalProperties: false,
+  properties: { id: { type: "string", format: "uuid" } },
+};
+const creation = {
+  type: "object",
+  additionalProperties: false,
+  required: ["name", "requestId"],
+  properties: { name, requestId },
+};
+const rename = {
+  type: "object",
+  additionalProperties: false,
+  required: ["name"],
+  properties: { name },
+};
+type Id = { Params: { id: string } };
 
 export function registerSessionRoutes(
   app: FastifyInstance,
-  sessions: Awaited<ReturnType<typeof openSessions>>,
+  service: Awaited<ReturnType<typeof sessionService>>,
 ) {
-  app.get("/state", () => sessions.state.get());
-  app.put<{ Body: { value: Record<string, unknown>; revision: number } }>(
-    "/state",
+  app.get("/projects", () => service.projects.list());
+  app.post<{ Body: { name: string; path: string; requestId: string } }>(
+    "/projects",
     {
       schema: {
         body: {
-          type: "object",
-          additionalProperties: false,
-          required: ["value", "revision"],
+          ...creation,
+          required: ["name", "path", "requestId"],
           properties: {
-            value: { type: "object", additionalProperties: true },
-            revision: { type: "integer", minimum: 0 },
+            ...creation.properties,
+            path: { type: "string", minLength: 1, maxLength: 2000 },
           },
-        },
-      },
-    },
-    (req) => sessions.state.save(req.body.value, req.body.revision),
-  );
-  app.post<{
-    Params: { id: string };
-    Body: { name?: string; requestId: string };
-  }>(
-    "/workspaces/:id/conversations",
-    {
-      schema: {
-        params,
-        body: {
-          ...nameBody,
-          required: ["requestId"],
-          properties: { ...nameBody.properties, requestId: string },
         },
       },
     },
     async (req, reply) =>
-      reply
-        .code(201)
-        .send(
-          await sessions.startConversation(
-            req.params.id,
-            req.body.name ?? "",
-            req.body.requestId,
-          ),
-        ),
+      reply.code(201).send(await service.projects.create(req.body)),
   );
-  app.get<{ Params: { id: string } }>(
-    "/workspaces/:id/memory",
-    { schema: { params } },
-    (req) => sessions.projectMemory(req.params.id),
+  app.patch<Id & { Body: { name: string } }>(
+    "/projects/:id",
+    { schema: { params, body: rename } },
+    (req) => service.projects.rename(req.params.id, req.body.name),
   );
-  app.put<{
-    Params: { id: string };
-    Body: { value: Record<string, unknown>; revision: number };
-  }>(
-    "/workspaces/:id/memory",
+  app.get<Id>("/projects/:id/sessions", { schema: { params } }, (req) =>
+    service.list(req.params.id),
+  );
+  app.post<Id & { Body: { name: string; requestId: string } }>(
+    "/projects/:id/sessions",
+    { schema: { params, body: creation } },
+    async (req, reply) =>
+      reply.code(201).send(await service.create(req.params.id, req.body)),
+  );
+  app.get<Id>("/sessions/:id", { schema: { params } }, (req) =>
+    service.get(req.params.id),
+  );
+  app.patch<Id & { Body: { name: string } }>(
+    "/sessions/:id",
+    { schema: { params, body: rename } },
+    (req) => service.rename(req.params.id, req.body.name),
+  );
+  app.get<Id & { Querystring: { before?: string } }>(
+    "/sessions/:id/history",
     {
       schema: {
         params,
-        body: {
-          type: "object",
-          required: ["value", "revision"],
-          additionalProperties: false,
-          properties: {
-            value: { type: "object", additionalProperties: true },
-            revision: { type: "integer", minimum: 0 },
-          },
-        },
-      },
-    },
-    (req) => sessions.projectMemory(req.params.id, req.body),
-  );
-  app.delete<{ Params: { id: string } }>(
-    "/sessions/:id/permanent",
-    async (req, reply) => {
-      await sessions.purge(req.params.id);
-      return reply.code(204).send();
-    },
-  );
-  app.delete<{ Params: { id: string; conversationId: string } }>(
-    "/sessions/:id/conversations/:conversationId/permanent",
-    async (req, reply) => {
-      await sessions.purge(req.params.id, req.params.conversationId);
-      return reply.code(204).send();
-    },
-  );
-  app.delete<{ Params: { id: string } }>(
-    "/workspaces/:id/permanent",
-    async (req, reply) => {
-      sessions.purgeWorkspace(req.params.id);
-      return reply.code(204).send();
-    },
-  );
-  app.get<{ Querystring: { include?: "conversations" } }>(
-    "/sessions",
-    {
-      schema: {
         querystring: {
           type: "object",
-          properties: { include: { enum: ["conversations"] } },
-        },
-      },
-    },
-    (req) => sessions.list(false, req.query.include === "conversations"),
-  );
-  app.get("/sessions/trash", () => sessions.list(true));
-  app.delete<{ Params: { id: string } }>(
-    "/sessions/:id",
-    async (req, reply) => {
-      await sessions.trash(req.params.id);
-      return reply.code(204).send();
-    },
-  );
-  app.post<{ Params: { id: string } }>("/sessions/:id/restore", async (req) => {
-    sessions.restore(req.params.id);
-    return sessions.get(req.params.id);
-  });
-  app.get<{ Params: { id: string } }>(
-    "/sessions/:id/conversations/trash",
-    (req) => sessions.deletedConversations(req.params.id),
-  );
-  app.delete<{ Params: { id: string; conversationId: string } }>(
-    "/sessions/:id/conversations/:conversationId",
-    async (req, reply) => {
-      await sessions.trashConversation(
-        req.params.id,
-        req.params.conversationId,
-      );
-      return reply.code(204).send();
-    },
-  );
-  app.post<{ Params: { id: string; conversationId: string } }>(
-    "/sessions/:id/conversations/:conversationId/restore",
-    async (req) => {
-      await sessions.restoreConversation(
-        req.params.id,
-        req.params.conversationId,
-      );
-      return sessions.get(req.params.id, req.params.conversationId);
-    },
-  );
-  app.post<{
-    Body: {
-      name?: string;
-      requestId: string;
-      workspaceId?: string;
-    };
-  }>(
-    "/sessions",
-    {
-      schema: {
-        body: {
-          type: "object",
-          required: ["requestId"],
           additionalProperties: false,
           properties: {
-            name: nameBody.properties.name,
-            requestId: string,
-            workspaceId: string,
+            before: { type: "string", pattern: "^[1-9][0-9]{0,15}$" },
           },
         },
       },
     },
-    async (request, reply) => {
-      const row = await sessions.create(
-        request.body.name ?? "",
-        request.body.requestId,
-        request.body.workspaceId,
-      );
-      return reply.code(201).send(await sessions.get(row.id));
-    },
+    (req) => service.history(req.params.id, req.query.before),
   );
-  app.patch<{
-    Params: { id: string; conversationId?: string };
-    Body: { name: string };
-  }>("/sessions/:id", { schema: { params, body: nameBody } }, (req) => {
-    sessions.rename(req.params.id, req.body.name.trim());
-    return sessions.get(req.params.id);
-  });
-  app.get<{ Params: { id: string; conversationId?: string } }>(
-    "/sessions/:id/conversations",
-    { schema: { params } },
-    (req) => sessions.conversations(req.params.id),
-  );
-  app.post<{
-    Params: { id: string; conversationId?: string };
-    Body: { name?: string; requestId: string };
-  }>(
-    "/sessions/:id/conversations",
+  app.patch<
+    Id & {
+      Body: {
+        model: string;
+        thinkingLevel?: ModelThinkingLevel;
+        instructions?: string;
+      };
+    }
+  >(
+    "/sessions/:id/config",
     {
       schema: {
         params,
         body: {
-          ...nameBody,
-          required: ["requestId"],
-          properties: { ...nameBody.properties, requestId: string },
+          type: "object",
+          additionalProperties: false,
+          required: ["model"],
+          properties: {
+            model: { type: "string", minLength: 1, maxLength: 200 },
+            thinkingLevel: { type: "string", maxLength: 24 },
+            instructions: { type: "string", maxLength: 16000 },
+          },
+        },
+      },
+    },
+    (req) => service.configure(req.params.id, req.body),
+  );
+  app.post<Id & { Body: { text: string; requestId: string } }>(
+    "/sessions/:id/messages",
+    {
+      schema: {
+        params,
+        body: {
+          type: "object",
+          additionalProperties: false,
+          required: ["text", "requestId"],
+          properties: {
+            text: {
+              type: "string",
+              minLength: 1,
+              maxLength: 32000,
+              pattern: "\\S",
+            },
+            requestId,
+          },
         },
       },
     },
     async (req, reply) =>
-      reply
-        .code(201)
-        .send(
-          await sessions.createConversation(
-            req.params.id,
-            req.body.name?.trim() ?? "",
-            req.body.requestId,
-          ),
-        ),
+      reply.code(202).send(await service.submit(req.params.id, req.body)),
   );
-  app.patch<{
-    Params: { id: string; conversationId: string };
-    Body: { name: string };
-  }>(
-    "/sessions/:id/conversations/:conversationId",
-    { schema: { params, body: nameBody } },
-    async (req) => {
-      await sessions.renameConversation(
-        req.params.id,
-        req.params.conversationId,
-        req.body.name.trim(),
-      );
-      return sessions.get(req.params.id, req.params.conversationId);
+  for (const action of ["cancel", "resume"] as const)
+    app.post<Id>(
+      `/sessions/:id/${action}`,
+      { schema: { params } },
+      async (req, reply) => {
+        await service[action](req.params.id);
+        return reply.code(204).send();
+      },
+    );
+  app.delete<Id>(
+    "/sessions/:id",
+    { schema: { params } },
+    async (req, reply) => {
+      await service.remove(req.params.id);
+      return reply.code(204).send();
     },
   );
-  registerConversationRoutes(app, sessions);
 }

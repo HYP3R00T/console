@@ -1,31 +1,33 @@
-import { homedir, hostname } from "node:os";
+import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
+import { parseArgs } from "node:util";
 
-export function resolveConfiguration(
-  options: { dataDirectory?: string; machineName?: string } = {},
-) {
-  const configured = options.dataDirectory ?? process.env.CONSOLE_DATA_DIR;
+export function resolveConfiguration(options: { dataDirectory?: string } = {}) {
   const directory =
-    configured ??
-    join(
-      process.env.XDG_DATA_HOME ?? join(homedir(), ".local/share"),
-      "console",
-    );
+    options.dataDirectory ?? join(homedir(), ".local", "share", "console");
   if (!directory.trim() || !isAbsolute(directory))
     throw new Error("Console data directory must be an absolute path.");
-  const machineName = options.machineName ?? hostname();
-  if (!machineName.trim() || machineName.length > 80)
-    throw new Error("Machine name must contain 1 to 80 characters.");
+  return { directory: resolve(directory) };
+}
+
+export function startupArguments(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      port: { type: "string", default: "3000" },
+      "data-dir": { type: "string" },
+      help: { type: "boolean", short: "h" },
+    },
+    strict: true,
+    allowPositionals: false,
+  });
+  const rawPort = values.port ?? "3000";
+  const port = Number(rawPort);
+  if (!/^\d+$/.test(rawPort) || !Number.isSafeInteger(port) || port > 65535)
+    throw new Error("--port must be an integer between 0 and 65535.");
   return {
-    directory: resolve(directory),
-    machineName: machineName.trim(),
-    storageSource:
-      options.dataDirectory !== undefined
-        ? "application"
-        : configured !== undefined
-          ? "CONSOLE_DATA_DIR"
-          : process.env.XDG_DATA_HOME
-            ? "XDG_DATA_HOME"
-            : "default",
+    port,
+    help: values.help ?? false,
+    ...resolveConfiguration({ dataDirectory: values["data-dir"] }),
   };
 }

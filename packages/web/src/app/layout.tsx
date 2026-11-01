@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { Geist } from "next/font/google";
-import { ConsoleShell } from "@/components/layout/console-shell";
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +9,7 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "Console",
-  description: "Console development starter",
+  description: "Local agent work sessions",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -22,7 +21,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <ConsoleShell>{children}</ConsoleShell>
+          {children}
         </ThemeProvider>
       </body>
     </html>

@@ -17,7 +17,6 @@ export type Login = {
   status: "pending" | "connected" | "failed" | "cancelled";
   events: {
     id: string;
-    type: string;
     message?: string;
     url?: string;
     instructions?: string;
@@ -32,237 +31,82 @@ export type Login = {
     options?: { id: string; label: string }[];
   };
 };
+export type Project = { id: string; name: string; path: string };
 export type SessionSummary = {
-  conversations?: ConversationSummary[];
   id: string;
+  projectId: string;
   name: string;
   createdAt: string;
-  workspace?: string;
-  workspaceId?: string | null;
-  enabledTools?: string[];
   status: "idle" | "running" | "interrupted" | "blocked" | "unavailable";
-  model?: { provider: string; modelId: string };
+  model?: string;
   thinkingLevel?: string;
+  instructions?: string;
 };
-export type AgentConfiguration = {
-  provider: string;
-  model: string;
-  thinkingLevel: string;
+export type ChatMessage = {
+  id: string;
+  entryId: string;
+  kind: string;
+  role: string;
+  text: string;
+  toolName?: string;
+  toolCallId?: string;
+  isError?: boolean;
+  reasoning?: string[];
+  toolCalls?: { id: string; name: string; arguments: unknown }[];
 };
-export type Conversation = SessionSummary & {
-  plan?: {
-    title: string;
-    steps: { step: string; status: "pending" | "in_progress" | "completed" }[];
-    sourceEntryId: string;
-  };
-  queue?: { id: string; mode: "steer" | "followUp"; text: string }[];
-  usage?: {
-    models: Record<string, RecordedUsage>;
-    tools: Record<string, RecordedUsage>;
-  };
-  contextUsage?: {
-    estimatedTokens: number;
-    capacity: number;
-    reserveTokens: number;
-    backgroundTokens: number;
-  };
-  compactions?: {
-    id: string;
-    reason: string;
-    blocking: boolean;
-    attempt: number;
-    retryAt?: number;
-  }[];
-  compactionFailed?: boolean;
-  liveTools?: { id: string; name: string; status: string; output?: string }[];
-  thinkingLevel: string;
+export type HistoryPage = {
+  messages: ChatMessage[];
   hasOlder: boolean;
   olderCursor?: string;
-  messages: {
-    id: string;
-    role: string;
-    text: string;
-    toolName?: string;
-    toolCallId?: string;
-    isError?: boolean;
-    entryId?: string;
-    kind?: string;
-    toolCalls?: {
-      id: string;
-      name: string;
-      arguments: Record<string, unknown>;
-    }[];
-    reasoning?: ReasoningPart[];
-  }[];
-  partial: string;
-  conversationId?: string;
-  partialReasoning?: ReasoningPart[];
-  partialId?: string;
-  outcome?: string;
 };
-
-export type RecordedUsage = {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  totalTokens: number;
-  reasoning?: number;
-  cost: { total: number };
-};
-
-export type MessageMode = "reject" | "steer" | "followUp";
-
-export type ReasoningPart = { id: string; text: string; streaming: boolean };
-
+export type Session = SessionSummary &
+  HistoryPage & {
+    partial: string;
+    liveTools: { id: string; name: string; status: string; output?: string }[];
+    outcome?: string;
+    compactionFailed?: boolean;
+    failure?: string;
+  };
 export class ApiError extends Error {
-  status: number;
-  constructor(message: string, status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
     super(message);
-    this.status = status;
   }
 }
-
 export async function api<T>(
   path: string,
   method = "GET",
   body?: unknown,
   signal?: AbortSignal,
-  machineId?: string,
 ): Promise<T> {
-  const backend =
-    machineId ??
-    (typeof window === "undefined"
-      ? ""
-      : sessionStorage.getItem("console.backend") || "");
-  const registry = path === "/backends" || path.startsWith("/backends/");
-  if (!registry && !backend)
-    throw new ApiError(
-      "Connect a machine before opening its projects or sessions.",
-      409,
-    );
-  const target = registry
-    ? `/api/machines${path.slice("/backends".length)}`
-    : `/api/machines/${encodeURIComponent(backend)}/api${path}`;
-  const response = await fetch(target, {
+  const response = await fetch(`/api/v1${path}`, {
     method,
     signal,
     cache: "no-store",
     headers: {
       "x-console-request": "1",
-      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
     const error = await response.json().catch(() => null);
     throw new ApiError(
-      error?.message ?? `Server returned ${response.status}`,
+      error?.message ?? `Request failed (${response.status}).`,
       response.status,
     );
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }
-
 export const fieldClass =
-  "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-1 focus-visible:outline-ring disabled:opacity-50";
-
-export function safeLink(value: string | undefined) {
-  if (!value) return undefined;
+  "w-full border border-input bg-background px-3 py-2 text-sm disabled:opacity-50";
+export function safeLink(value?: string) {
   try {
-    const url = new URL(value);
+    const url = new URL(value ?? "");
     return ["https:", "http:"].includes(url.protocol) ? url.href : undefined;
   } catch {
     return undefined;
   }
 }
-
-export type Machine = {
-  id: string;
-  name: string;
-  local: boolean;
-  platform: string;
-  architecture: string;
-  status: string;
-  sessions: number;
-  activeSessions: number;
-  unavailableSessions: number;
-  storage: {
-    directory: string;
-    source: string;
-    credentials: string;
-    catalog: string;
-    sessions: string;
-    restartRequired: boolean;
-  };
-  capabilities: {
-    remoteMachines: boolean;
-    shell: boolean;
-    execution: "host";
-  };
-};
-
-export type BackendConnection = {
-  ssh?: { host: string; port: number; backendPort: number };
-  lastUsed?: string;
-  machineId?: string;
-  apiVersion?: number;
-  id: string;
-  name: string;
-  url?: string;
-  local: boolean;
-  status: string;
-};
-export type Workspace = {
-  isDefault?: number;
-  id: string;
-  name: string;
-  path: string;
-  repository?: string | null;
-  error?: string | null;
-  state?: string;
-  deleted?: number;
-};
-export type ConversationSummary = {
-  isMain?: boolean;
-  parentId?: string;
-  kind?: "root" | "fork" | "subagent";
-  id: string;
-  name: string;
-  status: string;
-  model?: { provider: string; modelId: string };
-};
-
-export type AgentInspection = {
-  tools: {
-    name: string;
-    description: string;
-    parameters: unknown;
-    replay: string;
-    extension: string;
-    enabled: boolean;
-    permitted: boolean;
-  }[];
-  extensions: {
-    enabled: boolean;
-    name: string;
-    tools: string[];
-    sections: number;
-    hooks: number;
-  }[];
-  instructions: string;
-  tasks: { id: string; name: string; state: string }[];
-  taskGraph?: {
-    id: string;
-    name: string;
-    conversationId: string;
-    owner?: string;
-    background: boolean;
-    abortRequested: boolean;
-    state: string;
-    waitingOn: string[];
-    wakeAt?: number;
-    blockedReason?: string;
-  }[];
-  scheduling: string;
-};

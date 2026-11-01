@@ -1,4 +1,4 @@
-// The root shell owns the persistent workspace; secondary routes replace its center pane.
+import { Workspace } from "@/components/workspace";
 export default function Page() {
-  return null;
+  return <Workspace />;
 }
