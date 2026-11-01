@@ -5,7 +5,10 @@ export function createApp(
   options: FastifyServerOptions = {},
   consoleOptions: ConsoleOptions = {},
 ) {
-  const app = Fastify(options);
+  const app = Fastify({
+    ...options,
+    ajv: { customOptions: { removeAdditional: false } },
+  });
 
   app.get(
     "/health",

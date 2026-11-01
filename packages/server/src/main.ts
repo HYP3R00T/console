@@ -1,49 +1,46 @@
 import { createApp } from "./app.ts";
+import { startupArguments } from "./platform/configuration.ts";
 
-const app = createApp({ logger: true });
-let stopping = false;
-
-async function shutdown(signal: NodeJS.Signals) {
-  if (stopping) return;
-  stopping = true;
-  app.log.info({ signal }, "Stopping server");
-
+async function main() {
+  const options = startupArguments(process.argv.slice(2));
+  if (options.help) {
+    process.stdout.write(
+      "Console backend\n\nStart: node dist/main.js [--port 3000] [--data-dir /absolute/path]\n\nDefaults: loopback 127.0.0.1:3000, storage ~/.local/share/console.\nNo environment file or configuration file is required.\n",
+    );
+    return;
+  }
+  const app = createApp({ logger: true }, { dataDirectory: options.directory });
+  let stopping = false;
+  async function shutdown(signal: NodeJS.Signals) {
+    if (stopping) return;
+    stopping = true;
+    app.log.info({ signal }, "Stopping server");
+    try {
+      await app.close();
+    } catch {
+      app.log.error("Server shutdown failed");
+      process.exitCode = 1;
+    }
+  }
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
   try {
-    await app.close();
-  } catch (error) {
-    app.log.error(error);
+    const address = await app.listen({ host: "127.0.0.1", port: options.port });
+    app.log.info(
+      { address, directory: options.directory, apiVersion: 1 },
+      "Console backend ready",
+    );
+  } catch {
+    app.log.error(
+      "Cannot start Console. Check the port and data-directory permissions.",
+    );
     process.exitCode = 1;
+    await app.close();
   }
 }
-
-process.once("SIGINT", shutdown);
-process.once("SIGTERM", shutdown);
-
-try {
-  const rawPort = process.env.PORT ?? "3000";
-  const port = Number(rawPort);
-  if (!/^\d+$/.test(rawPort) || !Number.isSafeInteger(port) || port > 65535) {
-    throw new Error("PORT must be an integer between 0 and 65535");
-  }
-
-  const address = await app.listen({
-    host: process.env.HOST ?? "127.0.0.1",
-    port,
-  });
-  app.log.info(
-    {
-      connectionUrl: address
-        .replace("0.0.0.0", "127.0.0.1")
-        .replace("[::]", "[::1]"),
-      apiVersion: 1,
-      authentication: process.env.CONSOLE_ACCESS_TOKEN
-        ? "access token required"
-        : "loopback only; token not required",
-    },
-    "Connect this machine from Console > Machines. Nothing is discovered automatically.",
+main().catch((error) => {
+  process.stderr.write(
+    `${error instanceof Error ? error.message : "Console startup failed."}\n`,
   );
-} catch (error) {
-  app.log.error(error);
   process.exitCode = 1;
-  await app.close();
-}
+});

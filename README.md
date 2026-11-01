@@ -1,8 +1,14 @@
 # Console
 
-A dashboard for managing AI agent sessions across workspaces and machines.
+A minimal local interface for agent work: **project → work session → one conversation**.
+Pi Durable runs and persists each session. Native tools execute on the backend host.
+The backend starts with built-in defaults; no environment file or configuration file is required.
+After building, run `pnpm --filter @console/server start`. Use `--help` for optional startup arguments.
 
-- [Feature inventory](docs/features.md): statuses, evidence and verification limits, including direct host execution.
-- [Requirements](docs/requirements.md): product intent and delivery boundary.
-- [Architecture](docs/architecture.md): runtime, storage and execution design.
-- [Server guide](docs/packages/server.md) and [web guide](docs/packages/web.md): development and APIs.
+- [Requirements](docs/requirements.md): the MVP and its deliberate exclusions.
+- [Architecture](docs/architecture.md): ownership, execution and storage boundaries.
+- [Server guide](docs/packages/server.md): source map and HTTP API contract.
+- [Web guide](docs/packages/web.md): client and fixed local proxy.
+- [Feature inventory](docs/features.md): stable capability IDs, status and verification limits.
+
+The MVP uses a fresh storage namespace, retaining earlier experimental files without migration.

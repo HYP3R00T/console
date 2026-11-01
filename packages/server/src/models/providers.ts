@@ -22,7 +22,11 @@ export type LoginView = {
   };
 };
 
-export function createProviders(models: Models, deviceId: string) {
+export function createProviders(
+  models: Models,
+  deviceId: string,
+  providerId: string,
+) {
   let flow:
     | {
         view: LoginView;
@@ -39,59 +43,47 @@ export function createProviders(models: Models, deviceId: string) {
 
   return {
     current: () => flow?.view ?? null,
-    async refresh(provider: string) {
-      if (!models.getProvider(provider))
-        throw httpError(404, "Unknown provider.");
-      const result = await models.refresh({
-        providers: [provider],
-        allowNetwork: true,
-        force: true,
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (result.aborted || result.errors.size)
-        throw httpError(
-          502,
-          "Could not refresh this provider's model catalog.",
-        );
-    },
     async list(connectedOnly = false) {
       const items = await Promise.all(
-        models.getProviders().map(async (provider) => {
-          let source: string | undefined;
-          try {
-            const auth = await models.checkAuth(provider.id);
-            source = auth ? (auth.source ?? auth.type) : undefined;
-          } catch {
-            /* Not verified. */
-          }
-          return {
-            id: provider.id,
-            name: provider.name,
-            configured: source !== undefined,
-            source,
-            methods: [
-              ...(provider.auth.oauth
-                ? [
-                    {
-                      type: "oauth",
-                      label:
-                        provider.auth.oauth.loginLabel ??
-                        provider.auth.oauth.name,
-                    },
-                  ]
-                : []),
-              ...(provider.auth.apiKey?.login
-                ? [{ type: "api_key", label: provider.auth.apiKey.name }]
-                : []),
-            ],
-            models: models.getModels(provider.id).map((model) => ({
-              id: model.id,
-              name: model.name,
-              thinkingLevels: getSupportedThinkingLevels(model),
-              contextWindow: model.contextWindow,
-            })),
-          };
-        }),
+        models
+          .getProviders()
+          .filter((provider) => provider.id === providerId)
+          .map(async (provider) => {
+            let source: string | undefined;
+            try {
+              const auth = await models.checkAuth(provider.id);
+              source = auth ? (auth.source ?? auth.type) : undefined;
+            } catch {
+              /* Not verified. */
+            }
+            return {
+              id: provider.id,
+              name: provider.name,
+              configured: source !== undefined,
+              source,
+              methods: [
+                ...(provider.auth.oauth
+                  ? [
+                      {
+                        type: "oauth",
+                        label:
+                          provider.auth.oauth.loginLabel ??
+                          provider.auth.oauth.name,
+                      },
+                    ]
+                  : []),
+                ...(provider.auth.apiKey?.login
+                  ? [{ type: "api_key", label: provider.auth.apiKey.name }]
+                  : []),
+              ],
+              models: models.getModels(provider.id).map((model) => ({
+                id: model.id,
+                name: model.name,
+                thinkingLevels: getSupportedThinkingLevels(model),
+                contextWindow: model.contextWindow,
+              })),
+            };
+          }),
       );
       return connectedOnly ? items.filter((item) => item.configured) : items;
     },

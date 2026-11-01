@@ -1,19 +1,10 @@
-import { NextResponse } from "next/server";
-
-function retired() {
-  return NextResponse.json(
-    {
-      message:
-        "Select an explicitly connected machine. The implicit local proxy has been retired.",
-    },
-    { status: 410 },
-  );
+import { proxy } from "@/lib/server/proxy";
+export const runtime = "nodejs";
+async function handle(
+  request: Request,
+  context: { params: Promise<{ path: string[] }> },
+) {
+  return proxy(request, (await context.params).path);
 }
 
-export {
-  retired as GET,
-  retired as POST,
-  retired as PATCH,
-  retired as PUT,
-  retired as DELETE,
-};
+export { handle as GET, handle as POST, handle as PATCH, handle as DELETE };
