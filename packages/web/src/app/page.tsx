@@ -1,7 +1,5 @@
-export default function Home() {
-  return (
-    <main>
-      <h1>Hello, world!</h1>
-    </main>
-  );
+import { Home } from "../components/home.tsx";
+
+export default function Page() {
+  return <Home />;
 }
