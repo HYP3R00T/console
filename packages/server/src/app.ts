@@ -1,35 +1,7 @@
-import Fastify, { type FastifyServerOptions } from "fastify";
-import { type ConsoleOptions, registerConsole } from "./http/console.ts";
+import Fastify from "fastify";
 
-export function createApp(
-  options: FastifyServerOptions = {},
-  consoleOptions: ConsoleOptions = {},
-) {
-  const app = Fastify({
-    ...options,
-    ajv: { customOptions: { removeAdditional: false } },
-  });
-
-  app.get(
-    "/health",
-    {
-      schema: {
-        response: {
-          200: {
-            type: "object",
-            required: ["status"],
-            additionalProperties: false,
-            properties: {
-              status: { type: "string", const: "ok" },
-            },
-          },
-        },
-      },
-    },
-    async () => ({ status: "ok" }),
-  );
-
-  app.register(registerConsole, { prefix: "/v1", ...consoleOptions });
-
+export function createApp() {
+  const app = Fastify({ logger: true });
+  app.get("/health", async () => ({ status: "ok" }));
   return app;
 }

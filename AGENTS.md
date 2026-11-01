@@ -13,7 +13,8 @@
 
 ## Git workflow
 
-- Use the primary repository checkout for all development, with a dedicated branch per task. Do not implement directly on `main`.
+- Use the primary repository checkout with one active working branch. Continue related work on that branch; rename it when the scope changes instead of creating another branch. Do not implement directly on `main`.
+- Once approved and merged to `main`, delete the completed working branch before starting the next branch. Do not merge or delete unrelated branches without authorization.
 - Do not create or switch to additional Git worktrees unless the user explicitly requests it.
 - Allow only one active session to write to the shared checkout; coordinate before switching branches.
 - Start new task branches from the latest remote default branch unless the task specifies another base. Do not carry unrelated uncommitted changes into the task.
