@@ -18,10 +18,6 @@ use_git_credentials = true
 [hooks]
 enter = { run = "bash ./scripts/enter_project.sh" }
 
-[tasks.dev]
-description = "Run the server and web app together"
-depends = ["dev:server", "dev:web"]
-
 [tasks."dev:server"]
 description = "Run the Fastify development server"
 run = "pnpm dev:server"

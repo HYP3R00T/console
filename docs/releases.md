@@ -1,34 +1,23 @@
 # Versions and changelogs
 
-Changesets is installed through mise (`npm:@changesets/cli`), alongside the other shared tools.
-Run `mise install` before using the commands below.
+Both workspace packages are private and currently versioned `0.1.0`. Changesets is installed
+through Mise. It records package changes and prepares versions/changelogs; it does not publish,
+deploy or commit automatically.
 
-The server and web app are private versioned workspace packages. Changesets records their
-user-visible changes and generates changelogs; it does not publish or deploy them.
+The Hello World baseline reset cleared pending Changeset entries without preparing a release
+or changing package versions. Record future user-visible package changes normally.
 
-## Record a package change
+## Record a change
 
-Run `pnpm changeset` from the repository root. Select the affected packages, choose a patch,
-minor, or major bump, and describe the user-visible change. Include the generated
-`.changeset/*.md` file with the implementation. Documentation-only and tooling-only changes
-do not need a package release entry unless they affect a released package.
+Run `pnpm changeset`, select the affected packages and bump level, then commit its generated
+`.changeset/*.md` entry with the implementation. Documentation-only and tooling-only changes
+do not need an entry unless they affect released package behavior.
 
-Use `pnpm changeset status` to inspect pending entries. Comparisons use `main` by default.
+`pnpm changeset status` shows pending entries; its comparison base is `main`. After the baseline
+reset it exits nonzero while package changes exist relative to `main` without a release entry.
+That reports the deliberately empty release queue; it does not mean an application check failed.
 
-## Prepare versions and changelogs
+## Prepare a release
 
-Run `pnpm changeset version` when preparing a release. This consumes pending entries, updates
-package versions and internal dependency ranges, and generates package changelogs. Review the
-resulting changes before committing them.
-
-Private packages receive versions and changelogs too, but are not published to npm or tagged
-by this configuration. Changesets does not automatically commit. Publishing, deployment,
-release tags, and release automation have not been configured.
-
-## Tool lockfile compatibility
-
-`mise.lock` uses format version 1 with explicit request bindings, including `lts` for Node.
-This keeps locked installation compatible with the development and CI mise versions while
-preserving the selected tool releases. Verify tool changes with `mise install --locked node pnpm`,
-the same locked installation used by application CI. Refresh metadata with `mise lock`; assess
-`mise lock --upgrade` separately because newer formats can require a newer mise and dependency sidecars.
+Run `pnpm changeset version` only when preparing a release. Review the resulting package versions,
+changelogs and consumed entries before committing. Publishing, tags and deployment are not configured.
