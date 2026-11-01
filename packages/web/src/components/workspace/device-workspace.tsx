@@ -71,7 +71,8 @@ export function DeviceWorkspace({ view }: { view: "overview" | "preview" }) {
           <EmptyHeader>
             <EmptyTitle>Device workspace</EmptyTitle>
             <EmptyDescription>
-              Select a conversation from Projects or Recents.
+              Add or open a project from the sidebar. Recents remains a
+              conversation preview.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>

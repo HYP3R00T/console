@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   ChevronRight,
   Folder,
-  FolderClock,
   KeyRound,
   Monitor,
   Palette,
@@ -14,6 +13,7 @@ import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { SidebarAction } from "@/components/layout/sidebar-action";
 import { useSidebar } from "@/components/ui/sidebar";
+import { ProjectTree } from "@/components/workspace/project-tree";
 
 export function ContextRail() {
   const { setOpen, setOpenMobile, isMobile } = useSidebar();
@@ -61,50 +61,30 @@ export function ContextRail() {
       ) : deviceId ? (
         <>
           {deviceSettings ? (
-            <SidebarAction
-              compact
-              nativeButton={false}
-              render={
-                <Link
-                  href={`/devices/${encodeURIComponent(deviceId)}/settings/providers`}
-                />
-              }
-              aria-label="Providers"
-              title="Providers"
-              aria-current="page"
-              className="bg-sidebar-accent"
-            >
-              <KeyRound />
-            </SidebarAction>
+            [
+              { id: "providers", label: "Providers", icon: KeyRound },
+              { id: "projects", label: "Projects", icon: Folder },
+            ].map(({ id, label, icon: Icon }) => {
+              const href = `/devices/${encodeURIComponent(deviceId)}/settings/${id}`;
+              return (
+                <SidebarAction
+                  key={id}
+                  compact
+                  nativeButton={false}
+                  render={<Link href={href} />}
+                  aria-label={label}
+                  title={label}
+                  aria-current={pathname === href ? "page" : undefined}
+                  className={
+                    pathname === href ? "bg-sidebar-accent" : undefined
+                  }
+                >
+                  <Icon />
+                </SidebarAction>
+              );
+            })
           ) : (
-            <>
-              <SidebarAction
-                compact
-                nativeButton={false}
-                render={
-                  <Link
-                    href={`/devices/${encodeURIComponent(deviceId)}/preview/main`}
-                  />
-                }
-                aria-label="Example project"
-                title="Example project"
-              >
-                <Folder />
-              </SidebarAction>
-              <SidebarAction
-                compact
-                nativeButton={false}
-                render={
-                  <Link
-                    href={`/devices/${encodeURIComponent(deviceId)}/preview/recent-idea`}
-                  />
-                }
-                aria-label="Recents"
-                title="Recents"
-              >
-                <FolderClock />
-              </SidebarAction>
-            </>
+            <ProjectTree deviceId={deviceId} compact />
           )}
           <SidebarAction
             compact

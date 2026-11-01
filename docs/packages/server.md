@@ -48,3 +48,41 @@ Responses are uncached; SDK/storage failures are sanitized. HTTP is sufficient f
 workflow; no SSE or WebSocket endpoint is implemented yet. Login operations are transient; credentials
 and favorites survive restart. `test/providers.test.ts` covers injected fake-provider login, OAuth,
 cancellation/removal races, private persistence, credential redaction, favorites and validation/CORS.
+
+## Project HTTP API
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/v1/projects` | Registrations and current directory availability. |
+| POST | `/v1/projects` | Register `{name, path}`; returns 201 or 409 for a duplicate canonical path. |
+| GET | `/v1/projects/:id` | Project metadata and availability; 404 if unregistered. |
+| GET | `/v1/projects/:id/git` | Read-only local branches/current branch and worktrees; repository/non-repository/unavailable states. |
+| PUT | `/v1/projects/:id` | Update `{name,icon,color}`; display label only, path unchanged. |
+| DELETE | `/v1/projects/:id` | Remove registration only; never delete directory/files. |
+
+`projects.sqlite` lives beside the provider database and uses private filesystem permissions.
+Registration requires an existing readable/writable/traversable absolute directory; symlink aliases
+resolve to one canonical path. Missing directories remain registered and unavailable. Responses are
+uncached, schemas reject unknown fields, and internal failures are sanitized. Preset icons/colors and display names are editable. No filesystem browser, directory rename, sessions or execution. `test/projects.test.ts` verifies persistence,
+alias/concurrent duplicates, invalid input, availability, origin rejection and preservation of files.
+
+## Project defaults and creation
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/v1/machine/settings` | Default `projectsRoot` and current availability. |
+| PUT | `/v1/machine/settings` | Save `{projectsRoot}`; no directory creation/migration. |
+| POST | `/v1/projects/create` | `{name,folder,createParents}` → new Git repository/registration, 201. |
+| POST | `/v1/projects/clone` | Same body plus `repository` → public HTTPS clone/registration, 201. |
+
+The default root is backend `~/Projects`. Folder names are one portable segment; project display
+names can contain spaces. `createParents` must be explicitly true to make missing parents. Destination
+collisions return 409. Git must be installed; commands use isolated configuration with no personal
+credentials/hooks/templates/submodules. Public HTTPS only; no redirect, SSH or private login support.
+Git operations time out after two minutes and cancel when their HTTP response connection closes.
+The service allows two concurrent setups. Failed staging is cleaned; an abrupt process crash may
+leave hidden staging directories. Published files remain intact on registry errors and unregister.
+
+Git inspection is on demand. Commands have five-second/1 MiB limits, omit optional locks and use isolated configuration. Errors are sanitized. No history, remote fetch, checkout or worktree mutation. Tests cover empty/non-Git, unborn/detached branches, linked/locked worktrees with newline paths, missing directories, unknown registrations, origin policy and bare repositories. Formats follow [Git worktree](https://git-scm.com/docs/git-worktree) and [for-each-ref](https://git-scm.com/docs/git-for-each-ref).
+
+Project appearance updates accept 32 preset icon IDs and eight colors. Invalid IDs remain validation errors; icon selection never changes project files.

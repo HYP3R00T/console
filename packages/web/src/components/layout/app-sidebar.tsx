@@ -3,6 +3,7 @@
 import {
   ArrowLeft,
   ChevronLeft,
+  Folder,
   KeyRound,
   Monitor,
   Palette,
@@ -79,21 +80,29 @@ export function AppSidebar() {
             ))}
           </nav>
         ) : deviceSettings && device ? (
-          <nav aria-label="Device setting categories" className="px-2">
-            <SidebarAction
-              nativeButton={false}
-              render={
-                <Link
-                  href={`/devices/${encodeURIComponent(device.id)}/settings/providers`}
-                  onClick={closeMobile}
-                />
-              }
-              aria-current="page"
-              className="bg-sidebar-accent"
-            >
-              <KeyRound />
-              <span>Providers</span>
-            </SidebarAction>
+          <nav
+            aria-label="Machine setting categories"
+            className="space-y-1 px-2"
+          >
+            {[
+              { id: "providers", label: "Providers", icon: KeyRound },
+              { id: "projects", label: "Projects", icon: Folder },
+            ].map(({ id, label, icon: Icon }) => {
+              const href = `/devices/${encodeURIComponent(device.id)}/settings/${id}`;
+              const active = pathname === href;
+              return (
+                <SidebarAction
+                  key={id}
+                  nativeButton={false}
+                  render={<Link href={href} onClick={closeMobile} />}
+                  aria-current={active ? "page" : undefined}
+                  className={active ? "bg-sidebar-accent" : undefined}
+                >
+                  <Icon />
+                  <span>{label}</span>
+                </SidebarAction>
+              );
+            })}
           </nav>
         ) : device ? (
           <ProjectTree

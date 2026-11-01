@@ -20,7 +20,7 @@ Browser → selected loopback backend → GET /v1/connection
 | `packages/web/src/components/layout/` | Expandable client/device column, resizable backend context panel, compact rails and shared actions. |
 | `packages/web/src/components/devices/` | Browser-local device bookmark state. |
 | `packages/web/src/lib/devices.ts` | Bookmark validation, URL normalization and duplicate rejection. |
-| `packages/web/src/components/workspace/` | Device workspace, connection settings and explicitly simulated project hierarchy. |
+| `packages/web/src/components/workspace/` | Device workspace, connection settings and conversation previews. |
 | `packages/web/src/components/ui/` | CLI-installed shadcn Base UI components; no custom primitive library. |
 | `packages/web/src/components/home.tsx` | Cross-device overview of saved bookmarks and current connection status. |
 | `packages/web/src/app/layout.tsx` | Shared navigation and connection provider. |
@@ -104,7 +104,7 @@ connection is supported. Route selection determines the viewed device independen
 The primary column selects Home, a device or Preferences. The adjacent panel shows either that
 device's projects/Machine settings or Preferences categories (Appearance and saved bookmarks).
 First-column device disclosures own connect/disconnect. Machine settings replaces the project tree
-with a Providers category and Back to workspace; it owns AI provider configuration. Provider
+with Providers and Projects settings categories and Back to workspace; it owns AI provider configuration and the default projects folder. Provider
 credentials and favorite models belong to that backend, not browser appearance.
 
 - `/`: cross-device overview of saved devices and the current connection state.
@@ -120,9 +120,9 @@ credentials and favorite models belong to that backend, not browser appearance.
 The main content pane currently displays route content. A multi-pane workspace for conversations,
 files and previews is a future increment; no window/docking framework is installed yet.
 
-`ProjectTree` demonstrates collapsible project → session → conversations, with subagent/fork
-examples. It has no backend entities, creation API or execution behavior. These fixtures are a
-navigation prototype, not a domain schema or implementation of Durable. Authentication and SSH
+`ProjectTree` lists real backend project registrations. New conversation and Recents still open
+frontend examples, without a session or execution backend. The older conversation preview routes
+are fixtures, not a domain schema or implementation of Durable. Authentication and SSH
 are not offered as nonworking controls.
 
 `DeviceProvider` sits inside `ConnectionProvider`, above route content. It persists only device
@@ -199,10 +199,77 @@ The desktop provider catalog is 320px wide. Provider and model names share the s
 and weight; metadata remains secondary.
 
 Workspace navigation separates Projects from Recents (conversations outside projects), with a
-New conversation entry. These entries open frontend examples only: they create no conversations,
-folders or files. The sidebar omits the Preview badge; the content view retains its explicit
+New conversation entry. New conversation and Recents open frontend examples only: they create no conversations,
+folders or files; expanded project rows toggle sessions and a sibling gear opens settings. The sidebar omits the Preview badge; the content view retains its explicit
 preview notice. Recents does not represent a live activity feed or persisted history yet.
 
 The workspace New conversation action aligns vertically with Home in the primary column.
 Collapsed workspace navigation exposes direct project/Recents folder shortcuts; only the top
 chevron expands the panel. The footer uses the label Machine settings.
+
+## Projects
+
+`packages/server/src/projects/` separates SQLite registration storage, directory validation and HTTP routes.
+The registry is `~/.local/share/console/projects.sqlite`; `storage/database.ts` gives both project and
+provider databases private permissions and a busy timeout. Project records contain UUID, name, canonical
+absolute path and creation time. A unique path constraint arbitrates concurrent registration requests.
+Directory checks use realpath/stat/access (read/write/traverse); they are a snapshot, not a filesystem
+sandbox or a guarantee that later execution will succeed. No writes occur inside a project directory.
+
+GET `/v1/projects` lists registrations; POST registers `{name,path}`; GET `/v1/projects/:id` opens
+metadata; DELETE removes the registration only. List/open recheck availability, retaining unavailable
+registrations. Unknown body fields fail validation. PUT `/v1/projects/:id` updates a display name, preset icon and color without changing the path or files. No directory browsing, sessions or execution is exposed. New/clone setup is described below. API access retains the existing local-only boundary.
+
+The frontend's `hooks/use-backend-request.ts` owns bounded, uncached requests and cancellation on
+connection change, shared by providers and projects. `components/projects/projects-provider.tsx`
+scopes project lists to the active origin and rejects stale refreshes; ten-second polling observes
+other clients. `project-page.tsx` owns the empty project workspace and dedicated editor/check/remove views. Expanded and
+compact workspace navigation list the same real projects. Routes are
+`/devices/[deviceId]/projects/new` and `/devices/[deviceId]/projects/[projectId]`. Opening a bookmark
+never connects automatically. The registration form cannot operate against a different selected machine.
+
+## Managed project setup
+
+Machine defaults use `machine_settings` in projects.sqlite, initially resolving the backend home
+plus Projects. GET/PUT `/v1/machine/settings` read/save `projectsRoot`; saving a missing path does
+not create it. Existing registrations retain their paths. POST `/v1/projects/create` accepts
+`{name,folder,createParents}`; POST `/v1/projects/clone` additionally accepts `repository`.
+
+`projects/setup.ts` validates one portable folder segment, checks the captured root, optionally
+creates missing parents and rejects registered/existing destinations. Work is prepared inside a
+unique hidden staging directory under that root. A nonrecursive mkdir exclusively reserves the
+final name before rename publishes the result; a competing request cannot overwrite an existing
+folder. Failure removes only staging and an empty reservation. Published files are never recursively
+deleted. Registration failure after publication leaves files for Existing directory to recover.
+Directory checks are snapshots, not a filesystem security boundary against a hostile local operator.
+
+`projects/git.ts` spawns Git using argument arrays (no shell), with a minimal environment, global
+and system configuration disabled, no credential helper/prompts, empty templates, disabled hooks,
+HTTPS-only transport, no redirects and no recursive submodules. Git is an external runtime dependency.
+New repositories use main and have no initial commit. Clone URLs cannot contain credentials/query/
+fragments; private login, SSH and pull/update are deferred. On Linux cancellation kills the Git
+process group, including transport children. Windows descendant cancellation has not been verified.
+
+The service caps setup at two concurrent operations, times out after two minutes and aborts pending
+operations during close. HTTP disconnect cancels its operation; the client has a slightly longer
+request deadline and Cancel setup. This is bounded HTTP work, not a durable job: process crashes can
+leave hidden `.console-setup-*` staging directories; no automatic deletion or resume is implemented.
+
+`project-setup.tsx` owns the three-mode shadcn Tabs form, derived names, destination summary and parent
+creation checkbox. `project-settings.tsx` owns the machine projects-root form. No browser filesystem
+picker is used: these are paths on the connected backend. Public Git behavior follows the official
+[clone](https://git-scm.com/docs/git-clone) and [init](https://git-scm.com/docs/git-init) documentation.
+
+Project appearance is backend-owned. SQLite adds icon/color columns transactionally to existing registries, with folder/neutral defaults. Expanded project rows use shadcn Collapsible; their settings link is a separate sibling control. `/devices/[deviceId]/projects/[projectId]/settings` hosts the editor. Polling updates names and appearance across clients without replacing unsaved editor drafts.
+
+## Project Git inspection
+
+GET `/v1/projects/:id/git` resolves the registered project and rechecks its directory. `projects/git-metadata.ts` runs read-only Git commands with argument arrays, isolated global/system configuration, no optional locks, a five-second timeout and 1 MiB output limit per command. Responses distinguish repository, non-repository and unavailable/error states; command stderr is not exposed. Local refs use `for-each-ref`; worktrees use the stable NUL-delimited porcelain format, preserving paths containing newlines. No network operation or history traversal is performed.
+
+`project-git.tsx` owns the on-demand Git view and aborts stale client requests on unmount/origin changes. Refresh rechecks directory and Git metadata; ordinary project polling does not spawn Git processes. Worktree discovery is read-only and does not establish execution isolation. Each inspection consists of multiple commands and is a best-effort snapshot if Git changes concurrently.
+
+The project editor uses full-width responsive layout and top-right removal/confirmation. Its icon picker renders 32 Lucide presets; the project update schema accepts the same IDs. Git inspection behavior remains on demand; reorganizing the view does not add Git actions or polling.
+
+Project identity and directory metadata use container-responsive columns so their layout follows the available content pane. Current Git rows use accessible current-state attributes and blue square markers. The first Git worktree-list record is the main worktree (or bare repository); linked records use their directory basename as display identity. Branch names remain in the API snapshot but are omitted from the compact worktree UI. The red Delete action retains the registration-only backend contract.
+
+The editor tracks the last successfully saved name/icon/color separately from its draft. Its conditional header Save button targets the identity form and hides on revert or successful save. The project-title refresh icon reads directory and Git data; the Git view reports loading to keep that control disabled until completion. Main is the display label for the original checkout; active worktrees and branches share row highlighting.

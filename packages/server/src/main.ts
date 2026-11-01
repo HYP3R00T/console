@@ -1,4 +1,6 @@
 import { createApp } from "./app.ts";
+import { ProjectService } from "./projects/service.ts";
+import { ProjectStore, projectDatabasePath } from "./projects/store.ts";
 
 import { ProviderService } from "./providers/service.ts";
 import { ProviderStore, providerDatabasePath } from "./providers/store.ts";
@@ -6,7 +8,8 @@ import { ProviderStore, providerDatabasePath } from "./providers/store.ts";
 const providers = new ProviderService(
   new ProviderStore(providerDatabasePath()),
 );
-const app = createApp({ logger: true }, providers);
+const projects = new ProjectService(new ProjectStore(projectDatabasePath()));
+const app = createApp({ logger: true }, providers, projects);
 let stopping = false;
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
