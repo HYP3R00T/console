@@ -12,21 +12,10 @@
     "enabled": true,
     "useEditorconfig": true
   },
-  "css": {
-    "parser": {
-      "tailwindDirectives": true
-    }
-  },
-  "tailwind": {
-    "stylesheet": "./packages/web/src/app/globals.css"
-  },
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended",
-      "nursery": {
-        "noTailwindLegacyUtilities": "error"
-      }
+      "preset": "recommended"
     }
   }
 }

@@ -1,140 +1,102 @@
 # Console feature inventory
 
-This is the single master checklist. Stable IDs are preserved from the earlier dashboard.
-The MVP deliberately removes advanced integration paths; Deferred means excluded from the current
-delivery boundary, not hidden functionality or authorization to implement it.
+This is the single master checklist. The current baseline contains only the two features below.
+Implemented means source exists; verification describes the checks, not production certification.
 
-Implemented means a concrete path exists. Partial names the limit. Verification is scenario-specific;
-a passing test does not prove provider entitlement, power-loss durability or arbitrary external effects.
+## Current baseline
 
-Current source: [HTTP](../packages/server/src/http/console.ts),
-[session lifecycle](../packages/server/src/sessions/service.ts),
-[Pi adapter](../packages/server/src/runtime/session.ts),
-[client](../packages/web/src/components/workspace.tsx).
-
-Evidence: [backend tests](../packages/server/test/mvp.test.ts) and
-[client/proxy tests](../packages/web/test/client.test.ts). Live ChatGPT login/inference and broad
-browser/platform checks remain unverified. Earlier experimental data stays on disk without migration.
-
-## Machines and connections
-
-| ID | Feature | Status | Boundary / remaining work |
+| ID | Feature | Status | Evidence / limits |
 | --- | --- | --- | --- |
-| NET-01 | Persistent identity and capability handshake | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| NET-02 | Connect/disconnect/reconnect and recent machines | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| NET-03 | Authenticated local proxy and token protection | Partial | Fixed local proxy; embedded backend bearer option; no environment token setup or remote registry. |
-| NET-04 | Managed SSH forwarding | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| NET-05 | Machine name, project directory and model defaults | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| NET-06 | Remote provisioning/service management | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| NET-07 | Execution migration between machines | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| NET-08 | Multiple users and per-user authorization | Deferred | Excluded from MVP; no active Console API/UI integration. |
+| BASE-01 | Fastify health endpoint | Implemented | `src/app.ts`; server HTTP injection test; no dependency readiness. |
+| BASE-02 | Next.js Hello World page | Implemented | Web `src/app/page.tsx`; type check and build; no browser automation. |
 
-## Projects and stored work
+## Historical capabilities
 
-| ID | Feature | Status | Boundary / remaining work |
+Stable IDs are retained for traceability. Removed means no current implementation; Deferred means
+previously considered but absent. Neither status commits us to rebuilding a feature.
+Previous application behavior and its verification do not apply to this baseline.
+
+| ID | Feature | Status | Boundary |
 | --- | --- | --- | --- |
-| PRJ-01 | Register/create project directories | Partial | Existing canonical directories only; create-directory and clone flows removed. |
-| PRJ-02 | Public GitHub clone/retry | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| PRJ-03 | Private repository authentication | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| PRJ-04 | Protected Default project and model association | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| PRJ-05 | Named independent work sessions | Implemented | Named independent sessions, one conversation/Harness/database per session; idempotent creation. |
-| PRJ-06 | Rename and project/conversation navigation | Partial | Project/session rename and URL selection; no multi-conversation hierarchy. |
-| PRJ-07 | Trash/restore/permanent deletion | Partial | Idle whole-session deletion and retry tombstones; no Trash, restore or conversation purge. |
-| PRJ-08 | Isolated checkouts for concurrent editing | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| PRJ-09 | Diff review and verification-evidence workflow | Deferred | Excluded from MVP; no active Console API/UI integration. |
-
-## Model access and content
-
-| ID | Feature | Status | Boundary / remaining work |
-| --- | --- | --- | --- |
-| MOD-01 | Built-in providers, supported login and catalog refresh | Partial | One supported ChatGPT provider and persisted login; no refresh/custom-provider API. |
-| MOD-02 | Session model/thinking/instructions | Implemented | Idle-only explicit model, thinking and instruction save; no machine defaults/favorites. |
-| MOD-03 | Custom/local endpoints, headers and model overrides | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| MOD-04 | Virtual-model routing | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| MOD-05 | Attachments and non-text result rendering | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| MOD-06 | Image generation and classification | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| MOD-07 | Token/cache/cost and context inspection | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| MOD-08 | Usage aggregation and enforced cost budgets | Deferred | Excluded from MVP; no active Console API/UI integration. |
-
-## Sandboxing and execution authority
-
-| ID | Feature | Status | Boundary / remaining work |
-| --- | --- | --- | --- |
-| SEC-01 | Native nono worker confinement | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| SEC-02 | Filesystem grants and access presets | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| SEC-03 | Network policy | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| SEC-04 | Native Pi read/write/edit/bash | Implemented | Only native CodingTools and NodeExecutionEnv; backend host authority. |
-| SEC-05 | Child environment and credential separation | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| SEC-06 | Command timeout and descendant cancellation | Partial | Native shell cancellation exercised; no Console supervisor or global command deadline. |
-| SEC-07 | Output bounds and scratch cleanup | Partial | Native bounded tool output; no full-output retrieval or Console scratch lifecycle. |
-| SEC-08 | CPU/memory/disk/concurrency quotas | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| SEC-09 | Executable plugin/MCP trust review | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| SEC-10 | Durable human approval for consequential tools | Deferred | Excluded from MVP; no active Console API/UI integration. |
-
-## Agent runtime, history and recovery
-
-| ID | Feature | Status | Boundary / remaining work |
-| --- | --- | --- | --- |
-| RUN-01 | Durable transcript/inbox and request deduplication | Implemented | Pi SQLite history and stable request admission; changed text with the same ID rejected. |
-| RUN-02 | Steer/follow-up/reject and queued withdrawal | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| RUN-03 | Cancel and explicit Resume after interruption | Implemented | Explicit per-session Resume; cancellation persists; siblings have separate schedulers. |
-| RUN-04 | Native history forks | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| RUN-05 | History/reasoning and context-boundary navigation | Partial | Paged text/tool/reasoning history; no arbitrary-entry navigation or fork UI. |
-| RUN-06 | Compaction and reset/handoff | Partial | Automatic Pi compaction retained; manual compact/reset/handoff endpoints removed. |
-| RUN-07 | Runtime policy configuration | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| RUN-08 | Live task ownership/dependency inspection | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| RUN-09 | Agent-accessible history search | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| RUN-10 | Durable full-output artifacts/retrieval | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| RUN-11 | Parked-task retry and failure diagnosis | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| RUN-12 | Abrupt-crash/external-effect recovery proof | Partial | Graceful reopen, cancellation and SIGKILL during generation tested; power loss/general effects unproven. |
-| RUN-13 | Operational reports/telemetry | Partial | Sanitized runtime report categories/IDs and API failure logs; no telemetry pipeline. |
-| RUN-14 | One executing session per project | Implemented | One lifecycle queue owns admission, configuration, cancellation, recovery and deletion; unavailable/interrupted siblings block execution. |
-
-## Resources and extensibility
-
-| ID | Feature | Status | Boundary / remaining work |
-| --- | --- | --- | --- |
-| EXT-01 | Root/nested workspace instructions | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| EXT-02 | SYSTEM/APPEND_SYSTEM sections | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| EXT-03 | Skills and parameterized templates | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| EXT-04 | Additional resource directories/diagnostics | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| EXT-05 | Installed extension/tool selection | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| EXT-06 | Package install/remove/hot reload | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| EXT-07 | Typed hooks and custom interactive tools | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| EXT-08 | MCP lifecycle/credentials/resources/exposure | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| EXT-09 | Code Mode | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| EXT-10 | Deferred tool discovery/search | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| EXT-11 | Mid-run agent configuration | Deferred | Excluded from MVP; no active Console API/UI integration. |
-
-## Coordination and durable workflows
-
-| ID | Feature | Status | Boundary / remaining work |
-| --- | --- | --- | --- |
-| AGT-01 | Foreground task-owned subagents | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| AGT-02 | Background spawn/message/wait/stop/report-back | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| AGT-03 | Revisioned shared state | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| AGT-04 | Atomic shared-state path operations | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| AGT-05 | Recorded conversation plans | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| AGT-06 | Checkpointed application jobs and durable sleep/wake | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| AGT-07 | Durable approval/review gates | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| AGT-08 | Schedules/authenticated event triggers | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| AGT-09 | Explicit project memory | Deferred | Excluded from MVP; no active Console API/UI integration. |
-
-## Web, other clients and operations
-
-| ID | Feature | Status | Boundary / remaining work |
-| --- | --- | --- | --- |
-| UI-01 | Markdown/collapsible activity, plans and output | Partial | Markdown, reasoning/tool disclosures and error flags; advanced grouping/plans removed. |
-| UI-02 | History anchoring and paused bottom-follow | Partial | Paged history merge retains loaded messages; no scroll anchoring or follow controls. |
-| UI-03 | On-demand inspectors/settings and machine tree | Partial | Minimal project/session screen, configuration and provider settings; no split inspectors. |
-| UI-04 | Continuous model/tool event delivery | Partial | Non-overlapping polling; no SSE or WebSocket channel. |
-| UI-05 | Transcript export/import/sharing | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| CLI-01 | Reusable client SDK and CLI/TUI | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| CLI-02 | Structured stream and submit-and-wait API | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| OPS-01 | Persistent data configuration/storage inspection | Implemented | Absolute data directory, fresh MVP namespace, unavailable state and explicit failed-Harness reopen. |
-| OPS-02 | Supported backup/restore | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| OPS-03 | Cross-platform/live remote validation | Partial | Linux native tools exercised; remote deployment and live subscription use unverified. |
-| OPS-04 | Crash/reconnect/backpressure/browser regressions | Partial | API race, retry, cancellation, SIGKILL, proxy and polling tests; no comprehensive browser suite. |
-| OPS-05 | Measured scale and retention policy | Deferred | Excluded from MVP; no active Console API/UI integration. |
-| OPS-06 | Versions/changelogs and quality tooling | Implemented | Changeset, types/tests/build, Biome, RumDL and prek; no deployment automation. |
-| OPS-07 | Publishing/deployment/release automation | Deferred | Excluded from MVP; no active Console API/UI integration. |
+| NET-01 | Persistent identity and capability handshake | Removed / deferred | Not part of the Hello World baseline. |
+| NET-02 | Connect/disconnect/reconnect and recent machines | Removed / deferred | Not part of the Hello World baseline. |
+| NET-03 | Authenticated proxy and token protection | Removed / deferred | Not part of the Hello World baseline. |
+| NET-04 | Managed SSH forwarding | Removed / deferred | Not part of the Hello World baseline. |
+| NET-05 | Machine name, project directory and model defaults | Removed / deferred | Not part of the Hello World baseline. |
+| NET-06 | Remote provisioning/service management | Removed / deferred | Not part of the Hello World baseline. |
+| NET-07 | Execution migration between machines | Removed / deferred | Not part of the Hello World baseline. |
+| NET-08 | Multiple users and per-user authorization | Removed / deferred | Not part of the Hello World baseline. |
+| PRJ-01 | Register/create project directories | Removed / deferred | Not part of the Hello World baseline. |
+| PRJ-02 | Public GitHub clone/retry | Removed / deferred | Not part of the Hello World baseline. |
+| PRJ-03 | Private repository authentication | Removed / deferred | Not part of the Hello World baseline. |
+| PRJ-04 | Protected Default project and model association | Removed / deferred | Not part of the Hello World baseline. |
+| PRJ-05 | Named/numbered sessions and conversations | Removed / deferred | Not part of the Hello World baseline. |
+| PRJ-06 | Rename and project/conversation navigation | Removed / deferred | Not part of the Hello World baseline. |
+| PRJ-07 | Trash/restore/permanent deletion | Removed / deferred | Not part of the Hello World baseline. |
+| PRJ-08 | Isolated checkouts for concurrent editing | Removed / deferred | Not part of the Hello World baseline. |
+| PRJ-09 | Diff review and verification-evidence workflow | Removed / deferred | Not part of the Hello World baseline. |
+| MOD-01 | Built-in providers, supported login and catalog refresh | Removed / deferred | Not part of the Hello World baseline. |
+| MOD-02 | Model/thinking selection and defaults | Removed / deferred | Not part of the Hello World baseline. |
+| MOD-03 | Custom/local endpoints, headers and model overrides | Removed / deferred | Not part of the Hello World baseline. |
+| MOD-04 | Virtual-model routing | Removed / deferred | Not part of the Hello World baseline. |
+| MOD-05 | Attachments and non-text result rendering | Removed / deferred | Not part of the Hello World baseline. |
+| MOD-06 | Image generation and classification | Removed / deferred | Not part of the Hello World baseline. |
+| MOD-07 | Token/cache/cost and context inspection | Removed / deferred | Not part of the Hello World baseline. |
+| MOD-08 | Usage aggregation and enforced cost budgets | Removed / deferred | Not part of the Hello World baseline. |
+| SEC-01 | Native nono worker confinement | Removed / deferred | Not part of the Hello World baseline. |
+| SEC-02 | Filesystem grants and access presets | Removed / deferred | Not part of the Hello World baseline. |
+| SEC-03 | Network policy | Removed / deferred | Not part of the Hello World baseline. |
+| SEC-04 | Native Pi read/write/edit/bash | Removed / deferred | Not part of the Hello World baseline. |
+| SEC-05 | Child environment and credential separation | Removed / deferred | Not part of the Hello World baseline. |
+| SEC-06 | Command timeout and descendant cancellation | Removed / deferred | Not part of the Hello World baseline. |
+| SEC-07 | Output bounds and scratch cleanup | Removed / deferred | Not part of the Hello World baseline. |
+| SEC-08 | CPU/memory/disk/concurrency quotas | Removed / deferred | Not part of the Hello World baseline. |
+| SEC-09 | Executable plugin/MCP trust review | Removed / deferred | Not part of the Hello World baseline. |
+| SEC-10 | Durable human approval for consequential tools | Removed / deferred | Not part of the Hello World baseline. |
+| RUN-01 | Durable transcript/inbox and request deduplication | Removed / deferred | Not part of the Hello World baseline. |
+| RUN-02 | Steer/follow-up/reject and queued withdrawal | Removed / deferred | Not part of the Hello World baseline. |
+| RUN-03 | Cancel and explicit Resume after interruption | Removed / deferred | Not part of the Hello World baseline. |
+| RUN-04 | Native history forks | Removed / deferred | Not part of the Hello World baseline. |
+| RUN-05 | History/reasoning and context-boundary navigation | Removed / deferred | Not part of the Hello World baseline. |
+| RUN-06 | Compaction and reset/handoff | Removed / deferred | Not part of the Hello World baseline. |
+| RUN-07 | Runtime policy configuration | Removed / deferred | Not part of the Hello World baseline. |
+| RUN-08 | Live task ownership/dependency inspection | Removed / deferred | Not part of the Hello World baseline. |
+| RUN-09 | Agent-accessible history search | Removed / deferred | Not part of the Hello World baseline. |
+| RUN-10 | Durable full-output artifacts/retrieval | Removed / deferred | Not part of the Hello World baseline. |
+| RUN-11 | Parked-task retry and failure diagnosis | Removed / deferred | Not part of the Hello World baseline. |
+| RUN-12 | Abrupt-crash/external-effect recovery proof | Removed / deferred | Not part of the Hello World baseline. |
+| RUN-13 | Operational reports/telemetry | Removed / deferred | Not part of the Hello World baseline. |
+| EXT-01 | Root/nested workspace instructions | Removed / deferred | Not part of the Hello World baseline. |
+| EXT-02 | SYSTEM/APPEND_SYSTEM sections | Removed / deferred | Not part of the Hello World baseline. |
+| EXT-03 | Skills and parameterized templates | Removed / deferred | Not part of the Hello World baseline. |
+| EXT-04 | Additional resource directories/diagnostics | Removed / deferred | Not part of the Hello World baseline. |
+| EXT-05 | Installed extension/tool selection | Removed / deferred | Not part of the Hello World baseline. |
+| EXT-06 | Package install/remove/hot reload | Removed / deferred | Not part of the Hello World baseline. |
+| EXT-07 | Typed hooks and custom interactive tools | Removed / deferred | Not part of the Hello World baseline. |
+| EXT-08 | MCP lifecycle/credentials/resources/exposure | Removed / deferred | Not part of the Hello World baseline. |
+| EXT-09 | Code Mode | Removed / deferred | Not part of the Hello World baseline. |
+| EXT-10 | Deferred tool discovery/search | Removed / deferred | Not part of the Hello World baseline. |
+| EXT-11 | Mid-run agent configuration | Removed / deferred | Not part of the Hello World baseline. |
+| AGT-01 | Foreground task-owned subagents | Removed / deferred | Not part of the Hello World baseline. |
+| AGT-02 | Background spawn/message/wait/stop/report-back | Removed / deferred | Not part of the Hello World baseline. |
+| AGT-03 | Revisioned shared state | Removed / deferred | Not part of the Hello World baseline. |
+| AGT-04 | Atomic shared-state path operations | Removed / deferred | Not part of the Hello World baseline. |
+| AGT-05 | Recorded conversation plans | Removed / deferred | Not part of the Hello World baseline. |
+| AGT-06 | Checkpointed application jobs and durable sleep/wake | Removed / deferred | Not part of the Hello World baseline. |
+| AGT-07 | Durable approval/review gates | Removed / deferred | Not part of the Hello World baseline. |
+| AGT-08 | Schedules/authenticated event triggers | Removed / deferred | Not part of the Hello World baseline. |
+| AGT-09 | Explicit project memory | Removed / deferred | Not part of the Hello World baseline. |
+| UI-01 | Markdown/collapsible activity, plans and output | Removed / deferred | Not part of the Hello World baseline. |
+| UI-02 | History anchoring and paused bottom-follow | Removed / deferred | Not part of the Hello World baseline. |
+| UI-03 | On-demand inspectors/settings and machine tree | Removed / deferred | Not part of the Hello World baseline. |
+| UI-04 | Continuous model/tool event delivery | Removed / deferred | Not part of the Hello World baseline. |
+| UI-05 | Transcript export/import/sharing | Removed / deferred | Not part of the Hello World baseline. |
+| CLI-01 | Reusable client SDK and CLI/TUI | Removed / deferred | Not part of the Hello World baseline. |
+| CLI-02 | Structured stream and submit-and-wait API | Removed / deferred | Not part of the Hello World baseline. |
+| OPS-01 | Persistent data configuration/storage inspection | Removed / deferred | Not part of the Hello World baseline. |
+| OPS-02 | Supported backup/restore | Removed / deferred | Not part of the Hello World baseline. |
+| OPS-03 | Cross-platform/live remote validation | Removed / deferred | Not part of the Hello World baseline. |
+| OPS-04 | Crash/reconnect/backpressure/browser regressions | Removed / deferred | Not part of the Hello World baseline. |
+| OPS-05 | Measured scale and retention policy | Removed / deferred | Not part of the Hello World baseline. |
+| OPS-06 | Versions/changelogs and quality tooling | Implemented | Changesets, TypeScript, server test, builds and repository checks remain. |
+| OPS-07 | Publishing/deployment/release automation | Removed / deferred | Not part of the Hello World baseline. |
