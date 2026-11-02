@@ -10,6 +10,12 @@ import {
 } from "react";
 import { useDevices } from "@/components/devices/device-provider";
 import { useBackendRequest } from "@/hooks/use-backend-request";
+import {
+  type ProjectPins,
+  parseProjectPins,
+  projectPinsStorageKey,
+  updateProjectPins,
+} from "@/lib/project-pins";
 
 export type Project = {
   id: string;
@@ -30,11 +36,35 @@ type State = ReturnType<typeof useBackendRequest> & {
   settings?: MachineSettings;
   projects?: Project[];
   error?: string;
+  pinnedIds: string[];
+  pinError?: string;
+  setPinned: (id: string, pinned: boolean) => void;
   refresh: () => Promise<void>;
 };
 const Context = createContext<State | null>(null);
 export function ProjectsProvider({ children }: { children: ReactNode }) {
   const { origin, request } = useBackendRequest();
+  const [pins, setPins] = useState<ProjectPins>({});
+  const [pinsReady, setPinsReady] = useState(false);
+  const [pinError, setPinError] = useState<string>();
+  useEffect(() => {
+    try {
+      setPins(parseProjectPins(localStorage.getItem(projectPinsStorageKey)));
+    } catch {
+      setPinError(
+        "Project pins could not be read. Existing browser data has not been changed.",
+      );
+    }
+    setPinsReady(true);
+  }, []);
+  function setPinned(id: string, pinned: boolean) {
+    if (!origin || !pinsReady)
+      throw new Error("Connect this machine before pinning projects.");
+    if (pinError) throw new Error(pinError);
+    const next = updateProjectPins(pins, origin, id, pinned);
+    localStorage.setItem(projectPinsStorageKey, JSON.stringify(next));
+    setPins(next);
+  }
   const latest = useRef(origin);
   latest.current = origin;
   const version = useRef(0);
@@ -86,6 +116,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         projects: current?.projects,
         settings: current?.settings,
         error: current?.error,
+        pinnedIds: origin ? (pins[origin] ?? []) : [],
+        pinError,
+        setPinned,
       }}
     >
       {children}
@@ -105,5 +138,10 @@ export function useMachineProjects(deviceId: string) {
     projects: connected ? state.projects : undefined,
     settings: connected ? state.settings : undefined,
     error: connected ? state.error : undefined,
+    pinnedIds: connected ? state.pinnedIds : [],
+    setPinned: (id: string, pinned: boolean) => {
+      if (!connected) throw new Error("Connect this machine first.");
+      state.setPinned(id, pinned);
+    },
   };
 }
