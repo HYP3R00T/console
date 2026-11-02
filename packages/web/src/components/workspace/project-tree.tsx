@@ -4,21 +4,28 @@ import {
   type Folder,
   FolderClock,
   MessageSquare,
+  Pin,
   Plus,
-  Settings,
   SquarePen,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import { SidebarAction } from "@/components/layout/sidebar-action";
+import { ProjectContextMenu } from "@/components/projects/project-context-menu";
 import { ProjectIcon } from "@/components/projects/project-icon";
-import { useMachineProjects } from "@/components/projects/projects-provider";
+import { ProjectRemovalDialog } from "@/components/projects/project-removal-dialog";
+import {
+  type Project,
+  useMachineProjects,
+} from "@/components/projects/projects-provider";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { orderPinnedProjects } from "@/lib/project-pins";
 import { cn } from "@/lib/utils";
 
 export function ProjectTree({
@@ -30,7 +37,11 @@ export function ProjectTree({
   closeMobile?: () => void;
   compact?: boolean;
 }) {
-  const { projects, connected, error } = useMachineProjects(deviceId);
+  const { projects, connected, error, pinnedIds, pinError, setPinned } =
+    useMachineProjects(deviceId);
+  const [removing, setRemoving] = useState<Project>();
+  const [actionError, setActionError] = useState<string>();
+  const router = useRouter();
   const base = `/devices/${encodeURIComponent(deviceId)}`;
   const pathname = usePathname();
   function link(href: string, label: string, Icon: typeof Folder) {
@@ -53,70 +64,120 @@ export function ProjectTree({
       </SidebarAction>
     );
   }
-  const projectLinks = projects?.map((p) => {
-    const href = `${base}/projects/${encodeURIComponent(p.id)}`;
-    if (compact)
-      return (
+  const projectLinks =
+    projects &&
+    orderPinnedProjects(projects, pinnedIds).map((p) => {
+      const href = `${base}/projects/${encodeURIComponent(p.id)}`;
+      const pinned = pinnedIds.includes(p.id);
+      const row = compact ? (
         <SidebarAction
-          key={p.id}
           compact
           nativeButton={false}
           render={<Link href={href} onClick={closeMobile} />}
           aria-label={p.name}
-          title={p.name}
+          aria-description="Right-click or press Shift+F10 for project actions."
+          title={`${p.name}${pinned ? " · pinned" : ""}`}
         >
           <ProjectIcon icon={p.icon} color={p.color} />
         </SidebarAction>
-      );
-    return (
-      <Collapsible key={p.id} className="group/project">
-        <div
-          className={cn(
-            "flex items-center",
-            pathname.startsWith(href) && "bg-sidebar-accent",
-          )}
-        >
-          <CollapsibleTrigger className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-sm hover:bg-sidebar-accent [&[aria-expanded=true]>svg:first-child]:rotate-90">
-            <ChevronRight className="size-3 shrink-0 transition-transform" />
-            <ProjectIcon icon={p.icon} color={p.color} />
-            <span className="truncate">{p.name}</span>
-            {!p.available && (
-              <span
-                className="size-1.5 shrink-0 bg-destructive"
-                title="Directory unavailable"
-              />
+      ) : (
+        <Collapsible className="group/project">
+          <div
+            className={cn(
+              "flex items-center",
+              pathname.startsWith(href) && "bg-sidebar-accent",
             )}
-          </CollapsibleTrigger>
-          <Button
-            nativeButton={false}
-            variant="ghost"
-            size="icon"
-            className="size-8 shrink-0"
-            aria-label={`Settings for ${p.name}`}
-            title="Project settings"
-            render={<Link href={`${href}/settings`} onClick={closeMobile} />}
           >
-            <Settings className="size-3.5" />
-          </Button>
-        </div>
-        <CollapsibleContent className="overflow-hidden">
-          <p className="py-3 pl-11 text-xs text-muted-foreground">
-            No sessions yet.
-          </p>
-        </CollapsibleContent>
-      </Collapsible>
-    );
-  });
+            <CollapsibleTrigger
+              aria-description="Right-click or press Shift+F10 for project actions."
+              className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-sm hover:bg-sidebar-accent [&[aria-expanded=true]>svg:first-child]:rotate-90"
+            >
+              <ChevronRight className="size-3 shrink-0 transition-transform" />
+              <ProjectIcon icon={p.icon} color={p.color} />
+              <span className="truncate">{p.name}</span>
+              {pinned && (
+                <Pin
+                  className="ml-auto size-3 shrink-0 text-muted-foreground"
+                  aria-label="Pinned project"
+                />
+              )}
+              {!p.available && (
+                <span
+                  className="size-1.5 shrink-0 bg-destructive"
+                  title="Directory unavailable"
+                />
+              )}
+            </CollapsibleTrigger>
+          </div>
+          <CollapsibleContent className="overflow-hidden">
+            <p className="py-3 pl-11 text-xs text-muted-foreground">
+              No sessions yet.
+            </p>
+          </CollapsibleContent>
+        </Collapsible>
+      );
+      return (
+        <ProjectContextMenu
+          key={p.id}
+          name={p.name}
+          href={href}
+          pinned={pinned}
+          onPin={() => {
+            try {
+              setPinned(p.id, !pinned);
+              setActionError(undefined);
+            } catch (cause) {
+              setActionError(
+                cause instanceof Error
+                  ? cause.message
+                  : "Could not save project pins.",
+              );
+            }
+          }}
+          onRemove={() => setRemoving(p)}
+          onEdit={closeMobile}
+        >
+          {row}
+        </ProjectContextMenu>
+      );
+    });
+  const removal = removing && (
+    <ProjectRemovalDialog
+      key={removing.id}
+      project={removing}
+      deviceId={deviceId}
+      onClose={() => setRemoving(undefined)}
+      onRemoved={(id) => {
+        const href = `${base}/projects/${encodeURIComponent(id)}`;
+        if (pathname === href || pathname.startsWith(`${href}/`)) {
+          router.push(base);
+          closeMobile();
+        }
+      }}
+    />
+  );
   if (compact)
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
         {link(`${base}/projects/new`, "Add project", Plus)}
         {projectLinks}
+        {removal}
+        {(actionError || pinError) && (
+          <span role="alert" className="sr-only">
+            {actionError ?? pinError}
+          </span>
+        )}
         {link(`${base}/preview/recent-idea`, "Recents", FolderClock)}
       </div>
     );
   return (
     <div className="min-w-0 space-y-6 px-2">
+      {removal}
+      {(actionError || pinError) && (
+        <p role="alert" className="px-3 text-xs text-destructive">
+          {actionError ?? pinError}
+        </p>
+      )}
       {link(`${base}/preview/new`, "New conversation", SquarePen)}
       <section aria-label="Projects">
         <div className="mb-2 flex items-center justify-between pl-3">

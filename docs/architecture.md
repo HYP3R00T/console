@@ -200,7 +200,7 @@ and weight; metadata remains secondary.
 
 Workspace navigation separates Projects from Recents (conversations outside projects), with a
 New conversation entry. New conversation and Recents open frontend examples only: they create no conversations,
-folders or files; expanded project rows toggle sessions and a sibling gear opens settings. The sidebar omits the Preview badge; the content view retains its explicit
+folders or files; expanded project rows toggle sessions and their context menu opens settings. The sidebar omits the Preview badge; the content view retains its explicit
 preview notice. Recents does not represent a live activity feed or persisted history yet.
 
 The workspace New conversation action aligns vertically with Home in the primary column.
@@ -260,7 +260,7 @@ creation checkbox. `project-settings.tsx` owns the machine projects-root form. N
 picker is used: these are paths on the connected backend. Public Git behavior follows the official
 [clone](https://git-scm.com/docs/git-clone) and [init](https://git-scm.com/docs/git-init) documentation.
 
-Project appearance is backend-owned. SQLite adds icon/color columns transactionally to existing registries, with folder/neutral defaults. Expanded project rows use shadcn Collapsible; their settings link is a separate sibling control. `/devices/[deviceId]/projects/[projectId]/settings` hosts the editor. Polling updates names and appearance across clients without replacing unsaved editor drafts.
+Project appearance is backend-owned. SQLite adds icon/color columns transactionally to existing registries, with folder/neutral defaults. Expanded project rows use shadcn Collapsible; their context menu opens settings or removal and supports browser-local pinning. `/devices/[deviceId]/projects/[projectId]/settings` hosts the editor. Polling updates names and appearance across clients without replacing unsaved editor drafts.
 
 ## Project Git inspection
 
@@ -270,6 +270,10 @@ GET `/v1/projects/:id/git` resolves the registered project and rechecks its dire
 
 The project editor uses full-width responsive layout and top-right removal/confirmation. Its icon picker renders 32 Lucide presets; the project update schema accepts the same IDs. Git inspection behavior remains on demand; reorganizing the view does not add Git actions or polling.
 
-Project identity and directory metadata use container-responsive columns so their layout follows the available content pane. Current Git rows use accessible current-state attributes and blue square markers. The first Git worktree-list record is the main worktree (or bare repository); linked records use their directory basename as display identity. Branch names remain in the API snapshot but are omitted from the compact worktree UI. The red Delete action retains the registration-only backend contract.
+Project identity and directory metadata use container-responsive columns so their layout follows the available content pane. Current Git rows use accessible current-state attributes and blue square markers. The first Git worktree-list record is the main worktree (or bare repository); linked records use their directory basename as display identity. Branch names remain in the API snapshot but are omitted from the compact worktree UI. The red Remove action retains the registration-only backend contract.
 
 The editor tracks the last successfully saved name/icon/color separately from its draft. Its conditional header Save button targets the identity form and hides on revert or successful save. The project-title refresh icon reads directory and Git data; the Git view reports loading to keep that control disabled until completion. Main is the display label for the original checkout; active worktrees and branches share row highlighting.
+
+`project-context-menu.tsx` wraps both project navigation modes in the library context menu. `project-removal-dialog.tsx` owns the shared registration-only Remove workflow used by the menu and editor. ProjectsProvider owns validated browser-local pin preferences, scoped by backend URL; `lib/project-pins.ts` validates persistence and orders known projects without mutating backend snapshots. No pin field or API is added to the backend.
+
+Project context-menu triggers use a flex-column formatting context. This preserves automatic horizontal margins on compact inline-flex action buttons and stretches expanded disclosure rows to the available width; a plain block wrapper would left-align compact buttons.

@@ -67,7 +67,7 @@ and weight; metadata remains secondary.
 
 Workspace navigation separates Projects from Recents (conversations outside projects), with a
 New conversation entry. New conversation and Recents open frontend examples only: they create no conversations,
-folders or files. Expanded project rows toggle their sessions; a separate gear opens project settings. The sidebar omits the Preview badge; the content view retains its explicit
+folders or files. Expanded project rows toggle their sessions; the project context menu opens Edit settings. The sidebar omits the Preview badge; the content view retains its explicit
 preview notice. Recents does not represent a live activity feed or persisted history yet.
 
 The workspace New conversation action aligns vertically with Home in the primary column.
@@ -94,7 +94,7 @@ chevron expands the panel. The footer uses the label Machine settings.
 - Setup stages work, reserves a destination name exclusively, then publishes it and registers it. Failed/cancelled Git operations remove their staging directory; published files are preserved if registration fails.
 - Git must be installed on the backend. Setup allows two concurrent operations, has a two-minute limit, and cancels on client disconnect. No durable job recovery, private authentication, SSH clone or Git pull/update workflow yet.
 
-Project settings persist name, icon and color per backend. Renaming changes the label only. Project disclosures show an honest empty state until sessions exist; metadata/check/remove actions live in a dedicated settings route. Add project uses a 2:1 form/destination layout on wide screens.
+Project settings persist name, icon and color per backend. Renaming changes the label only. Project disclosures show an honest empty state until sessions exist; Edit opens a dedicated settings route; a project context menu also offers Remove and Pin/Unpin. Add project uses a 2:1 form/destination layout on wide screens.
 
 ## Project Git metadata
 
@@ -104,6 +104,12 @@ Project settings persist name, icon and color per backend. Renaming changes the 
 
 Project settings uses the full content width. Removal/confirmation lives at the top-right; name/icon editing and directory metadata share two responsive columns with a single inset input focus outline. The icon picker offers 32 searchable Lucide presets. Git has separate branches/worktrees sections with blue current-item squares, aligned counts and one on-demand refresh button. Worktree identity and checked-out branch are distinct.
 
-Project headers show only the project name and destructive Delete/trash action. Deletion remains registration-only and requires confirmation. UI omits redundant Git/Main worktree and current-branch summary lines; the worktree list uses Main as the original checkout display label and omits per-worktree branch lines.
+Project headers show only the project name and destructive Remove/trash action. Deletion remains registration-only and requires confirmation. UI omits redundant Git/Main worktree and current-branch summary lines; the worktree list uses Main as the original checkout display label and omits per-worktree branch lines.
 
-Save changes is shown immediately left of Delete only for unsaved name/icon/color changes; reverting changes hides it. Refresh is an icon beside the project title and waits for directory/Git reads to finish. Current worktrees and branches share shaded row backgrounds and blue square markers.
+Save changes is shown immediately left of Remove only for unsaved name/icon/color changes; reverting changes hides it. Refresh is an icon beside the project title and waits for directory/Git reads to finish. Current worktrees and branches share shaded row backgrounds and blue square markers.
+
+## Project actions and pinning
+
+- Right-click project entries in expanded or compact navigation for Edit, Pin to top/Unpin and Remove. Project clicks still expand/collapse rather than opening settings; the gear shortcut is removed. Keyboard context-menu invocation and library long-press behavior expose the same actions.
+- Pinning is a client preference persisted in this browser per backend URL. Newest pins sort first; unpinned projects keep backend order. Removed/unknown IDs do not create sidebar entries. No cross-tab synchronization is implemented.
+- Sidebar and settings Remove share a confirmation dialog that names the project/path and states files stay on the machine. Only the backend registration is removed.

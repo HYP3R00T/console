@@ -110,7 +110,7 @@ and weight; metadata remains secondary.
 
 Workspace navigation separates Projects from Recents (conversations outside projects), with a
 New conversation entry. New conversation and Recents open frontend examples only: they create no conversations,
-folders or files; Project rows expand in place; their gear opens settings. The sidebar omits the Preview badge; the content view retains its explicit
+folders or files; Project rows expand in place; their context menu offers Edit. The sidebar omits the Preview badge; the content view retains its explicit
 preview notice. Recents does not represent a live activity feed or persisted history yet.
 
 The workspace New conversation action aligns vertically with Home in the primary column.
@@ -121,7 +121,7 @@ chevron expands the panel. The footer uses the label Machine settings.
 
 Connect a machine using its first-column disclosure. Use Add project beside Projects (or the plus
 in the compact workspace rail), enter a name and an absolute existing directory path on that machine,
-and register it. Both sidebar modes show real registrations. Expand a project row for its sessions (currently empty); use its gear for name/icon/color, an inline path/status dot, metadata refresh and Git inspection. Remove registration asks for confirmation and leaves all files untouched; registering
+and register it. Both sidebar modes show real registrations. Expand a project row for its sessions (currently empty); use right-click → Edit for name/icon/color, an inline path/status dot, metadata refresh and Git inspection. Remove registration asks for confirmation and leaves all files untouched; registering
 the directory again restores a new registry entry, not the old ID. Missing directories are retained
 as unavailable. Reload keeps registrations on the backend but still requires explicit reconnection.
 
@@ -146,6 +146,14 @@ Project settings loads a read-only Git snapshot on entry and explicit refresh: c
 
 Project settings spans the content pane. Its top-right removal action retains confirmation and preserves files. Name/icon editing occupies the first column beside directory details; narrow content panes stack these columns; the name input uses a shaded surface and one inset focus indicator. The picker provides 32 searchable icons and eight colors. Git branches and worktrees use separate shaded sections (side by side on desktop), with blue squares marking current items, heading-sized counts and one explicit Refresh action.
 
-The project header shows only the project name and a red Delete action with a trash icon. Delete removes the registration only; confirmation states that files stay on the machine. The main worktree uses the display label Main; linked worktrees use directory names. The compact list omits per-worktree branch lines. Redundant Git summary/current-branch lines are omitted. Current list items retain accessible current-state semantics.
+The project header shows only the project name and a red Remove action with a trash icon. Remove removes the registration only; confirmation states that files stay on the machine. The main worktree uses the display label Main; linked worktrees use directory names. The compact list omits per-worktree branch lines. Redundant Git summary/current-branch lines are omitted. Current list items retain accessible current-state semantics.
 
-Save changes appears in the header immediately before Delete only when the name/icon/color differs from the last saved values; reverting an edit hides it. The header button submits the associated form, preserving keyboard validation. The refresh icon beside the project name reloads directory and Git metadata and is disabled while that snapshot loads. Current worktrees use the same shaded background and blue square as current branches.
+Save changes appears in the header immediately before Remove only when the name/icon/color differs from the last saved values; reverting an edit hides it. The header button submits the associated form, preserving keyboard validation. The refresh icon beside the project name reloads directory and Git metadata and is disabled while that snapshot loads. Current worktrees use the same shaded background and blue square as current branches.
+
+Project entries in both sidebar modes use the official shadcn Base UI Context Menu: Edit opens settings, Pin to top/Unpin changes browser-local ordering, and Remove opens a shared confirmation dialog. The gear is removed. Shift+F10 or the keyboard context-menu key on a focused entry provides keyboard access; Base UI supplies touch long-press behavior. Expanded pinned rows show a pin icon; compact entries include pinned state in their tooltip.
+
+`console.project-pins.v1` stores project IDs grouped by backend URL. Newest pins come first, then unchanged backend order; unknown IDs are ignored. Invalid storage is reported and left untouched, and failed writes preserve in-memory state. Pins persist across reload; they are not shared with other clients or synchronized across tabs. `test/project-pins.test.ts` checks parsing, round-trip persistence, backend isolation and ordering.
+
+Browser verification covered expanded/compact right-click menus, Shift+F10, Edit navigation, pin ordering/persistence after reload and reconnect, Unpin, shared removal confirmation/cancel, and removal disabled while disconnected. A temporary registration was unpinned and cleaned up; source-file preservation was verified through the backend API. Touch long-press was not manually verified.
+
+Context-menu triggers retain a flex-column layout: compact action buttons keep their automatic horizontal margins, matching the rail icon center, while expanded project rows stretch to the panel width.

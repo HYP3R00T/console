@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { ProjectGit } from "./project-git";
 import { ProjectIcon, ProjectIconPicker } from "./project-icon";
+import { ProjectRemovalDialog } from "./project-removal-dialog";
 import { type Project, useMachineProjects } from "./projects-provider";
 
 export function ProjectPage({ settings = false }: { settings?: boolean }) {
@@ -87,7 +88,7 @@ function ProjectEditor({
   const [revision, setRevision] = useState(0);
   const router = useRouter();
   const endpoint = `/v1/projects/${encodeURIComponent(project.id)}`;
-  async function run(action: "save" | "remove" | "check") {
+  async function run(action: "save" | "check") {
     if (busy || (action === "save" && (!dirty || !name.trim()))) return;
     setBusy(true);
     setError(undefined);
@@ -104,12 +105,9 @@ function ProjectEditor({
           icon: updated.icon,
           color: updated.color,
         });
-      } else if (action === "remove")
-        await state.request(endpoint, { method: "DELETE" });
+      }
       await state.refresh();
       if (action === "check") setRevision((value) => value + 1);
-      if (action === "remove")
-        router.push(`/devices/${encodeURIComponent(deviceId)}`);
       if (action === "save") setSaved(true);
     } catch (cause) {
       setError(
@@ -141,7 +139,7 @@ function ProjectEditor({
           </Button>
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          {dirty && !confirm && (
+          {dirty && (
             <Button
               type="submit"
               form="project-details"
@@ -150,39 +148,26 @@ function ProjectEditor({
               Save changes
             </Button>
           )}
-          {confirm ? (
-            <>
-              <p className="mr-2 text-xs text-muted-foreground">
-                Files stay on the machine.
-              </p>
-              <Button
-                variant="destructive"
-                disabled={busy}
-                onClick={() => void run("remove")}
-              >
-                <Trash2 className="size-3.5" />
-                Confirm delete registration
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={busy}
-                onClick={() => setConfirm(false)}
-              >
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="destructive"
-              disabled={busy}
-              onClick={() => setConfirm(true)}
-            >
-              <Trash2 className="size-3.5" />
-              Delete
-            </Button>
-          )}
+          <Button
+            variant="destructive"
+            disabled={busy}
+            onClick={() => setConfirm(true)}
+          >
+            <Trash2 className="size-3.5" />
+            Remove
+          </Button>
         </div>
       </header>
+      {confirm && (
+        <ProjectRemovalDialog
+          project={project}
+          deviceId={deviceId}
+          onClose={() => setConfirm(false)}
+          onRemoved={() =>
+            router.push(`/devices/${encodeURIComponent(deviceId)}`)
+          }
+        />
+      )}
       <div className="grid items-start gap-6 @3xl:grid-cols-2">
         <form
           id="project-details"
