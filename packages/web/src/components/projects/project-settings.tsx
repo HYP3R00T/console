@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ProjectArchive } from "./project-archive";
 import { useMachineProjects } from "./projects-provider";
 export function ProjectSettings() {
   const { deviceId } = useParams<{ deviceId: string }>();
@@ -83,6 +84,7 @@ export function ProjectSettings() {
           </Button>
         </form>
       )}
+      {connected && <ProjectArchive key={deviceId} deviceId={deviceId} />}
     </div>
   );
 }

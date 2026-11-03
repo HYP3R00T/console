@@ -63,15 +63,13 @@ test("project -> harness -> one persistent session -> multiple independent conve
       .length,
     0,
   );
+  const projectUrl = `/v1/projects/${project.id}`;
   assert.equal(
-    (
-      await f.app.inject({
-        method: "DELETE",
-        url: `/v1/projects/${project.id}`,
-      })
-    ).statusCode,
-    409,
+    (await f.app.inject({ method: "DELETE", url: projectUrl })).statusCode,
+    200,
   );
+  assert.equal((await f.app.inject(base)).statusCode, 404);
+  assert.equal((await f.app.inject(message)).statusCode, 404);
   assert.equal(
     statSync(join(directory, "sessions", `${harness.sessionId}.sqlite`)).mode &
       0o777,
@@ -79,6 +77,18 @@ test("project -> harness -> one persistent session -> multiple independent conve
   );
   await f.app.close();
   f = await fixture(directory);
+  assert.equal((await f.app.inject("/v1/projects")).json().projects.length, 0);
+  assert.equal(
+    (await f.app.inject("/v1/projects/archive")).json().projects[0].id,
+    project.id,
+  );
+  assert.equal((await f.app.inject(base)).statusCode, 404);
+  assert.equal(
+    (
+      await f.app.inject({ method: "POST", url: `${projectUrl}/restore` })
+    ).json().id,
+    project.id,
+  );
   list = (await f.app.inject(base)).json();
   assert.equal(list.conversations.length, 2);
   assert.ok(
@@ -239,6 +249,47 @@ test("SSE detach leaves generation running; reconnect supplies the current snaps
     assert.ok(submission);
     const result = await submission.status(context);
     assert.equal(result.status, "unanswered");
+  }
+  f.faux.setResponses([hang]);
+  const active = await f.service.submit(
+    h.sessionId,
+    String(main),
+    "Active",
+    randomUUID(),
+  );
+  const queued = await f.service.submit(
+    h.sessionId,
+    String(main),
+    "Queued",
+    randomUUID(),
+  );
+  const projectUrl = `/v1/projects/${project.id}`;
+  const blocked = await f.app.inject({ method: "DELETE", url: projectUrl });
+  assert.equal(blocked.statusCode, 409, blocked.body);
+  assert.equal(blocked.json().code, "project_busy");
+  assert.equal((await f.app.inject(projectUrl)).statusCode, 200);
+  const archiving = f.projects.archive(project.id, true);
+  await assert.rejects(
+    f.service.submit(h.sessionId, String(main), "Race", randomUUID()),
+    /archiv/,
+  );
+  await archiving;
+  assert.equal((await f.app.inject(projectUrl)).statusCode, 404);
+  assert.equal(
+    (await f.app.inject({ method: "POST", url: `${projectUrl}/restore` }))
+      .statusCode,
+    200,
+  );
+  const restored = await f.service.session(h.sessionId);
+  assert.equal((await restored.harness.inspect(context)).tasks.length, 0);
+  for (const admitted of [active, queued]) {
+    const submission = await restored.harness.submission(admitted.id, context);
+    assert.ok(submission);
+    assert.ok(
+      ["unanswered", "withdrawn"].includes(
+        (await submission.status(context)).status,
+      ),
+    );
   }
 });
 

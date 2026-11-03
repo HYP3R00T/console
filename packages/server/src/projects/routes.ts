@@ -19,6 +19,9 @@ export function registerProjectRoutes(
             ? 400
             : 500;
       reply.code(status).send({
+        ...(error instanceof ProjectError && error.code
+          ? { code: error.code }
+          : {}),
         error:
           error instanceof ProjectError
             ? error.message
@@ -100,6 +103,7 @@ export function registerProjectRoutes(
       );
     }
     routes.get("/v1/projects", () => service.list());
+    routes.get("/v1/projects/archive", () => service.list(true));
     routes.post<{ Body: { name: string; path: string } }>(
       "/v1/projects",
       {
@@ -207,7 +211,17 @@ export function registerProjectRoutes(
     routes.delete<{ Params: { id: string } }>(
       "/v1/projects/:id",
       { schema: { params } },
-      (req) => service.remove(req.params.id),
+      (req) => service.archive(req.params.id),
+    );
+    routes.post<{ Params: { id: string } }>(
+      "/v1/projects/:id/stop-and-archive",
+      { schema: { params } },
+      (req) => service.archive(req.params.id, true),
+    );
+    routes.post<{ Params: { id: string } }>(
+      "/v1/projects/:id/restore",
+      { schema: { params } },
+      (req) => service.restore(req.params.id),
     );
   });
 }

@@ -1,5 +1,5 @@
 "use client";
-import { Trash2 } from "lucide-react";
+import { Archive } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { BackendRequestError } from "@/hooks/use-backend-request";
 import { type Project, useMachineProjects } from "./projects-provider";
 
 export function ProjectRemovalDialog({
@@ -26,20 +27,28 @@ export function ProjectRemovalDialog({
   const { connected, request, refresh } = useMachineProjects(deviceId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  async function remove() {
+  const [needsStop, setNeedsStop] = useState(false);
+  async function archive(stop: boolean) {
     if (!connected || busy) return;
     setBusy(true);
     setError(undefined);
     try {
-      await request(`/v1/projects/${encodeURIComponent(project.id)}`, {
-        method: "DELETE",
-      });
+      const path = `/v1/projects/${encodeURIComponent(project.id)}`;
+      await request(
+        stop ? `${path}/stop-and-archive` : path,
+        {
+          method: stop ? "POST" : "DELETE",
+        },
+        30000,
+      );
       await refresh();
       onRemoved(project.id);
       onClose();
     } catch (cause) {
+      if (cause instanceof BackendRequestError && cause.code === "project_busy")
+        setNeedsStop(true);
       setError(
-        cause instanceof Error ? cause.message : "Could not remove project.",
+        cause instanceof Error ? cause.message : "Could not archive project.",
       );
     } finally {
       setBusy(false);
@@ -54,9 +63,10 @@ export function ProjectRemovalDialog({
     >
       <DialogContent showCloseButton={!busy}>
         <DialogHeader>
-          <DialogTitle>Remove {project.name}?</DialogTitle>
+          <DialogTitle>Archive {project.name}?</DialogTitle>
           <DialogDescription>
-            Remove this project from Console. Files stay on the machine.
+            Sessions and conversations can be restored from Machine settings →
+            Projects. Source files stay on this machine.
           </DialogDescription>
         </DialogHeader>
         <p className="break-all font-mono text-xs text-muted-foreground">
@@ -64,12 +74,17 @@ export function ProjectRemovalDialog({
         </p>
         {!connected && (
           <p role="status" className="text-xs text-muted-foreground">
-            Connect this machine to remove the project.
+            Connect this machine to archive the project.
           </p>
         )}
         {error && (
           <p role="alert" className="text-xs text-destructive">
             {error}
+          </p>
+        )}
+        {needsStop && (
+          <p className="text-sm text-muted-foreground">
+            This will interrupt running work and cancel queued messages.
           </p>
         )}
         <DialogFooter>
@@ -79,10 +94,14 @@ export function ProjectRemovalDialog({
           <Button
             variant="destructive"
             disabled={busy || !connected}
-            onClick={() => void remove()}
+            onClick={() => void archive(needsStop)}
           >
-            <Trash2 className="size-3.5" />
-            {busy ? "Removing…" : "Remove project"}
+            <Archive className="size-3.5" />
+            {busy
+              ? "Archiving…"
+              : needsStop
+                ? "Stop all and archive"
+                : "Archive project"}
           </Button>
         </DialogFooter>
       </DialogContent>

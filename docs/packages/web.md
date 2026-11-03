@@ -121,8 +121,7 @@ chevron expands the panel. The footer uses the label Machine settings.
 
 Connect a machine using its first-column disclosure. Use Add project beside Projects (or the plus
 in the compact workspace rail), enter a name and an absolute existing directory path on that machine,
-and register it. Both sidebar modes show real registrations. Expand a project row for its sessions; use right-click → Edit for name/icon/color, an inline path/status dot, metadata refresh and Git inspection. Remove registration asks for confirmation and leaves all files untouched; registering
-the directory again restores a new registry entry, not the old ID. Missing directories are retained
+and register it. Both sidebar modes show real registrations. Expand a project row for its sessions; use right-click → Edit for name/icon/color, an inline path/status dot, metadata refresh and Git inspection. Archive asks for confirmation and preserves all files and chat history. Restore from Machine settings → Projects → Archive. Missing directories are retained
 as unavailable. Reload keeps registrations on the backend but still requires explicit reconnection.
 
 Project routes: `/devices/[deviceId]/projects/new` and `/devices/[deviceId]/projects/[projectId]`.
@@ -184,4 +183,4 @@ Markdown, attachments, tool execution, forks, subagents and automatic history-ga
 deferred. Session lists refresh after local creation and poll every ten seconds. Unknown/other-project
 sessions cannot be displayed through a mismatched project route. Recents/top New conversation remain
 explicit standalone previews. The backend Stop API remains session-wide, with no chat control.
-Projects owning sessions remain protected from removal until cleanup is implemented.
+When an archive attempt finds running or queued work, the dialog offers Stop all and archive.

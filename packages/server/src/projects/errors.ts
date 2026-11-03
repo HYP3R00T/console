@@ -1,7 +1,9 @@
 export class ProjectError extends Error {
   readonly statusCode: number;
-  constructor(statusCode: number, message: string) {
+  readonly code?: string;
+  constructor(statusCode: number, message: string, code?: string) {
     super(message);
     this.statusCode = statusCode;
+    this.code = code;
   }
 }

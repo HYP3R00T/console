@@ -1,8 +1,12 @@
-import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
+import {
+  BACKGROUND_CONTEXT as context,
+  withAbortSignal,
+} from "@earendil-works/chord/context";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type {
   ConversationId,
   Cursor,
+  Harness,
   ModelRef,
   SubmissionId,
 } from "@earendil-works/pi-durable";
@@ -39,14 +43,49 @@ export class HarnessService {
     this.providers = providers;
     this.runtime = new HarnessRuntime(directory, providers);
     projects.afterRegister = (id) =>
-      this.operation(() => this.ensureDefault(id));
-    projects.removalGuard = (id) => {
-      if (store.list(id).length)
+      this.operation(() => this.serial(id, () => this.ensureDefault(id)));
+    projects.beforeArchive = (id, stop) =>
+      this.operation(() => this.prepareArchive(id, stop));
+  }
+  private async prepareArchive(projectId: string, stop: boolean) {
+    // The project gate is already held. Only commands admitted before it can mutate.
+    const sessions = this.store.list(projectId);
+    await Promise.allSettled([
+      this.commands.get(projectId),
+      ...sessions.map(({ sessionId }) => this.commands.get(sessionId)),
+    ]);
+    const harnesses = await Promise.all(
+      sessions.map(({ sessionId }) => this.runtime.open(sessionId)),
+    );
+    const active = async (harness: Harness) => {
+      const inspection = await harness.inspect(context);
+      return inspection.tasks.length > 0 || inspection.submissions.length > 0;
+    };
+    const busy = (await Promise.all(harnesses.map(active))).some(Boolean);
+    if (busy && !stop)
+      throw new ProjectError(
+        409,
+        "This project has running or queued work.",
+        "project_busy",
+      );
+    if (busy) {
+      const deadline = withAbortSignal(AbortSignal.timeout(15000), context);
+      const results = await Promise.allSettled(
+        harnesses.map((harness) =>
+          this.abortConversations(harness, deadline, true),
+        ),
+      );
+      if (
+        results.some((result) => result.status === "rejected") ||
+        (await Promise.all(harnesses.map(active))).some(Boolean)
+      )
         throw new ProjectError(
           409,
-          "This project owns sessions. Removal is unavailable until session cleanup is supported.",
+          "Some work could not be stopped. The project is still active.",
+          "project_busy",
         );
-    };
+    }
+    await Promise.all(harnesses.map((harness) => harness.close(context)));
   }
   // Track admission/read operations too: shutdown cannot close their databases underneath them.
   operation<T>(action: () => Promise<T>): Promise<T> {
@@ -61,6 +100,7 @@ export class HarnessService {
     for (const project of this.projects.store.list())
       await this.ensureDefault(project.id);
     for (const record of this.store.list()) {
+      if (!this.projects.store.get(record.projectId)) continue;
       const project = await this.projects.get(record.projectId);
       if (project.available) (await this.ready(record)).resume();
     }
@@ -89,6 +129,7 @@ export class HarnessService {
   }
 
   async ensureDefault(projectId: string) {
+    this.projects.assertWritable(projectId);
     const project = this.projects.store.get(projectId);
     if (!project) throw new HarnessError(404, "Project not found.");
     const record =
@@ -102,12 +143,14 @@ export class HarnessService {
     );
     return record;
   }
-  async create(projectId: string, model?: ModelRef) {
+  create(projectId: string, model?: ModelRef) {
+    return this.serial(projectId, () => this.createSession(projectId, model));
+  }
+  private async createSession(projectId: string, model?: ModelRef) {
     const project = await this.project(projectId);
     if (model) await this.model(model);
     await this.ensureDefault(projectId);
-    if (!this.projects.store.get(projectId))
-      throw new HarnessError(404, "Project not found.");
+    this.projects.assertWritable(projectId);
     const record = this.store.insert(
       projectId,
       model?.provider,
@@ -147,8 +190,10 @@ export class HarnessService {
   async session(sessionId: string) {
     const record = this.store.session(sessionId);
     if (!record) throw new HarnessError(404, "Session not found.");
-    await this.projects.get(record.projectId);
-    return { record, harness: await this.ready(record) };
+    this.projects.assertWritable(record.projectId);
+    const harness = await this.ready(record);
+    this.projects.assertWritable(record.projectId);
+    return { record, harness };
   }
   async conversations(sessionId: string) {
     const { record, harness } = await this.session(sessionId);
@@ -202,7 +247,7 @@ export class HarnessService {
       throw new HarnessError(404, "Conversation not found in this session.");
     return { record, harness, conversation };
   }
-  async admit(
+  private async admit(
     sessionId: string,
     id: string,
     content: string,
@@ -291,22 +336,34 @@ export class HarnessService {
   stop(sessionId: string) {
     return this.serial(sessionId, async () => {
       const { harness } = await this.session(sessionId);
-      let cursor: Cursor | undefined;
-      do {
-        const page = await harness.commit(
-          (tx) => tx.scanConversations({}, 200, cursor),
-          context,
-        );
-        await Promise.all(
-          page.items.map(async (row) => {
-            const conversation = await harness.conversation(row.id, context);
-            await conversation?.abort(context);
-          }),
-        );
-        cursor = page.next;
-      } while (cursor);
+      await this.abortConversations(harness, context);
       return { stopped: true };
     });
+  }
+  private async abortConversations(
+    harness: Harness,
+    operationContext: typeof context,
+    background = false,
+  ) {
+    let cursor: Cursor | undefined;
+    do {
+      const page = await harness.commit(
+        (tx) => tx.scanConversations({}, 200, cursor),
+        operationContext,
+      );
+      const results = await Promise.allSettled(
+        page.items.map(async (row) => {
+          const conversation = await harness.conversation(
+            row.id,
+            operationContext,
+          );
+          await conversation?.abort(operationContext, { background });
+        }),
+      );
+      for (const result of results)
+        if (result.status === "rejected") throw result.reason;
+      cursor = page.next;
+    } while (cursor);
   }
   async submission(sessionId: string, id: string, submissionId: string) {
     const { harness } = await this.conversation(sessionId, id);

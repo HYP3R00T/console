@@ -1,5 +1,5 @@
 "use client";
-import { RefreshCw, Trash2 } from "lucide-react";
+import { Archive, RefreshCw } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { ProjectSessions } from "@/components/sessions/project-sessions";
@@ -154,8 +154,8 @@ function ProjectEditor({
             disabled={busy}
             onClick={() => setConfirm(true)}
           >
-            <Trash2 className="size-3.5" />
-            Remove
+            <Archive className="size-3.5" />
+            Archive
           </Button>
         </div>
       </header>

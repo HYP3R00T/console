@@ -82,7 +82,7 @@ chevron expands the panel. The footer uses the label Machine settings.
 - Persist project IDs, names, paths and creation timestamps on that machine. Browser bookmarks remain client-owned.
 - List/open registered projects and recheck directory availability without creating files or running tools.
 - Missing/inaccessible directories remain registered with an unavailable status.
-- Remove registration only; preserve the directory and every project file. Display names, preset icons and colors are editable; directory paths are immutable. Harness/session APIs and text generation are described below.
+- Archive the project registration and its conversations while preserving the directory and every project file. Display names, preset icons and colors are editable; directory paths are immutable. Harness/session APIs and text generation are described below.
 
 ## Project setup and machine defaults
 
@@ -105,15 +105,15 @@ Project settings persist name, icon and color per backend. Renaming changes the 
 
 Project settings uses the full content width. Removal/confirmation lives at the top-right; name/icon editing and directory metadata share two responsive columns with a single inset input focus outline. The icon picker offers 32 searchable Lucide presets. Git has separate branches/worktrees sections with blue current-item squares, aligned counts and one on-demand refresh button. Worktree identity and checked-out branch are distinct.
 
-Project headers show only the project name and destructive Remove/trash action. Deletion remains registration-only and requires confirmation. UI omits redundant Git/Main worktree and current-branch summary lines; the worktree list uses Main as the original checkout display label and omits per-worktree branch lines.
+Project headers show only the project name and Archive action with confirmation. UI omits redundant Git/Main worktree and current-branch summary lines; the worktree list uses Main as the original checkout display label and omits per-worktree branch lines.
 
 Save changes is shown immediately left of Remove only for unsaved name/icon/color changes; reverting changes hides it. Refresh is an icon beside the project title and waits for directory/Git reads to finish. Current worktrees and branches share shaded row backgrounds and blue square markers.
 
 ## Project actions and pinning
 
-- Right-click project entries in expanded or compact navigation for Edit, Pin to top/Unpin and Remove. Project clicks still expand/collapse rather than opening settings; the gear shortcut is removed. Keyboard context-menu invocation and library long-press behavior expose the same actions.
+- Right-click project entries in expanded or compact navigation for Edit, Pin to top/Unpin and Archive. Project clicks still expand/collapse rather than opening settings; the gear shortcut is removed. Keyboard context-menu invocation and library long-press behavior expose the same actions.
 - Pinning is a client preference persisted in this browser per backend URL. Newest pins sort first; unpinned projects keep backend order. Removed/unknown IDs do not create sidebar entries. No cross-tab synchronization is implemented.
-- Sidebar and settings Remove share a confirmation dialog that names the project/path and states files stay on the machine. Only the backend registration is removed.
+- Sidebar and settings Archive share a confirmation dialog that names the project and path. Restore is available under Machine settings → Projects → Archive.
 
 ## Durable project increment
 
@@ -125,7 +125,7 @@ Save changes is shown immediately left of Remove only for unsaved name/icon/colo
 - SSE observation reconnects with current committed state. Closing the browser does not stop admitted work.
 - Backend startup reopens and resumes sessions for available projects. The session-wide Stop API withdraws queued input and aborts ordinary work; no chat Stop session control is shown.
 - Text history survives graceful/abrupt restarts; automatic recovery follows Durable retry rules, not exactly-once provider billing.
-- Project removal is blocked once a harness exists, pending explicit session cleanup support.
+- Archive requires idle sessions. If work is running or queued, warn and offer Stop all and archive. Stop must complete before archiving. Restore recovers the same project, sessions and conversations without restarting interrupted work. Project triggers are planned and must remain disabled after restore.
 - No filesystem/process tools, sandbox, fork/subagent APIs or standalone session creation yet.
 - Harness creation itself is not idempotent on request retry. Session lists report the first 200 conversations; SSE and history are bounded network projections.
 

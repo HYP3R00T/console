@@ -1,5 +1,5 @@
 "use client";
-import { Layers, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
+import { Archive, Layers, Pencil, Pin, PinOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import {
@@ -62,8 +62,8 @@ export function ProjectContextMenu({
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem variant="destructive" onClick={onRemove}>
-          <Trash2 />
-          Remove
+          <Archive />
+          Archive
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

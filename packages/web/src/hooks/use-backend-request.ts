@@ -2,6 +2,15 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useConnection } from "@/components/connection-provider";
 
+export class BackendRequestError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+  ) {
+    super(message);
+  }
+}
+
 export function useBackendRequest() {
   const { origin } = useConnection();
   const latest = useRef(origin);
@@ -51,10 +60,11 @@ export function useBackendRequest() {
       if (latest.current !== origin)
         throw new Error("The backend connection changed.");
       if (!response.ok)
-        throw new Error(
+        throw new BackendRequestError(
           typeof data.error === "string"
             ? data.error
             : `Backend returned HTTP ${response.status}.`,
+          typeof data.code === "string" ? data.code : undefined,
         );
       return data as T;
     },
