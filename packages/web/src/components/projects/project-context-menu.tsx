@@ -1,5 +1,5 @@
 "use client";
-import { Pencil, Pin, PinOff, Trash2 } from "lucide-react";
+import { Layers, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import {
@@ -18,6 +18,8 @@ export function ProjectContextMenu({
   onPin,
   onRemove,
   onEdit,
+  onNewSession,
+  creatingSession,
 }: {
   children: ReactNode;
   name: string;
@@ -26,6 +28,8 @@ export function ProjectContextMenu({
   onPin: () => void;
   onRemove: () => void;
   onEdit: () => void;
+  onNewSession: () => void;
+  creatingSession?: boolean;
 }) {
   const router = useRouter();
   const PinIcon = pinned ? PinOff : Pin;
@@ -38,6 +42,11 @@ export function ProjectContextMenu({
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent className="min-w-40">
+        <ContextMenuItem disabled={creatingSession} onClick={onNewSession}>
+          <Layers />
+          New session
+        </ContextMenuItem>
+        <ContextMenuSeparator />
         <ContextMenuItem
           onClick={() => {
             router.push(`${href}/settings`);

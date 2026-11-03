@@ -45,7 +45,7 @@ These tests use Fastify injection without opening a port. Shared checks are in t
 Configured means stored credentials, not validated inference access. Counts exclude disabled records.
 Removal leaves the built-in provider discoverable as unconfigured and does not revoke upstream grants.
 Responses are uncached; SDK/storage failures are sanitized. HTTP is sufficient for this configuration
-workflow; no SSE or WebSocket endpoint is implemented yet. Login operations are transient; credentials
+workflow; conversation SSE is described below. Login operations are transient; credentials
 and favorites survive restart. `test/providers.test.ts` covers injected fake-provider login, OAuth,
 cancellation/removal races, private persistence, credential redaction, favorites and validation/CORS.
 
@@ -63,7 +63,7 @@ cancellation/removal races, private persistence, credential redaction, favorites
 `projects.sqlite` lives beside the provider database and uses private filesystem permissions.
 Registration requires an existing readable/writable/traversable absolute directory; symlink aliases
 resolve to one canonical path. Missing directories remain registered and unavailable. Responses are
-uncached, schemas reject unknown fields, and internal failures are sanitized. Preset icons/colors and display names are editable. No filesystem browser, directory rename, sessions or execution. `test/projects.test.ts` verifies persistence,
+uncached, schemas reject unknown fields, and internal failures are sanitized. Preset icons/colors and display names are editable. No filesystem browser, directory rename or file/tool execution. Project sessions support text generation. `test/projects.test.ts` verifies persistence,
 alias/concurrent duplicates, invalid input, availability, origin rejection and preservation of files.
 
 ## Project defaults and creation
@@ -86,3 +86,45 @@ leave hidden staging directories. Published files remain intact on registry erro
 Git inspection is on demand. Commands have five-second/1 MiB limits, omit optional locks and use isolated configuration. Errors are sanitized. No history, remote fetch, checkout or worktree mutation. Tests cover empty/non-Git, unborn/detached branches, linked/locked worktrees with newline paths, missing directories, unknown registrations, origin policy and bare repositories. Formats follow [Git worktree](https://git-scm.com/docs/git-worktree) and [for-each-ref](https://git-scm.com/docs/git-for-each-ref).
 
 Project appearance updates accept 32 preset icon IDs and eight colors. Invalid IDs remain validation errors; icon selection never changes project files.
+
+## Session HTTP API
+
+Pi Durable 1.4 owns each session's SQLite transcript, tasks, documents and inbox. Console's
+`harnesses.sqlite` maps projects to numbered sessions, each opened by exactly one Durable Harness.
+Session files live under `~/.local/share/console/sessions`. No environment setup is required.
+Startup resumes available-project sessions; browser disconnect never cancels admitted work.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/v1/projects/:id/sessions` | Project-owned harness/session index. |
+| POST | `/v1/projects/:id/sessions` | `{}`; create the next numbered session and Main, 201. |
+| GET | `/v1/sessions/:sessionId/conversations` | Session metadata and first 200 conversations; `more` reports truncation. |
+| POST | `/v1/sessions/:sessionId/conversations` | `{}`; create the next numbered conversation in that session, 201. |
+| POST | `/v1/sessions/:sessionId/conversations/:conversationId/messages` | `{content,requestId,model?,thinkingLevel?}`; validated choices and UUID deduplication, durable admission, 202. |
+| GET | `/v1/sessions/:sessionId/conversations/:conversationId/submissions` | Latest safe completion status; supports failure display after reconnect. |
+| GET | `/v1/sessions/:sessionId/conversations/:conversationId/submissions/:submissionId` | Persisted admission/completion state, scoped to its conversation. |
+| GET | `/v1/sessions/:sessionId/conversations/:conversationId/events` | SSE current snapshot, then committed updates; disconnect only detaches. |
+| GET | `/v1/sessions/:sessionId/conversations/:conversationId/history` | Text history page; round-trip optional `cursor` from response `next`. |
+| POST | `/v1/sessions/:sessionId/stop` | `{}`; stop all session conversations and queued inputs. |
+
+Conversation/submission IDs are numeric Durable IDs, scoped to the session UUID. Creation requires an available project; model-free defaults are created on project registration. New
+input requires an enabled available favorite model and a supported thinking level. Duplicate message retries
+return their original record even if model preferences changed. Creation itself is not deduplicated.
+No tools, forks, subagents or per-conversation Resume are exposed. Project unregister returns 409
+when durable sessions exist; session cleanup is not implemented.
+
+SSE uses explicit safe text projections, 50 recent entries, 32 streams and bounded slow-client handling.
+History retains older entries. SQLite file ownership excludes a competing local runtime; no distributed
+host coordination or production-scale retention is implemented. Fake-provider tests cover persistence,
+deduplication after reopen, isolated conversations, validation/origin checks, stream detach/reconnect,
+session-wide Stop and SIGKILL recovery. Real-provider inference remains unverified.
+
+Project registration, new-project setup and public clone initialize Session 1/Main automatically.
+Startup initializes missing defaults for older registrations. Session numbers are allocated under an
+SQLite transaction/unique index; conversation names use a Durable session counter. Existing index
+records are numbered without changing their UUIDs or transcript files. Additional conversations
+inherit Main's stored model/thinking settings; no creation dialog/configuration is required.
+
+Message selection is validated before admission. Changing model/thinking while working or queued
+returns 409; unsupported thinking levels return 400. Model changes clear an incompatible previous
+thinking choice. Duplicate message keys return the original admission before revalidating preferences.

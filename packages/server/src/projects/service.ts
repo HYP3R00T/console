@@ -13,6 +13,8 @@ export class ProjectService {
   private operations = new Set<AbortController>();
   private tasks = new Set<Promise<unknown>>();
   private closing = false;
+  afterRegister?: (id: string) => Promise<unknown>;
+  removalGuard?: (id: string) => void;
   constructor(store: ProjectStore) {
     this.store = store;
   }
@@ -61,10 +63,15 @@ export class ProjectService {
         ...(signal ? [signal] : []),
       ]),
       git,
-    ).finally(() => {
-      this.operations.delete(controller);
-      this.tasks.delete(task);
-    });
+    )
+      .then(async (project) => {
+        await this.afterRegister?.(project.id);
+        return project;
+      })
+      .finally(() => {
+        this.operations.delete(controller);
+        this.tasks.delete(task);
+      });
     this.tasks.add(task);
     return task;
   }
@@ -124,6 +131,7 @@ export class ProjectService {
     const project = this.store.insert(name, canonical);
     if (!project)
       throw new ProjectError(409, "This directory is already registered.");
+    await this.afterRegister?.(project.id);
     return this.describe(project);
   }
   async update(id: string, name: string, icon: string, color: string) {
@@ -135,6 +143,7 @@ export class ProjectService {
     return this.get(id);
   }
   remove(id: string) {
+    this.removalGuard?.(id);
     if (!this.store.remove(id))
       throw new ProjectError(404, "Project not found.");
     return { removed: true };

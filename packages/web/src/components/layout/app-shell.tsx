@@ -16,7 +16,7 @@ import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 function Content({ children }: { children: ReactNode }) {
   return (
     <main className="flex h-full min-w-0 flex-col bg-background">
-      <div className="flex flex-1 flex-col overflow-auto p-5 md:p-8 lg:p-10">
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto p-5 md:p-8 lg:p-10">
         {children}
       </div>
     </main>

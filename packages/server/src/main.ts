@@ -1,4 +1,7 @@
+import { dirname, join } from "node:path";
 import { createApp } from "./app.ts";
+import { HarnessService } from "./harnesses/service.ts";
+import { HarnessStore, harnessDataPath } from "./harnesses/store.ts";
 import { ProjectService } from "./projects/service.ts";
 import { ProjectStore, projectDatabasePath } from "./projects/store.ts";
 
@@ -9,7 +12,13 @@ const providers = new ProviderService(
   new ProviderStore(providerDatabasePath()),
 );
 const projects = new ProjectService(new ProjectStore(projectDatabasePath()));
-const app = createApp({ logger: true }, providers, projects);
+const harnesses = new HarnessService(
+  new HarnessStore(join(dirname(projectDatabasePath()), "harnesses.sqlite")),
+  harnessDataPath(),
+  projects,
+  providers,
+);
+const app = createApp({ logger: true }, providers, projects, harnesses);
 let stopping = false;
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

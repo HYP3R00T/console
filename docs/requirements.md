@@ -1,13 +1,14 @@
 # Requirements
 
-The current increment connects a local website to an explicitly selected local backend configures its AI providers, and sets up projects on that machine.
+The current increment connects a local website to an explicitly selected local backend, configures
+its AI providers, sets up projects, and runs text conversations through project-owned Durable sessions.
 
 - Fastify listens on `127.0.0.1:3000`; Next.js listens on `127.0.0.1:3001`.
 - The website starts disconnected, with a full-width layout and two navigation columns.
 - The client column animates between 256px expanded and a 56px rail over 200ms; reduced motion skips the transition. It lists devices, Home, Add device and Client preferences.
 - Selecting a device changes the viewed workspace without connecting it automatically.
 - The contextual second column is absent on Home; devices show registered projects, conversation previews and Machine settings, while Preferences shows its categories.
-- Projects are real backend registrations. Sessions, subagents, forks and standalone conversations remain frontend examples.
+- Projects, sessions and project conversations are real backend records; each session opens one internal Durable Harness. Subagents, forks and standalone conversations remain frontend examples.
 - The first column chooses Home, a device or Preferences. Appearance and saved-device category navigation lives in the second column; device disclosures in the first column own backend connection actions.
 - `/settings/connections/new` saves a backend name and loopback URL, then opens its workspace.
 - Device names and URLs persist only in this browser; saving a device does not connect it.
@@ -33,7 +34,7 @@ The current increment connects a local website to an explicitly selected local b
 Authentication is deliberately deferred. The browser accepts only loopback backend URLs;
 the backend permits browser requests only from the local website's two supported origins.
 These reachability restrictions are not user authentication: other local processes can call the API.
-There is no Console user/token management, agent execution or server-side device connection registry.
+There is no Console user/token management or server-side device connection registry. Project sessions support text-only agent execution.
 Provider credentials and favorites are backend-owned; Console client authentication remains deferred.
 SSH, cloud exposure and nonlocal browser hosting require a separate authenticated transport design.
 Existing data from earlier experiments remains untouched and unused.
@@ -46,9 +47,9 @@ Existing data from earlier experiments remains untouched and unused.
 - Disconnect provider disables use while retaining credentials/favorites; reconnect re-enables them. Remove deletes local credentials, favorites and cached catalog, not the upstream account or grant.
 - The backend stores API keys/OAuth tokens and favorites in its own private SQLite database; no browser credential persistence, environment configuration or shared Pi sign-in import is used.
 - Model overview/search exposes catalog IDs/names, context/output limits, supported inputs, thinking levels and catalog pricing.
-- Favorite choices persist per backend. The future picker API returns only starred models that Pi considers available from enabled providers; no favorites means an empty picker list.
+- Favorite choices persist per backend. The composer model-picker API returns only starred models that Pi considers available from enabled providers; no favorites means an empty picker list.
 - Configured/enabled means stored credentials, not a successful live inference or proof of model entitlement. No billable validation call is made.
-- Provider metadata refreshes in connected clients every ten seconds and after mutations. Agent event SSE, chat model pickers and execution are not yet implemented.
+- Provider metadata refreshes in connected clients every ten seconds and after mutations. Session SSE and composer model/thinking selection are implemented; tools and rich agent events remain deferred.
 
 Provider settings use shadcn Scroll Area for both catalogs. On desktop, each list fills the
 remaining content-pane height and scrolls independently; smaller screens stack the catalogs.
@@ -67,7 +68,7 @@ and weight; metadata remains secondary.
 
 Workspace navigation separates Projects from Recents (conversations outside projects), with a
 New conversation entry. New conversation and Recents open frontend examples only: they create no conversations,
-folders or files. Expanded project rows toggle their sessions; the project context menu opens Edit settings. The sidebar omits the Preview badge; the content view retains its explicit
+folders or files. Expanded project rows toggle their harness/session navigation; the project context menu opens Edit settings. The sidebar omits the Preview badge; the content view retains its explicit
 preview notice. Recents does not represent a live activity feed or persisted history yet.
 
 The workspace New conversation action aligns vertically with Home in the primary column.
@@ -81,7 +82,7 @@ chevron expands the panel. The footer uses the label Machine settings.
 - Persist project IDs, names, paths and creation timestamps on that machine. Browser bookmarks remain client-owned.
 - List/open registered projects and recheck directory availability without creating files or running tools.
 - Missing/inaccessible directories remain registered with an unavailable status.
-- Remove registration only; preserve the directory and every project file. Display names, preset icons and colors are editable; directory paths are immutable. No session or execution APIs yet.
+- Remove registration only; preserve the directory and every project file. Display names, preset icons and colors are editable; directory paths are immutable. Harness/session APIs and text generation are described below.
 
 ## Project setup and machine defaults
 
@@ -94,7 +95,7 @@ chevron expands the panel. The footer uses the label Machine settings.
 - Setup stages work, reserves a destination name exclusively, then publishes it and registers it. Failed/cancelled Git operations remove their staging directory; published files are preserved if registration fails.
 - Git must be installed on the backend. Setup allows two concurrent operations, has a two-minute limit, and cancels on client disconnect. No durable job recovery, private authentication, SSH clone or Git pull/update workflow yet.
 
-Project settings persist name, icon and color per backend. Renaming changes the label only. Project disclosures show an honest empty state until sessions exist; Edit opens a dedicated settings route; a project context menu also offers Remove and Pin/Unpin. Add project uses a 2:1 form/destination layout on wide screens.
+Project settings persist name, icon and color per backend. Renaming changes the label only. Project disclosures show real sessions and conversations; Edit opens a dedicated settings route; a project context menu also offers Remove and Pin/Unpin. Add project uses a 2:1 form/destination layout on wide screens.
 
 ## Project Git metadata
 
@@ -113,3 +114,24 @@ Save changes is shown immediately left of Remove only for unsaved name/icon/colo
 - Right-click project entries in expanded or compact navigation for Edit, Pin to top/Unpin and Remove. Project clicks still expand/collapse rather than opening settings; the gear shortcut is removed. Keyboard context-menu invocation and library long-press behavior expose the same actions.
 - Pinning is a client preference persisted in this browser per backend URL. Newest pins sort first; unpinned projects keep backend order. Removed/unknown IDs do not create sidebar entries. No cross-tab synchronization is implemented.
 - Sidebar and settings Remove share a confirmation dialog that names the project/path and states files stay on the machine. Only the backend registration is removed.
+
+## Durable project increment
+
+- Machine → project → numbered sessions → conversations. Each session has one internal Durable Harness; UI/API do not duplicate that level.
+- Project registration creates Session 1/Main automatically; missing defaults are backfilled on startup. Additional sessions are numbered, and additional conversations use automatic names.
+- Console owns the harness/session index; Durable owns conversation state, transcripts, queued inputs and task checkpoints.
+- New sessions/conversations need no name/model prompt. Sending requires an enabled available favorite model and a supported thinking level; choices belong in the composer.
+- HTTP message admission requires a client-generated UUID request ID; retries reuse it without duplicate generation.
+- SSE observation reconnects with current committed state. Closing the browser does not stop admitted work.
+- Backend startup reopens and resumes sessions for available projects. The session-wide Stop API withdraws queued input and aborts ordinary work; no chat Stop session control is shown.
+- Text history survives graceful/abrupt restarts; automatic recovery follows Durable retry rules, not exactly-once provider billing.
+- Project removal is blocked once a harness exists, pending explicit session cleanup support.
+- No filesystem/process tools, sandbox, fork/subagent APIs or standalone session creation yet.
+- Harness creation itself is not idempotent on request retry. Session lists report the first 200 conversations; SSE and history are bounded network projections.
+
+Project context menus own New session. Session context menus and plus own New conversation.
+The first session is Session 1 (default); numbers are allocated atomically. Existing session UUIDs
+and transcripts survive numbering migration. No separate harness entry or New harness button is
+shown. The composer uses an icon-only square arrow, model selection followed by model-specific
+thinking levels, and no inactive attachment/slash-command affordances. The header has no Live badge.
+Jump to latest is conditional on being scrolled away from the bottom; short conversations omit it.

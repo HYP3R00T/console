@@ -90,7 +90,7 @@ borders and the visible resize line are removed while the expanded resize hit ta
 Selected device cards use a shared row/details background without an outline or metadata border.
 Disclosure state is not selection: tree/device triggers override the primitive's expanded background.
 
-`ProjectTree` uses nested lists with dashed elbow connectors, including main conversations,
+Standalone conversation previews use nested lists with dashed elbow connectors, including main conversations,
 subagents and forks. The final sibling's vertical connector ends at its row center, while parent
 branches continue only to siblings that actually exist. Conversation selection uses background
 and aria-current. Remaining borders default to dashed strokes; focus rings and form-control focus colors retain their
@@ -159,7 +159,7 @@ for pending login before changing storage, preventing a late login from restorin
 A per-provider update guard rejects overlapping login/configuration/catalog mutations while a
 provider update is in progress, including a new login arriving during removal.
 Backend shutdown aborts pending logins before closing storage. Restart requires restarting a pending
-login; completed credentials/favorites persist. There is no durable agent runtime or event SSE yet.
+login; completed credentials/favorites persist. Durable project sessions and SSE are described below.
 
 Configured/enabled status means credentials exist and are enabled, not that upstream access was
 verified. Pi handles model availability filtering and thinking-level metadata. Explicit catalog
@@ -174,7 +174,7 @@ and sign-in dialogs. The connection origin scopes requests and state; switching/
 obsolete requests. Overview refreshes use a sequence guard; stale responses cannot overwrite newer
 mutation results. Login polling runs sequentially; secret input is scoped to the current prompt and
 never written to browser storage. The page lists provider methods, searches models and stars favorites;
-`GET /v1/models/favorites` is the contract for a future chat picker, not an implemented chat selector.
+`GET /v1/models/favorites` supplies the composer model picker; supported thinking levels follow the selected model. Choices apply at message admission while idle.
 
 The implementation follows [Pi Pocket's provider flow](https://github.com/TannerMidd/pi-pocket/blob/db1e531d492f9ce231ba7a9761c52c0ebc7becc0/src/server/providers.ts)
 and [Pi AI's provider/auth API](https://github.com/earendil-works/pi/tree/main/packages/ai). Unlike
@@ -218,12 +218,12 @@ sandbox or a guarantee that later execution will succeed. No writes occur inside
 
 GET `/v1/projects` lists registrations; POST registers `{name,path}`; GET `/v1/projects/:id` opens
 metadata; DELETE removes the registration only. List/open recheck availability, retaining unavailable
-registrations. Unknown body fields fail validation. PUT `/v1/projects/:id` updates a display name, preset icon and color without changing the path or files. No directory browsing, sessions or execution is exposed. New/clone setup is described below. API access retains the existing local-only boundary.
+registrations. Unknown body fields fail validation. PUT `/v1/projects/:id` updates a display name, preset icon and color without changing the path or files. No directory browsing or project file/tool execution is exposed; text sessions are described below. New/clone setup is described below. API access retains the existing local-only boundary.
 
 The frontend's `hooks/use-backend-request.ts` owns bounded, uncached requests and cancellation on
 connection change, shared by providers and projects. `components/projects/projects-provider.tsx`
 scopes project lists to the active origin and rejects stale refreshes; ten-second polling observes
-other clients. `project-page.tsx` owns the empty project workspace and dedicated editor/check/remove views. Expanded and
+other clients. `project-page.tsx` owns project harness navigation and dedicated editor/check/remove views. Expanded and
 compact workspace navigation list the same real projects. Routes are
 `/devices/[deviceId]/projects/new` and `/devices/[deviceId]/projects/[projectId]`. Opening a bookmark
 never connects automatically. The registration form cannot operate against a different selected machine.
@@ -277,3 +277,114 @@ The editor tracks the last successfully saved name/icon/color separately from it
 `project-context-menu.tsx` wraps both project navigation modes in the library context menu. `project-removal-dialog.tsx` owns the shared registration-only Remove workflow used by the menu and editor. ProjectsProvider owns validated browser-local pin preferences, scoped by backend URL; `lib/project-pins.ts` validates persistence and orders known projects without mutating backend snapshots. No pin field or API is added to the backend.
 
 Project context-menu triggers use a flex-column formatting context. This preserves automatic horizontal margins on compact inline-flex action buttons and stretches expanded disclosure rows to the available width; a plain block wrapper would left-align compact buttons.
+
+## Durable sessions
+
+```text
+Machine
+└─ Project
+   ├─ Session 1 (default; one Durable Harness / SQLite session)
+   │  ├─ Main
+   │  └─ Conversation 2, Conversation 3, …
+   └─ Session 2, Session 3, …
+
+Browser -- HTTP commands --> HarnessService --> Durable commits --> session SQLite
+Browser <-- SSE snapshots -- conversation watch <-- committed state
+```
+
+A Durable Harness opens one Session. The implementation retains that one-to-one ownership;
+the public API and UI expose sessions, without a second harness navigation level. Projects get
+Session 1 and Main on registration/setup, even without any configured provider. Startup backfills
+missing defaults for existing projects without replacing existing conversations or session IDs.
+
+| Source | Owns |
+| --- | --- |
+| `server/src/harnesses/store.ts` | Internal harness/session index; transactionally allocated project session numbers. |
+| `server/src/harnesses/runtime.ts` | Single-flight open, process ownership lock, private session files, enabled-provider model gate, registry and shutdown. |
+| `server/src/harnesses/documents.ts` | Conversation labels, latest admission reference and session-wide conversation naming counter. |
+| `server/src/harnesses/service.ts` | Default sessions, numbering, project/model/thinking checks, lifecycle, deduplication and session-wide Stop API. |
+| `server/src/harnesses/view.ts` | Explicit text-only client projection; no credentials, raw system prompts or provider errors. |
+| `server/src/harnesses/routes.ts` | Validated session HTTP commands/history and bounded SSE delivery. |
+| `web/src/components/sessions/use-project-sessions.ts` | Backend-scoped project session snapshots and refresh notifications. |
+| `web/src/components/sessions/project-sessions.tsx` | Session/conversation disclosures, context menu and immediate conversation creation. |
+| `web/src/components/sessions/chat-composer.tsx` | Integrated textarea, model/thinking selectors and square arrow submit control. |
+| `web/src/components/sessions/use-chat-models.ts` | Favorite catalog and model-specific thinking choices. |
+| `web/src/components/sessions/conversation-page.tsx` | Transcript, delivery state, history and conditional jump-to-latest. |
+
+Paths in this table are relative to `packages/`. Pi Durable, Pi AI and Chord are pinned to
+1.4.0. The installed source/README governs this integration: newer upstream documentation has
+a different watch signature and a windowed view that 1.4 does not provide.
+
+Each session lives in `~/.local/share/console/sessions/<sessionId>.sqlite`; Durable owns its
+conversation, entry, task, document and submission tables. Console never writes those tables.
+The file is created mode 0600 inside a private directory. A separate SQLite exclusive transaction
+on `sessions/owner.sqlite` holds process ownership of the entire session directory, releases on
+process death, and rejects a competing runtime. This is local process coordination, not a distributed
+lease. SQLite's power-loss guarantees remain those of Durable's WAL/synchronous configuration.
+
+The Console index commits before opening the new session. Its session identity and optional legacy model reference let startup
+repair an interrupted first-root initialization using idempotent `root()`. An initialization failure
+can therefore leave an indexed, recoverable harness; creation retries do not have request deduplication.
+Message submissions do: a client supplies a UUID `requestId`, reused on retry. Existing admission is
+returned before current model eligibility is checked. Latest-submission metadata follows admission before acknowledgement; retry repairs a reference interrupted between those commits. Acknowledgement means stored, not finished.
+
+Startup claims ownership, opens available projects' sessions, restores Main if necessary and resumes
+each session scheduler before listening. Missing project directories skip automatic recovery;
+read-only history remains accessible, but new input requires an available directory. Restoring a
+missing directory requires a later backend restart or new admitted input to restart its work.
+Closing/reloading/disconnecting the browser only closes watches and HTTP waits. Admitted generation
+continues. Graceful backend close stops runtime invocations and closes session storage before project
+and provider databases. Abrupt recovery follows Durable's model retry/checkpoint semantics; a model
+request may be billed again. No claim of exactly-once external effects is made.
+
+Submit and Stop are serialized per session. Stop aborts all conversations' ordinary work, withdraws
+queued inputs and waits for it to settle. Its API/UI is deliberately session-scoped: `resume()` and
+progress-requesting Durable calls enable the shared scheduler. No conversation-scoped Resume or
+isolated scheduler promise exists. The API remains available, but chat does not expose a Stop session control. Durable reports log only event type and session ID, omitting raw
+provider errors and credentials. A failed storage instance is removed from the manager after it closes;
+a later access can reopen it, but automatic in-process failure recovery is not implemented.
+
+Creating a session/conversation does not require a model. The composer selects an enabled available favorite model and only that model's supported thinking levels. Message admission rechecks both before changing the stored agent and admitting input. Model/thinking changes are rejected while ordinary work or queued input exists. Unstarring hides/disallows new submissions to that selection; already admitted work
+is retained. The runtime rechecks provider enabled state when resolving models for new phases; it
+does not retract an upstream request already in flight. There are no filesystem/process tools or
+execution environment yet. Storing `cwd` is a workspace assignment, not confinement.
+
+SSE sends a complete current snapshot, then complete snapshots from a Durable conversation watch; its metadata watch also notifies clients when the latest admission reference changes; reconnection
+replaces the baseline instead of replaying missed events. The projection sends the newest 50 active
+entries and text partials, busy/inbox counts and model identity. After an idle snapshot the client reads latest submission status separately, surfacing unanswered inputs even when no assistant entry exists. Submission responses omit raw diagnostic detail/trace and whitelist reason codes. Older history is paged through an
+opaque cursor, 50 entries at a time. The installed Durable view itself still mounts the active
+transcript; limiting the network projection does not bound that library's memory use. There are 32
+stream slots, a 2 MiB frame limit, a five-second slow-consumer deadline and 15-second heartbeats.
+Disconnecting a slow consumer stops only observation. Oversized snapshots cannot be streamed and
+require a future incremental projection. No scale claim is made.
+
+Client state is scoped by backend/project/session/conversation. Unacknowledged text/request IDs are
+kept in sessionStorage for explicit Retry, then cleared on admission; this is browser-tab delivery
+state, not a second authoritative transcript. The text UI shows the recent snapshot, explicit Load
+earlier and Latest controls; automatic gap filling, Markdown, attachments and rich activity logs
+remain future work. Session lists poll every ten seconds and refresh after local creation. Listings
+currently expose the first 200 conversations and report truncation; full listing pagination is deferred.
+
+Project removal returns 409 once a harness exists, as explicitly chosen, until session cleanup is
+implemented. No archive/delete/session cleanup, fork, subagent, worktree assignment, sandbox,
+custom harness settings or standalone conversation creation is exposed in this increment.
+
+Session numbers use a unique `(projectId, number)` index and `BEGIN IMMEDIATE` allocation. The first
+number is 1; later numbers increase monotonically. Existing index rows gain numbers in creation/ID
+order and display names become Session N; UUIDs and transcript files are preserved. Root is Main.
+Additional conversations use a Durable session document counter, incremented atomically with creation,
+starting at Conversation 2. They inherit Main's stored agent choices when present.
+
+Project right-click → New session creates a session and opens Main without a dialog. Session
+right-click → New conversation and its plus create/open a numbered conversation immediately.
+The public creation bodies are `{}`. Existing transcript data is not renamed or recreated.
+
+The composer sends the selected model/thinking choices with each new input; model changes reset
+the selected thinking choice to a valid level for the new model. Only supported levels appear,
+and non-reasoning models have no thinking selector. Preferences apply on message admission and
+are then persisted in the conversation's agent document. Retried delivery retains its original
+model/thinking payload and request ID. Idle Live/Stop session labels are absent; disconnection
+and failures still surface. The transcript uses the shared Scroll Area, with Jump to latest shown
+only when more than 64 pixels above the bottom. ResizeObserver tracks transcript/viewport changes.
+The square arrow submits; Enter sends and Shift+Enter inserts a newline. Attachments and slash
+commands are not implemented and have no placeholder controls.
