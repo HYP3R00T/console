@@ -32,7 +32,7 @@ async function fixture(t: test.TestContext) {
   });
   return { dir, root, app, store, service };
 }
-test("projects register, persist, open and unregister without touching files", async (t) => {
+test("projects register, persist, open and archive without touching files", async (t) => {
   const { dir, root, app } = await fixture(t);
   const file = join(root, "keep.txt");
   await writeFile(file, "untouched");
@@ -357,6 +357,7 @@ test("existing project registries gain default appearance without losing registr
       name: "Legacy",
       path: dir,
       createdAt: "2026-01-01",
+      archivedAt: null,
       icon: "folder",
       color: "neutral",
     },

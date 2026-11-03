@@ -217,7 +217,7 @@ Directory checks use realpath/stat/access (read/write/traverse); they are a snap
 sandbox or a guarantee that later execution will succeed. No writes occur inside a project directory.
 
 GET `/v1/projects` lists registrations; POST registers `{name,path}`; GET `/v1/projects/:id` opens
-metadata; DELETE removes the registration only. List/open recheck availability, retaining unavailable
+metadata; DELETE archives the registration and its sessions. List/open recheck availability, retaining unavailable
 registrations. Unknown body fields fail validation. PUT `/v1/projects/:id` updates a display name, preset icon and color without changing the path or files. No directory browsing or project file/tool execution is exposed; text sessions are described below. New/clone setup is described below. API access retains the existing local-only boundary.
 
 The frontend's `hooks/use-backend-request.ts` owns bounded, uncached requests and cancellation on
@@ -260,7 +260,7 @@ creation checkbox. `project-settings.tsx` owns the machine projects-root form. N
 picker is used: these are paths on the connected backend. Public Git behavior follows the official
 [clone](https://git-scm.com/docs/git-clone) and [init](https://git-scm.com/docs/git-init) documentation.
 
-Project appearance is backend-owned. SQLite adds icon/color columns transactionally to existing registries, with folder/neutral defaults. Expanded project rows use shadcn Collapsible; their context menu opens settings or removal and supports browser-local pinning. `/devices/[deviceId]/projects/[projectId]/settings` hosts the editor. Polling updates names and appearance across clients without replacing unsaved editor drafts.
+Project appearance is backend-owned. SQLite adds icon/color columns transactionally to existing registries, with folder/neutral defaults. Expanded project rows use shadcn Collapsible; their context menu opens settings or archival and supports browser-local pinning. `/devices/[deviceId]/projects/[projectId]/settings` hosts the editor. Polling updates names and appearance across clients without replacing unsaved editor drafts.
 
 ## Project Git inspection
 
@@ -268,13 +268,13 @@ GET `/v1/projects/:id/git` resolves the registered project and rechecks its dire
 
 `project-git.tsx` owns the on-demand Git view and aborts stale client requests on unmount/origin changes. Refresh rechecks directory and Git metadata; ordinary project polling does not spawn Git processes. Worktree discovery is read-only and does not establish execution isolation. Each inspection consists of multiple commands and is a best-effort snapshot if Git changes concurrently.
 
-The project editor uses full-width responsive layout and top-right removal/confirmation. Its icon picker renders 32 Lucide presets; the project update schema accepts the same IDs. Git inspection behavior remains on demand; reorganizing the view does not add Git actions or polling.
+The project editor uses full-width responsive layout and top-right archive confirmation. Its icon picker renders 32 Lucide presets; the project update schema accepts the same IDs. Git inspection behavior remains on demand; reorganizing the view does not add Git actions or polling.
 
-Project identity and directory metadata use container-responsive columns so their layout follows the available content pane. Current Git rows use accessible current-state attributes and blue square markers. The first Git worktree-list record is the main worktree (or bare repository); linked records use their directory basename as display identity. Branch names remain in the API snapshot but are omitted from the compact worktree UI. The red Remove action retains the registration-only backend contract.
+Project identity and directory metadata use container-responsive columns so their layout follows the available content pane. Current Git rows use accessible current-state attributes and blue square markers. The first Git worktree-list record is the main worktree (or bare repository); linked records use their directory basename as display identity. Branch names remain in the API snapshot but are omitted from the compact worktree UI. The red Archive action preserves the project directory.
 
 The editor tracks the last successfully saved name/icon/color separately from its draft. Its conditional header Save button targets the identity form and hides on revert or successful save. The project-title refresh icon reads directory and Git data; the Git view reports loading to keep that control disabled until completion. Main is the display label for the original checkout; active worktrees and branches share row highlighting.
 
-`project-context-menu.tsx` wraps both project navigation modes in the library context menu. `project-removal-dialog.tsx` owns the shared registration-only Remove workflow used by the menu and editor. ProjectsProvider owns validated browser-local pin preferences, scoped by backend URL; `lib/project-pins.ts` validates persistence and orders known projects without mutating backend snapshots. No pin field or API is added to the backend.
+`project-context-menu.tsx` wraps both project navigation modes in the library context menu. `project-removal-dialog.tsx` owns the shared archive workflow used by the menu and editor. ProjectsProvider owns validated browser-local pin preferences, scoped by backend URL; `lib/project-pins.ts` validates persistence and orders known projects without mutating backend snapshots. No pin field or API is added to the backend.
 
 Project context-menu triggers use a flex-column formatting context. This preserves automatic horizontal margins on compact inline-flex action buttons and stretches expanded disclosure rows to the available width; a plain block wrapper would left-align compact buttons.
 
@@ -365,9 +365,13 @@ earlier and Latest controls; automatic gap filling, Markdown, attachments and ri
 remain future work. Session lists poll every ten seconds and refresh after local creation. Listings
 currently expose the first 200 conversations and report truncation; full listing pagination is deferred.
 
-Project removal returns 409 once a harness exists, as explicitly chosen, until session cleanup is
-implemented. No archive/delete/session cleanup, fork, subagent, worktree assignment, sandbox,
-custom harness settings or standalone conversation creation is exposed in this increment.
+Archiving gates new project mutations and session commands while the backend drains in-flight
+commands and inspects every harness. Active or queued work requires explicit Stop all and archive.
+Durable withdraws queued inputs and interrupts running conversations. If work fails to settle,
+the project stays active. After sessions close, one registry update hides the project and its
+sessions. The stored path remains reserved and the Durable databases stay in place. Startup skips
+archived projects. Restore clears the archive timestamp and retains project and session IDs.
+Project triggers, permanent deletion, forks, subagents and standalone conversation creation are deferred.
 
 Session numbers use a unique `(projectId, number)` index and `BEGIN IMMEDIATE` allocation. The first
 number is 1; later numbers increase monotonically. Existing index rows gain numbers in creation/ID

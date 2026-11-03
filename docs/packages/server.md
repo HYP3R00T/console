@@ -58,7 +58,10 @@ cancellation/removal races, private persistence, credential redaction, favorites
 | GET | `/v1/projects/:id` | Project metadata and availability; 404 if unregistered. |
 | GET | `/v1/projects/:id/git` | Read-only local branches/current branch and worktrees; repository/non-repository/unavailable states. |
 | PUT | `/v1/projects/:id` | Update `{name,icon,color}`; display label only, path unchanged. |
-| DELETE | `/v1/projects/:id` | Remove registration only; never delete directory/files. |
+| DELETE | `/v1/projects/:id` | Archive an idle project; 409 `project_busy` when sessions have pending work. |
+| GET | `/v1/projects/archive` | List archived project registrations. |
+| POST | `/v1/projects/:id/stop-and-archive` | Cancel queued input, stop active sessions and archive after they settle. |
+| POST | `/v1/projects/:id/restore` | Restore the original project registration and its sessions. |
 
 `projects.sqlite` lives beside the provider database and uses private filesystem permissions.
 Registration requires an existing readable/writable/traversable absolute directory; symlink aliases
@@ -81,7 +84,7 @@ collisions return 409. Git must be installed; commands use isolated configuratio
 credentials/hooks/templates/submodules. Public HTTPS only; no redirect, SSH or private login support.
 Git operations time out after two minutes and cancel when their HTTP response connection closes.
 The service allows two concurrent setups. Failed staging is cleaned; an abrupt process crash may
-leave hidden staging directories. Published files remain intact on registry errors and unregister.
+leave hidden staging directories. Published files remain intact on registry errors and archival.
 
 Git inspection is on demand. Commands have five-second/1 MiB limits, omit optional locks and use isolated configuration. Errors are sanitized. No history, remote fetch, checkout or worktree mutation. Tests cover empty/non-Git, unborn/detached branches, linked/locked worktrees with newline paths, missing directories, unknown registrations, origin policy and bare repositories. Formats follow [Git worktree](https://git-scm.com/docs/git-worktree) and [for-each-ref](https://git-scm.com/docs/git-for-each-ref).
 
@@ -110,8 +113,7 @@ Startup resumes available-project sessions; browser disconnect never cancels adm
 Conversation/submission IDs are numeric Durable IDs, scoped to the session UUID. Creation requires an available project; model-free defaults are created on project registration. New
 input requires an enabled available favorite model and a supported thinking level. Duplicate message retries
 return their original record even if model preferences changed. Creation itself is not deduplicated.
-No tools, forks, subagents or per-conversation Resume are exposed. Project unregister returns 409
-when durable sessions exist; session cleanup is not implemented.
+Project archive preserves source files and Durable databases. Archived sessions are excluded from startup recovery. Tools, forks, subagents, project triggers and per-conversation Resume are deferred.
 
 SSE uses explicit safe text projections, 50 recent entries, 32 streams and bounded slow-client handling.
 History retains older entries. SQLite file ownership excludes a competing local runtime; no distributed

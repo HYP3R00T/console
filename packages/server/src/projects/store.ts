@@ -10,6 +10,7 @@ export type Project = {
   createdAt: string;
   icon: string;
   color: string;
+  archivedAt: string | null;
 };
 export const projectDatabasePath = () =>
   join(homedir(), ".local", "share", "console", "projects.sqlite");
@@ -39,6 +40,8 @@ export class ProjectStore {
         this.db.exec(
           "ALTER TABLE projects ADD COLUMN color TEXT NOT NULL DEFAULT 'neutral'",
         );
+      if (!columns.has("archivedAt"))
+        this.db.exec("ALTER TABLE projects ADD COLUMN archivedAt TEXT");
       this.db.exec("COMMIT");
     } catch (error) {
       this.db.exec("ROLLBACK");
@@ -64,15 +67,17 @@ export class ProjectStore {
       | Project
       | undefined;
   }
-  list(): Project[] {
+  list(archived = false): Project[] {
     return this.db
-      .prepare("SELECT * FROM projects ORDER BY createdAt, id")
+      .prepare(
+        `SELECT * FROM projects WHERE archivedAt IS ${archived ? "NOT " : ""}NULL ORDER BY createdAt, id`,
+      )
       .all() as Project[];
   }
   get(id: string): Project | undefined {
-    return this.db.prepare("SELECT * FROM projects WHERE id=?").get(id) as
-      | Project
-      | undefined;
+    return this.db
+      .prepare("SELECT * FROM projects WHERE id=? AND archivedAt IS NULL")
+      .get(id) as Project | undefined;
   }
   insert(name: string, path: string): Project | undefined {
     const project = {
@@ -80,6 +85,7 @@ export class ProjectStore {
       name,
       path,
       createdAt: new Date().toISOString(),
+      archivedAt: null,
       icon: "folder",
       color: "neutral",
     };
@@ -93,13 +99,28 @@ export class ProjectStore {
   update(id: string, name: string, icon: string, color: string) {
     return (
       this.db
-        .prepare("UPDATE projects SET name=?,icon=?,color=? WHERE id=?")
+        .prepare(
+          "UPDATE projects SET name=?,icon=?,color=? WHERE id=? AND archivedAt IS NULL",
+        )
         .run(name, icon, color, id).changes > 0
     );
   }
-  remove(id: string) {
+  archive(id: string) {
     return (
-      this.db.prepare("DELETE FROM projects WHERE id=?").run(id).changes > 0
+      this.db
+        .prepare(
+          "UPDATE projects SET archivedAt=? WHERE id=? AND archivedAt IS NULL",
+        )
+        .run(new Date().toISOString(), id).changes > 0
+    );
+  }
+  restore(id: string) {
+    return (
+      this.db
+        .prepare(
+          "UPDATE projects SET archivedAt=NULL WHERE id=? AND archivedAt IS NOT NULL",
+        )
+        .run(id).changes > 0
     );
   }
   close() {

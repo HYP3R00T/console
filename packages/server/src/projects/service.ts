@@ -14,7 +14,13 @@ export class ProjectService {
   private tasks = new Set<Promise<unknown>>();
   private closing = false;
   afterRegister?: (id: string) => Promise<unknown>;
-  removalGuard?: (id: string) => void;
+  private archiving = new Set<string>();
+  beforeArchive?: (id: string, stop: boolean) => Promise<void>;
+  assertWritable(id: string) {
+    if (this.archiving.has(id))
+      throw new ProjectError(409, "Project archival is in progress.");
+    if (!this.store.get(id)) throw new ProjectError(404, "Project not found.");
+  }
   constructor(store: ProjectStore) {
     this.store = store;
   }
@@ -92,10 +98,10 @@ export class ProjectService {
       ...(unavailableReason ? { unavailableReason } : {}),
     };
   }
-  async list() {
+  async list(archived = false) {
     return {
       projects: await Promise.all(
-        this.store.list().map((p) => this.describe(p)),
+        this.store.list(archived).map((p) => this.describe(p)),
       ),
     };
   }
@@ -138,15 +144,31 @@ export class ProjectService {
     name = name.trim();
     if (!name || name.length > 120)
       throw new ProjectError(400, "Enter a project name.");
+    this.assertWritable(id);
     if (!this.store.update(id, name, icon, color))
       throw new ProjectError(404, "Project not found.");
     return this.get(id);
   }
-  remove(id: string) {
-    this.removalGuard?.(id);
-    if (!this.store.remove(id))
-      throw new ProjectError(404, "Project not found.");
-    return { removed: true };
+  archive(id: string, stop = false) {
+    this.assertWritable(id);
+    this.archiving.add(id);
+    const task = Promise.resolve()
+      .then(async () => {
+        await this.beforeArchive?.(id, stop);
+        this.store.archive(id);
+        return { archived: true };
+      })
+      .finally(() => {
+        this.archiving.delete(id);
+        this.tasks.delete(task);
+      });
+    this.tasks.add(task);
+    return task;
+  }
+  restore(id: string) {
+    if (!this.store.restore(id))
+      throw new ProjectError(404, "Archived project not found.");
+    return this.get(id);
   }
   async close() {
     this.closing = true;
