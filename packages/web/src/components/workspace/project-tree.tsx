@@ -19,6 +19,8 @@ import {
   type Project,
   useMachineProjects,
 } from "@/components/projects/projects-provider";
+import { ProjectSessions } from "@/components/sessions/project-sessions";
+import { sessionsChanged } from "@/components/sessions/use-project-sessions";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -37,10 +39,18 @@ export function ProjectTree({
   closeMobile?: () => void;
   compact?: boolean;
 }) {
-  const { projects, connected, error, pinnedIds, pinError, setPinned } =
-    useMachineProjects(deviceId);
+  const {
+    projects,
+    connected,
+    error,
+    pinnedIds,
+    pinError,
+    setPinned,
+    request,
+  } = useMachineProjects(deviceId);
   const [removing, setRemoving] = useState<Project>();
   const [actionError, setActionError] = useState<string>();
+  const [creatingSession, setCreatingSession] = useState(false);
   const router = useRouter();
   const base = `/devices/${encodeURIComponent(deviceId)}`;
   const pathname = usePathname();
@@ -110,9 +120,12 @@ export function ProjectTree({
             </CollapsibleTrigger>
           </div>
           <CollapsibleContent className="overflow-hidden">
-            <p className="py-3 pl-11 text-xs text-muted-foreground">
-              No sessions yet.
-            </p>
+            <ProjectSessions
+              compact
+              deviceId={deviceId}
+              projectId={p.id}
+              closeMobile={closeMobile}
+            />
           </CollapsibleContent>
         </Collapsible>
       );
@@ -136,6 +149,34 @@ export function ProjectTree({
           }}
           onRemove={() => setRemoving(p)}
           onEdit={closeMobile}
+          creatingSession={creatingSession || !connected || !p.available}
+          onNewSession={() => {
+            if (creatingSession) return;
+            setCreatingSession(true);
+            setActionError(undefined);
+            void request<{ sessionId: string }>(
+              `/v1/projects/${p.id}/sessions`,
+              { method: "POST", body: "{}" },
+            )
+              .then(async (session) => {
+                sessionsChanged();
+                const data = await request<{ conversations: { id: number }[] }>(
+                  `/v1/sessions/${session.sessionId}/conversations`,
+                );
+                closeMobile();
+                router.push(
+                  `${href}/sessions/${session.sessionId}/conversations/${data.conversations[0].id}`,
+                );
+              })
+              .catch((cause) =>
+                setActionError(
+                  cause instanceof Error
+                    ? cause.message
+                    : "Could not create session.",
+                ),
+              )
+              .finally(() => setCreatingSession(false));
+          }}
         >
           {row}
         </ProjectContextMenu>

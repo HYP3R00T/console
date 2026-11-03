@@ -2,6 +2,7 @@
 import { RefreshCw, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import { ProjectSessions } from "@/components/sessions/project-sessions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,7 +56,7 @@ export function ProjectPage({ settings = false }: { settings?: boolean }) {
         />
         <h1 className="text-xl font-semibold">{project.name}</h1>
       </header>
-      <p className="text-sm text-muted-foreground">No sessions yet.</p>
+      <ProjectSessions deviceId={deviceId} projectId={project.id} />
     </div>
   );
 }

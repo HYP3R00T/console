@@ -1,5 +1,7 @@
 import cors from "@fastify/cors";
 import Fastify, { type FastifyServerOptions } from "fastify";
+import { registerHarnessRoutes } from "./harnesses/routes.ts";
+import type { HarnessService } from "./harnesses/service.ts";
 import { registerProjectRoutes } from "./projects/routes.ts";
 import type { ProjectService } from "./projects/service.ts";
 import { registerProviderRoutes } from "./providers/routes.ts";
@@ -11,6 +13,7 @@ export function createApp(
   options: FastifyServerOptions = {},
   providers?: ProviderService,
   projects?: ProjectService,
+  harnesses?: HarnessService,
 ) {
   const app = Fastify({
     ajv: { customOptions: { removeAdditional: false } },
@@ -40,6 +43,11 @@ export function createApp(
   if (projects) {
     registerProjectRoutes(app, projects);
     app.addHook("onClose", async () => projects.close());
+  }
+  if (harnesses) {
+    registerHarnessRoutes(app, harnesses);
+    app.addHook("onReady", () => harnesses.start());
+    app.addHook("preClose", () => harnesses.close());
   }
   return app;
 }

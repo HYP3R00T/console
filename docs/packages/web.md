@@ -88,8 +88,8 @@ are never populated back into the page. Disconnect provider retains credentials/
 clears local backend configuration and does not revoke an upstream grant.
 
 Models show catalog context/output sizes, inputs, thinking levels and token pricing. Stars persist
-on the backend; only available favorites from enabled providers are returned by the future-picker
-API. No chat picker exists yet. Metadata and configured status do not verify account entitlement.
+on the backend; only available favorites from enabled providers are returned by the model-picker
+API. The composer selects favorite models and that model's supported thinking levels. Metadata and configured status do not verify account entitlement.
 The provider overview polls every ten seconds; login steps poll sequentially with cancellation and
 backend-origin scoping. Real provider credentials/OAuth completion require user verification.
 
@@ -121,12 +121,12 @@ chevron expands the panel. The footer uses the label Machine settings.
 
 Connect a machine using its first-column disclosure. Use Add project beside Projects (or the plus
 in the compact workspace rail), enter a name and an absolute existing directory path on that machine,
-and register it. Both sidebar modes show real registrations. Expand a project row for its sessions (currently empty); use right-click → Edit for name/icon/color, an inline path/status dot, metadata refresh and Git inspection. Remove registration asks for confirmation and leaves all files untouched; registering
+and register it. Both sidebar modes show real registrations. Expand a project row for its sessions; use right-click → Edit for name/icon/color, an inline path/status dot, metadata refresh and Git inspection. Remove registration asks for confirmation and leaves all files untouched; registering
 the directory again restores a new registry entry, not the old ID. Missing directories are retained
 as unavailable. Reload keeps registrations on the backend but still requires explicit reconnection.
 
 Project routes: `/devices/[deviceId]/projects/new` and `/devices/[deviceId]/projects/[projectId]`.
-Project appearance settings are implemented; sessions and agent execution are not. The shared backend
+Project appearance settings and text-only Durable sessions are implemented. The shared backend
 request hook handles provider and project requests; project state is isolated by connected origin.
 
 ## Add project modes
@@ -157,3 +157,31 @@ Project entries in both sidebar modes use the official shadcn Base UI Context Me
 Browser verification covered expanded/compact right-click menus, Shift+F10, Edit navigation, pin ordering/persistence after reload and reconnect, Unpin, shared removal confirmation/cancel, and removal disabled while disconnected. A temporary registration was unpinned and cleaned up; source-file preservation was verified through the backend API. Touch long-press was not manually verified.
 
 Context-menu triggers retain a flex-column layout: compact action buttons keep their automatic horizontal margins, matching the rail icon center, while expanded project rows stretch to the panel width.
+
+## Project sessions and conversations
+
+The tree is project → Session N → conversations. Each session is backed by one Durable Harness;
+there is no duplicate harness row. Projects get Session 1/Main automatically on registration and
+startup backfills missing defaults. Right-click a project → New session opens the next numbered
+session's Main. Right-click a session → New conversation, or use its plus, to open Conversation 2,
+Conversation 3, etc. Creation requires neither a name nor a model dialog.
+
+The real chat route is `/devices/[deviceId]/projects/[projectId]/sessions/[sessionId]/conversations/[conversationId]`.
+The composer contains one text surface, model selector, model-dependent thinking selector and a
+square arrow button with an accessible submit/queue/retry label. Enter sends; Shift+Enter inserts
+a newline. Changing model resets thinking to a supported choice; non-reasoning models hide that
+selector. Controls are locked while the conversation is working/queued or delivery is pending.
+Choices are persisted by the backend when sending. No attachment/slash-command placeholders exist.
+
+The header omits Live and Stop session. Connection failures remain visible. The shared Scroll Area
+owns the transcript; Jump to latest appears only when scrolled more than 64 pixels above the bottom
+and disappears at the bottom. Short conversations have no jump control. HTTP admits messages; SSE
+shows committed text and partial answers. Browser close only detaches observation. Uncertain delivery
+retains content, model/thinking choices and request ID in sessionStorage for explicit Retry.
+
+Reload still starts disconnected; reconnect restores saved history. Load earlier pages history.
+Markdown, attachments, tool execution, forks, subagents and automatic history-gap filling remain
+deferred. Session lists refresh after local creation and poll every ten seconds. Unknown/other-project
+sessions cannot be displayed through a mismatched project route. Recents/top New conversation remain
+explicit standalone previews. The backend Stop API remains session-wide, with no chat control.
+Projects owning sessions remain protected from removal until cleanup is implemented.
