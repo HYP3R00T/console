@@ -1,5 +1,7 @@
+"use client";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { useNavigationMenuOpen } from "./navigation-menu";
 
 /** Separate click targets share one hover/focus surface; action width never shifts labels. */
 export function NavigationRow({
@@ -11,8 +13,10 @@ export function NavigationRow({
   actions?: ReactNode;
   selected?: boolean;
 }) {
+  const menuOpen = useNavigationMenuOpen();
   return (
     <div
+      data-menu-open={menuOpen || undefined}
       className={cn(
         "navigation-row-group my-px flex min-w-0 items-center rounded-md transition-colors hover:bg-sidebar-accent",
         selected && "bg-sidebar-accent",

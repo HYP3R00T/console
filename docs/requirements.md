@@ -23,7 +23,7 @@ its AI providers, sets up projects, and runs conversations with read-only projec
 - Context visibility animates its occupied width to/from zero over 200ms without translating content; reduced-motion preferences disable the animation.
 - The desktop context panel resizes between 208–384px, collapses to a 56px icon rail and restores its last expanded width. Each newly entered device/Preferences context starts collapsed.
 - Chevron toggles stay anchored at the same top-left position. Toggling the first column preserves the second column's open/collapsed state.
-- Device rows navigate only, with name/initials and a connection-status square. Manage devices (`/devices`) lists URLs, status, last check, errors and per-device Connect/Disconnect/Cancel, Edit and Forget controls.
+- Device rows navigate only, with name/initials and a connection-status dot. Manage devices (`/devices`) lists URLs, status, last check, errors and per-device Connect/Disconnect/Cancel, Edit and Forget controls.
 - The compact context rail has no active resize hit area or keyboard resize control. Resize is available only after explicit expansion, constrained to 208–384px; collapsing uses the toggle.
 - Home is a dashboard with saved/connected/error counts and workspace links. Manage devices is a separate primary navigation destination; neither shows the backend context sidebar.
 - Uptime, connected-client counts, file viewers and split conversations are not implemented.
@@ -82,11 +82,12 @@ secondary catalog pricing (input/output/cache read/cache write). Model rows have
 The desktop provider catalog is 320px wide. Provider and model names share the same text size
 and weight; metadata remains secondary.
 
-Workspace navigation separates Projects from Recents. New conversation creates one standalone
-Durable session on the connected machine and opens its chat immediately. Recents lists those
-conversations newest first. Project rows expand in place and their context menu opens settings.
+Workspace navigation uses collapsible Pinned, Projects and Recents sections. The Recents header
+creates a standalone Durable session and opens its chat. Pinned projects and standalone chats move
+into Pinned; unpinned projects keep backend order and Recents keeps newest-first order. Project
+rows expand in place and their context menu opens settings.
 
-The workspace New conversation action aligns vertically with Home in the primary column.
+Standalone creation belongs to the Recents header action; there is no top-level New conversation button.
 Collapsed workspace navigation exposes direct project and conversation shortcuts; only the top
 chevron expands the panel. The footer uses the label Machine settings.
 
@@ -149,10 +150,27 @@ A single session is visually flattened; multiple sessions use numbered group hea
 conversation actions. Creating a session reveals the groups without navigating away from the current chat.
 Project/session rows share hover backgrounds with their action buttons. Menus support both dots and right-click.
 Conversation menus offer backend-persisted Rename and browser-local Pin/Unpin scoped by backend and session.
-Pins reorder within the session or Recents; they do not move conversations. Renaming preserves IDs, history
+Pins move chats into the machine Pinned section; they do not change Durable ownership. Renaming preserves IDs, history
 and unsent drafts. Cross-project moves, bulk chat archive, unread markers and conversation deletion are deferred.
 The first session is Session 1 (default); numbers are allocated atomically. Existing session UUIDs
 and transcripts survive numbering migration. No separate harness entry or New harness button is
 shown. The composer uses an icon-only square arrow, model selection followed by model-specific
 thinking levels, and no inactive attachment/slash-command affordances. The header has no Live badge.
 Jump to latest is conditional on being scrolled away from the bottom; short conversations omit it.
+
+## Workspace sections
+
+- The secondary workspace has Pinned, Projects and Recents, each independently collapsible and
+  initially open. Section state lasts while that workspace navigation is mounted; it is not persisted.
+- Pinned holds projects and individual conversations, removing them from their ordinary lists.
+  It shows projects first, then chats, with newest pins first within each kind.
+- Pinned project chats leave their source session list and return there on Unpin. No redundant pin badges.
+- Section headers show rotating right/down chevrons. Both menu types temporarily highlight their target.
+- Desktop drag supports pin/unpin placement only; cross-project ownership transfers remain deferred.
+  See [navigation action contract](navigation-actions.md) for capabilities, shortcuts and drop rules.
+- Projects Add and Recents compose actions appear on header hover, keyboard focus or touch.
+  Creating through Recents opens that section and creates outside every project.
+- The old top-level conversation action is removed, including from the compact rail. Compact
+  navigation retains project/conversation shortcuts and Add project; expand to create a Recents chat.
+- Machine status uses a circular dot: bottom-right on compact badges, trailing on expanded rows.
+  Accessible labels retain Connected/Connecting/Connection failed/Disconnected; color is not the only cue.

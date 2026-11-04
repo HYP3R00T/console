@@ -94,7 +94,7 @@ branches continue only to siblings that actually exist. Conversation selection u
 and aria-current. Remaining borders default to dashed strokes; focus rings and form-control focus colors retain their
 accessibility styling. These are presentation rules, not new backend domain entities.
 
-The rail lists all saved devices with initials, accessible names and status squares: green connected,
+The rail lists all saved devices with initials, accessible names and status dots: green connected,
 amber connecting, red connection failed, gray disconnected. These describe independent client
 connections, not fleet uptime. The primary column selects Home, a machine, Manage devices or
 Client preferences. Preferences currently contains Appearance only. Machine settings replaces the
@@ -222,11 +222,11 @@ secondary catalog pricing (input/output/cache read/cache write). Model rows have
 The desktop provider catalog is 320px wide. Provider and model names share the same text size
 and weight; metadata remains secondary.
 
-Workspace navigation separates Projects from Recents. New conversation creates one standalone
-Durable session on the connected machine and opens its chat immediately. Recents lists those
-conversations newest first. Project rows expand in place and their context menu opens settings.
+Workspace navigation uses collapsible Pinned, Projects and Recents sections. The Recents header
+creates a standalone Durable session and opens its chat. Pinned projects and standalone chats move
+into Pinned without duplicates; unpinned projects retain backend order and Recents stays newest first.
 
-The workspace New conversation action aligns vertically with Home in the primary column.
+Standalone creation belongs to the Recents header action; there is no top-level New conversation button.
 Collapsed workspace navigation exposes direct project and conversation shortcuts; only the top
 chevron expands the panel. The footer uses the label Machine settings.
 
@@ -482,8 +482,24 @@ icon/name is still a keyboard-accessible CollapsibleTrigger with aria-expanded. 
 conversation receives persistent selection styling. Expanded project/Recents conversations omit
 the leading chat icon, keeping indented text labels; compact conversation shortcuts retain icons.
 
-Project disclosure animation is scoped to .project-disclosure rather than changing every shared
+Project and section disclosure animation is scoped to .navigation-disclosure rather than changing every shared
 Collapsible. Base UI supplies measured --collapsible-panel-height and starting/ending attributes,
 and retains closing content until transitions finish. Height transitions for 180ms and opacity for
 140ms; spacing belongs to an inner wrapper so closed height reaches zero. The settled open panel
 returns to auto height for async list updates. Reduced-motion users receive immediate disclosure.
+
+NavigationSection composes the shared Collapsible and NavigationRow for Pinned/Projects/Recents,
+reusing project reveal motion and hover/keyboard/touch action rules. Section panels keep their
+children mounted but hidden after collapse, preserving nested project disclosure state. ProjectTree owns composition
+and partitions known records into pinned and regular entries without duplicating them. Existing
+project and conversation pin stores remain separate and backend-scoped; no server change is needed.
+useStandaloneNavigation owns polling/creation independently of section visibility. Refresh retains
+the last records under a stable backend/client identity so metadata updates do not flicker or
+unmount active rename dialogs. Recents creation reveals its section before routing to the chat.
+
+Navigation actions use explicit entity capabilities and stable IDs. NavigationMenu derives both menus
+and primary shortcuts from one definition; temporary menu-open row state is separate from route selection.
+NavigationDragProvider accepts only its own active drag and rejects stale backend clients. Drop intent
+changes browser-local pins, never Durable ownership. Pinned metadata resolves per session independently
+of expanded projects, and pinned chats are excluded from their source rows. See the
+[navigation action contract](navigation-actions.md) for transfer limits and extension rules.
