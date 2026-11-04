@@ -8,7 +8,7 @@ A Next.js/React client at `http://127.0.0.1:3001/` with a full-width shadcn Base
 - `/devices/[deviceId]`: selected device workspace.
 - `/devices/[deviceId]/settings`: redirects to provider settings.
 - `/devices/[deviceId]/settings/providers`: provider sign-in/enable/remove, model metadata and favorites.
-- `/devices/[deviceId]/preview/[conversationId]`: simulated conversation/subagent/fork view.
+- `/devices/[deviceId]/conversations/[sessionId]`: standalone Durable conversation.
 - `/settings`: redirects to saved devices.
 - `/settings/connections`: browser-local bookmarks, search, open, forget and Add device.
 - `/settings/connections/new`: name and local URL form; opens the saved device without connecting.
@@ -22,9 +22,9 @@ connection state, last successful check and Connect/Disconnect/Cancel. Row and d
 borderless card background; selected cards are shaded. Compact device icons navigate.
 Selecting a device never connects automatically.
 
-The adjacent backend panel shows its registered project list and standalone conversation previews and Device
+The adjacent backend panel shows its registered project list and standalone conversations and Machine
 settings. Selecting Preferences instead places saved-device and Appearance categories in the second column.
-Projects are real directory registrations; sessions and agent relationships remain examples. Uptime and
+Projects are directory registrations with Durable sessions. Uptime and
 connected-client metrics are unavailable and are not simulated.
 
 The context column is absent on Home, animating its occupied width to zero without translating
@@ -108,13 +108,12 @@ secondary catalog pricing (input/output/cache read/cache write). Model rows have
 The desktop provider catalog is 320px wide. Provider and model names share the same text size
 and weight; metadata remains secondary.
 
-Workspace navigation separates Projects from Recents (conversations outside projects), with a
-New conversation entry. New conversation and Recents open frontend examples only: they create no conversations,
-folders or files; Project rows expand in place; their context menu offers Edit. The sidebar omits the Preview badge; the content view retains its explicit
-preview notice. Recents does not represent a live activity feed or persisted history yet.
+Workspace navigation separates Projects from Recents. New conversation creates one standalone
+Durable session on the connected machine and opens its chat immediately. Recents lists those
+conversations newest first. Project rows expand in place and their context menu opens settings.
 
 The workspace New conversation action aligns vertically with Home in the primary column.
-Collapsed workspace navigation exposes direct project/Recents folder shortcuts; only the top
+Collapsed workspace navigation exposes direct project and conversation shortcuts; only the top
 chevron expands the panel. The footer uses the label Machine settings.
 
 ## Register a project
@@ -122,7 +121,7 @@ chevron expands the panel. The footer uses the label Machine settings.
 Connect a machine using its first-column disclosure. Use Add project beside Projects (or the plus
 in the compact workspace rail), enter a name and an absolute existing directory path on that machine,
 and register it. Both sidebar modes show real registrations. Expand a project row for its sessions; use right-click → Edit for name/icon/color, an inline path/status dot, metadata refresh and Git inspection. Archive asks for confirmation and preserves all files and chat history. Restore from Machine settings → Projects → Archive. Missing directories are retained
-as unavailable. Reload keeps registrations on the backend but still requires explicit reconnection.
+as unavailable. Reload rechecks the remembered device before displaying it as connected.
 
 Project routes: `/devices/[deviceId]/projects/new` and `/devices/[deviceId]/projects/[projectId]`.
 Project appearance settings and text-only Durable sessions are implemented. The shared backend
@@ -181,6 +180,18 @@ retains content, model/thinking choices and request ID in sessionStorage for exp
 Reload still starts disconnected; reconnect restores saved history. Load earlier pages history.
 Markdown, attachments, tool execution, forks, subagents and automatic history-gap filling remain
 deferred. Session lists refresh after local creation and poll every ten seconds. Unknown/other-project
-sessions cannot be displayed through a mismatched project route. Recents/top New conversation remain
-explicit standalone previews. The backend Stop API remains session-wide, with no chat control.
+sessions cannot be displayed through a mismatched project route. Standalone conversations use the same chat at
+`/devices/[deviceId]/conversations/[sessionId]`. The backend Stop API remains session-wide, with no chat control.
 When an archive attempt finds running or queued work, the dialog offers Stop all and archive.
+
+## Connection boundary
+
+`lib/backend/client.ts` defines BackendConnector and BackendClient. ConnectionProvider accepts
+a connector and owns the lifetime of its returned client. The default `local-http.ts` connector
+owns the handshake, requests and EventSource subscriptions. `useBackendRequest` delegates
+commands; `useConversation` consumes subscriptions. Switching or disconnecting closes both.
+The remembered bookmark is rechecked on reload.
+
+Future tunnel/authentication integrations implement the connection contracts and extend bookmark
+configuration where needed. Current supported endpoints remain loopback HTTP/HTTPS. Feature hooks
+consume paths and snapshots independent of how the connection was established.

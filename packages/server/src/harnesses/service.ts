@@ -15,7 +15,11 @@ import { ProjectError, type ProjectService } from "../projects/service.ts";
 import type { ProviderService } from "../providers/service.ts";
 import { ConversationInfo, SessionInfo } from "./documents.ts";
 import { HarnessRuntime } from "./runtime.ts";
-import type { HarnessRecord, HarnessStore } from "./store.ts";
+import {
+  type HarnessRecord,
+  type HarnessStore,
+  standaloneOwner,
+} from "./store.ts";
 
 export class HarnessError extends Error {
   readonly statusCode: number;
@@ -100,6 +104,10 @@ export class HarnessService {
     for (const project of this.projects.store.list())
       await this.ensureDefault(project.id);
     for (const record of this.store.list()) {
+      if (record.projectId === standaloneOwner) {
+        (await this.ready(record)).resume();
+        continue;
+      }
       if (!this.projects.store.get(record.projectId)) continue;
       const project = await this.projects.get(record.projectId);
       if (project.available) (await this.ready(record)).resume();
@@ -115,6 +123,23 @@ export class HarnessService {
     await this.projects.get(projectId);
     return { sessions: this.store.list(projectId) };
   }
+  listStandalone() {
+    return { sessions: this.store.listStandalone() };
+  }
+  async createStandalone() {
+    const record = this.store.insert(standaloneOwner);
+    await this.ready(record);
+    return record;
+  }
+  async standalone(sessionId: string) {
+    const record = this.store.session(sessionId);
+    if (record?.projectId !== standaloneOwner)
+      throw new HarnessError(404, "Standalone conversation not found.");
+    const harness = await this.ready(record);
+    const root = await harness.root(context);
+    return { session: record, conversationId: root.id };
+  }
+
   async model(model: ModelRef) {
     const available = await this.providers.favorites();
     const selected = available.models.find(
@@ -169,15 +194,18 @@ export class HarnessService {
       agent: { ...(model ? { model } : {}), cwd },
       init: async (tx, id) => {
         const info = await tx.doc(ConversationInfo, id);
-        info.name = "Main";
+        info.name = record.projectId === standaloneOwner ? record.name : "Main";
       },
     });
   }
   private async ready(record: HarnessRecord) {
-    const project = await this.projects.get(record.projectId);
+    const cwd =
+      record.projectId === standaloneOwner
+        ? await this.runtime.standaloneWorkspace(record.sessionId)
+        : (await this.projects.get(record.projectId)).path;
     await this.initialize(
       record,
-      project.path,
+      cwd,
       record.modelId
         ? {
             provider: record.provider,
@@ -190,9 +218,11 @@ export class HarnessService {
   async session(sessionId: string) {
     const record = this.store.session(sessionId);
     if (!record) throw new HarnessError(404, "Session not found.");
-    this.projects.assertWritable(record.projectId);
+    if (record.projectId !== standaloneOwner)
+      this.projects.assertWritable(record.projectId);
     const harness = await this.ready(record);
-    this.projects.assertWritable(record.projectId);
+    if (record.projectId !== standaloneOwner)
+      this.projects.assertWritable(record.projectId);
     return { record, harness };
   }
   async conversations(sessionId: string) {
@@ -212,6 +242,11 @@ export class HarnessService {
   addConversation(sessionId: string) {
     return this.serial(sessionId, async () => {
       const { record, harness } = await this.session(sessionId);
+      if (record.projectId === standaloneOwner)
+        throw new HarnessError(
+          409,
+          "Standalone sessions contain one conversation.",
+        );
       const project = await this.project(record.projectId);
       const root = await harness.root(context);
       const agent = await harness.snapshot(AgentDoc, root.id, context);
@@ -266,7 +301,8 @@ export class HarnessService {
       await this.rememberSubmission(harness, conversation.id, existing.id);
       return existing;
     }
-    await this.project(record.projectId);
+    if (record.projectId !== standaloneOwner)
+      await this.project(record.projectId);
     const agent = await conversation.agent(context);
     const model = selection?.model ?? agent.model;
     if (!model) throw new HarnessError(409, "Choose a model before sending.");

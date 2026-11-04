@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import type { BackendClient } from "@/lib/backend/client";
 export type ChatMessage = {
   id: string;
   entryId: number;
@@ -17,35 +18,46 @@ export type ChatSnapshot = {
   thinkingLevel?: string;
   model?: { provider: string; modelId: string };
 };
-export function useConversation(origin: string | undefined, path: string) {
-  const key = `${origin}:${path}`;
+export function useConversation(
+  client: BackendClient | undefined,
+  path: string,
+) {
+  const key = `${client?.origin}:${path}`;
   const [snapshot, setSnapshot] = useState<{
     key: string;
+    client: BackendClient;
     data?: ChatSnapshot;
     status: string;
   }>();
   useEffect(() => {
-    if (!origin) return;
-    const events = new EventSource(`${origin}${path}/events`);
-    setSnapshot({ key, status: "Connecting…" });
-    events.addEventListener("snapshot", (event) => {
-      try {
-        const data: ChatSnapshot = JSON.parse(event.data);
-        if (!Array.isArray(data.messages) || typeof data.busy !== "boolean")
-          throw new Error();
-        setSnapshot({ key, data, status: "Live" });
-      } catch {
-        events.close();
-        setSnapshot({ key, status: "Invalid conversation update." });
-      }
+    if (!client) return;
+    setSnapshot({ key, client, status: "Connecting…" });
+    const close = client.subscribe(`${path}/events`, "snapshot", {
+      message: (message) => {
+        try {
+          const data: ChatSnapshot = JSON.parse(message);
+          if (!Array.isArray(data.messages) || typeof data.busy !== "boolean")
+            throw new Error();
+          setSnapshot({ key, client, data, status: "Live" });
+        } catch {
+          close();
+          setSnapshot({ key, client, status: "Invalid conversation update." });
+        }
+      },
+      reconnecting: () =>
+        setSnapshot((previous) => ({
+          key,
+          client,
+          data:
+            previous?.key === key && previous.client === client
+              ? previous.data
+              : undefined,
+          status: "Reconnecting…",
+        })),
     });
-    events.onerror = () =>
-      setSnapshot((previous) => ({
-        key,
-        data: previous?.key === key ? previous.data : undefined,
-        status: "Reconnecting…",
-      }));
-    return () => events.close();
-  }, [origin, path, key]);
-  return snapshot?.key === key ? snapshot : undefined;
+    return close;
+  }, [client, path, key]);
+  return snapshot?.key === key && snapshot.client === client
+    ? snapshot
+    : undefined;
 }

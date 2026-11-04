@@ -15,12 +15,15 @@ import {
   parseDevices,
 } from "@/lib/devices";
 
+const selectedDeviceKey = "console.connected-device.v1";
+
 type DevicesState = {
   devices: Device[];
   ready: boolean;
   error?: string;
   selectedId?: string;
   select: (device: Device) => void;
+  disconnect: () => void;
   add: (name: string, url: string) => Device;
   remove: (id: string) => void;
 };
@@ -31,18 +34,40 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string>();
   const [selectedId, setSelectedId] = useState<string>();
-  const connection = useConnection();
+  const { connect, disconnect: disconnectBackend, origin } = useConnection();
 
   useEffect(() => {
     try {
-      setDevices(parseDevices(localStorage.getItem(devicesStorageKey)));
+      const saved = parseDevices(localStorage.getItem(devicesStorageKey));
+      setDevices(saved);
+      const remembered = localStorage.getItem(selectedDeviceKey);
+      const device = saved.find((item) => item.id === remembered);
+      if (device) {
+        setSelectedId(device.id);
+        void connect(device.url);
+      }
     } catch {
       setError(
         "Saved devices could not be read. Your existing browser data has not been changed.",
       );
     }
     setReady(true);
-  }, []);
+  }, [connect]);
+
+  function remember(id?: string) {
+    try {
+      if (id) localStorage.setItem(selectedDeviceKey, id);
+      else localStorage.removeItem(selectedDeviceKey);
+    } catch {
+      // Keep connection controls usable when browser storage is unavailable.
+    }
+  }
+
+  function disconnect() {
+    remember();
+    setSelectedId(undefined);
+    disconnectBackend();
+  }
 
   function save(next: Device[]) {
     if (!ready) throw new Error("Wait for saved devices to load.");
@@ -64,8 +89,10 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
         selectedId,
         select: (device) => {
           setSelectedId(device.id);
-          void connection.connect(device.url);
+          remember(device.id);
+          void connect(device.url);
         },
+        disconnect,
         add: (name, url) => {
           const device = newDevice(devices, name, url, crypto.randomUUID());
           save([...devices, device]);
@@ -74,9 +101,8 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
         remove: (id) => {
           const device = devices.find((item) => item.id === id);
           save(devices.filter((item) => item.id !== id));
-          if (selectedId === id) setSelectedId(undefined);
-          if (selectedId === id || connection.origin === device?.url)
-            connection.disconnect();
+          if (selectedId === id || (device && origin === device.url))
+            disconnect();
         },
       }}
     >

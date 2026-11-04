@@ -1,13 +1,5 @@
 "use client";
-import {
-  ChevronRight,
-  type Folder,
-  FolderClock,
-  MessageSquare,
-  Pin,
-  Plus,
-  SquarePen,
-} from "lucide-react";
+import { ChevronRight, type Folder, Pin, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -29,6 +21,7 @@ import {
 } from "@/components/ui/collapsible";
 import { orderPinnedProjects } from "@/lib/project-pins";
 import { cn } from "@/lib/utils";
+import { StandaloneNavigation } from "./standalone-navigation";
 
 export function ProjectTree({
   deviceId,
@@ -208,7 +201,11 @@ export function ProjectTree({
             {actionError ?? pinError}
           </span>
         )}
-        {link(`${base}/preview/recent-idea`, "Recents", FolderClock)}
+        <StandaloneNavigation
+          deviceId={deviceId}
+          compact
+          closeMobile={closeMobile}
+        />
       </div>
     );
   return (
@@ -219,53 +216,45 @@ export function ProjectTree({
           {actionError ?? pinError}
         </p>
       )}
-      {link(`${base}/preview/new`, "New conversation", SquarePen)}
-      <section aria-label="Projects">
-        <div className="mb-2 flex items-center justify-between pl-3">
-          <h3 className="text-xs font-medium text-muted-foreground">
-            Projects
-          </h3>
-          <Button
-            nativeButton={false}
-            variant="ghost"
-            size="icon"
-            aria-label="Add project"
-            title="Add project"
-            render={
-              <Link href={`${base}/projects/new`} onClick={closeMobile} />
-            }
-          >
-            <Plus className="size-4" />
-          </Button>
-        </div>
-        {projectLinks}
-        {!connected ? (
-          <p className="px-3 text-xs text-muted-foreground">
-            Connect this machine to see projects.
-          </p>
-        ) : error ? (
-          <p role="alert" className="px-3 text-xs text-destructive">
-            {error}
-          </p>
-        ) : !projects ? (
-          <p className="px-3 text-xs text-muted-foreground">
-            Loading projects…
-          </p>
-        ) : !projects.length ? (
-          <p className="px-3 text-xs text-muted-foreground">No projects yet.</p>
-        ) : null}
-      </section>
-      <section aria-label="Recents">
-        <h3 className="mb-2 px-3 text-xs font-medium text-muted-foreground">
-          Recents
-        </h3>
-        {link(`${base}/preview/recent-idea`, "Explore an idea", MessageSquare)}
-        {link(
-          `${base}/preview/recent-question`,
-          "Quick question",
-          MessageSquare,
-        )}
-      </section>
+      <StandaloneNavigation deviceId={deviceId} closeMobile={closeMobile}>
+        <section aria-label="Projects">
+          <div className="mb-2 flex items-center justify-between pl-3">
+            <h3 className="text-xs font-medium text-muted-foreground">
+              Projects
+            </h3>
+            <Button
+              nativeButton={false}
+              variant="ghost"
+              size="icon"
+              aria-label="Add project"
+              title="Add project"
+              render={
+                <Link href={`${base}/projects/new`} onClick={closeMobile} />
+              }
+            >
+              <Plus className="size-4" />
+            </Button>
+          </div>
+          {projectLinks}
+          {!connected ? (
+            <p className="px-3 text-xs text-muted-foreground">
+              Connect this machine to see projects.
+            </p>
+          ) : error ? (
+            <p role="alert" className="px-3 text-xs text-destructive">
+              {error}
+            </p>
+          ) : !projects ? (
+            <p className="px-3 text-xs text-muted-foreground">
+              Loading projects…
+            </p>
+          ) : !projects.length ? (
+            <p className="px-3 text-xs text-muted-foreground">
+              No projects yet.
+            </p>
+          ) : null}
+        </section>
+      </StandaloneNavigation>
     </div>
   );
 }
