@@ -18,7 +18,7 @@ A Next.js/React client at `http://127.0.0.1:3001/` with a full-width shadcn Base
 Two navigation columns separate scope. The client column animates between 256px expanded and 56px collapsed over 200ms,
 respecting reduced motion and clipping overflow.
 It lists all devices and keeps Home, Manage devices and Client preferences accessible. Device rows
-show initials/name and status squares; clicking navigates only, with no inline metadata expansion.
+show initials/name and status dots; clicking navigates only, with no inline metadata expansion.
 Manage devices owns connection actions and editing. Home shows saved/connected/error counts.
 Selecting a device never connects it or disconnects another machine.
 
@@ -108,11 +108,11 @@ secondary catalog pricing (input/output/cache read/cache write). Model rows have
 The desktop provider catalog is 320px wide. Provider and model names share the same text size
 and weight; metadata remains secondary.
 
-Workspace navigation separates Projects from Recents. New conversation creates one standalone
-Durable session on the connected machine and opens its chat immediately. Recents lists those
-conversations with pinned entries first, then newest first. Project rows expand in place and their context menu opens settings.
+Workspace navigation uses collapsible Pinned, Projects and Recents sections. The Recents header
+creates a standalone Durable session and opens its chat. Pinned projects and individual chats move
+into Pinned without duplicates; unpinned projects retain backend order and Recents stays newest first.
 
-The workspace New conversation action aligns vertically with Home in the primary column.
+Standalone creation belongs to the Recents header action; there is no top-level New conversation button.
 Collapsed workspace navigation exposes direct project and conversation shortcuts; only the top
 chevron expands the panel. The footer uses the label Machine settings.
 
@@ -148,7 +148,7 @@ The project header shows only the project name and a red Remove action with a tr
 
 Save changes appears in the header immediately before Remove only when the name/icon/color differs from the last saved values; reverting an edit hides it. The header button submits the associated form, preserving keyboard validation. The refresh icon beside the project name reloads directory and Git metadata and is disabled while that snapshot loads. Current worktrees use the same shaded background and blue square as current branches.
 
-Project entries in both sidebar modes use the official shadcn Base UI Context Menu: Edit opens settings, Pin to top/Unpin changes browser-local ordering, and Remove opens a shared confirmation dialog. The gear is removed. Shift+F10 or the keyboard context-menu key on a focused entry provides keyboard access; Base UI supplies touch long-press behavior. Expanded pinned rows show a pin icon; compact entries include pinned state in their tooltip.
+Project entries in both sidebar modes use the official shadcn Base UI Context Menu: Edit opens settings, Pin to top/Unpin changes browser-local ordering, and Remove opens a shared confirmation dialog. The gear is removed. Shift+F10 or the keyboard context-menu key on a focused entry provides keyboard access; Base UI supplies touch long-press behavior. Pinned rows omit redundant pin badges; compact entries include pinned state in their tooltip.
 
 `console.project-pins.v1` stores project IDs grouped by backend URL. Newest pins come first, then unchanged backend order; unknown IDs are ignored. Invalid storage is reported and left untouched, and failed writes preserve in-memory state. Pins persist across reload; they are not shared with other clients or synchronized across tabs. `test/project-pins.test.ts` checks parsing, round-trip persistence, backend isolation and ordering.
 
@@ -214,7 +214,7 @@ Remove retains the existing archive confirmation and recovery path.
 
 Project and Recents conversation rows share Rename and Pin/Unpin menus. Rename is backend-owned;
 conversation pins are browser-local in console.conversation-pins.v1, scoped by backend URL and
-session/conversation ID. Pins sort first within each group; remaining order stays unchanged.
+session/conversation ID. Pinned chats appear only in machine Pinned; remaining source order stays unchanged.
 Actions share row hover backgrounds, appear on hover or keyboard focus and remain visible while a menu is open or on touch screens.
 Refreshes retain loaded session metadata and keep the chat mounted, preserving unsent drafts.
 
@@ -236,3 +236,24 @@ aligns with its parent label, reclaiming horizontal space for conversation names
 Project conversation lists use the existing Base UI Collapsible with a scoped 180ms height reveal
 and 140ms fade, including collapse. Reduced motion skips both. The icon/name remains the trigger;
 there is no chevron or persistent project selection. Git/model/tool collapsibles are unaffected.
+
+## Workspace section navigation
+
+Pinned, Projects and Recents are independent animated sections, initially open. Projects Add and
+Recents compose actions reveal on header hover/keyboard focus and stay available on touch.
+Pinned projects and individual chats move out of their regular list; Unpin restores source order.
+Pinned projects precede pinned standalone chats, with newest pins first within each kind. Project
+conversation pins remain inside their sessions. Section disclosure state is not saved across reload.
+There is no top-level New conversation button; expand the compact rail for Recents creation.
+Machine status dots sit bottom-right on compact badges and at the trailing edge of expanded rows,
+with connection state in accessible names/tooltips. Status does not change connection behavior.
+
+## Navigation contract and dragging
+
+See [navigation actions](../navigation-actions.md) for the entity/action matrix. Dots and right-click
+menus share action definitions and temporary target highlighting; primary shortcuts derive from the
+same definitions. Section headers rotate chevrons. No redundant pin badges are rendered.
+Desktop drag pins projects/chats, unpins projects into Projects, standalone chats into Recents, and
+project chats onto their owning project row. Unsupported ownership moves show feedback and retain
+history/context. Touch and keyboard use menus; arbitrary ordering is deferred. Pinned project chats
+resolve metadata without expanding their project and do not duplicate in the source session list.

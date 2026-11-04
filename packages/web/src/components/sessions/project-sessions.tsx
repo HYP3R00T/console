@@ -2,8 +2,7 @@
 import { Layers, SquarePen } from "lucide-react";
 import { NavigationMenu } from "@/components/layout/navigation-menu";
 import { NavigationRow } from "@/components/layout/navigation-row";
-import { Button } from "@/components/ui/button";
-import { conversationKey, orderConversations } from "@/lib/conversation-pins";
+import { conversationKey } from "@/lib/conversation-pins";
 import { useConversationPins } from "./conversation-preferences";
 import { ConversationRow } from "./conversation-row";
 import type { Session } from "./use-project-sessions";
@@ -43,9 +42,13 @@ export function ProjectSessions({
         >
           {grouped && (
             <NavigationMenu
+              kind="session"
               label={`Session ${session.number} actions`}
               actions={[
                 {
+                  id: "create-conversation",
+                  primary: true,
+                  shortcutLabel: `New conversation in Session ${session.number}`,
                   label: "New conversation",
                   icon: SquarePen,
                   disabled: busy,
@@ -54,24 +57,7 @@ export function ProjectSessions({
               ]}
             >
               {(menu) => (
-                <NavigationRow
-                  actions={
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-6 [&_svg]:size-3.5"
-                        disabled={busy}
-                        aria-label={`New conversation in Session ${session.number}`}
-                        title="New conversation"
-                        onClick={() => createConversation(session.sessionId)}
-                      >
-                        <SquarePen className="size-4" />
-                      </Button>
-                      {menu}
-                    </>
-                  }
-                >
+                <NavigationRow actions={menu}>
                   <h4 className="flex h-7 items-center gap-2 px-2 text-xs font-medium text-muted-foreground">
                     <Layers className="size-4" />
                     Session {session.number}
@@ -81,20 +67,23 @@ export function ProjectSessions({
             </NavigationMenu>
           )}
           <div className={grouped ? "pl-6" : undefined}>
-            {orderConversations(
-              conversations,
-              (conversation) =>
-                conversationKey(session.sessionId, conversation.id),
-              pins,
-            ).map((conversation) => (
-              <ConversationRow
-                key={conversation.id}
-                sessionId={session.sessionId}
-                conversation={conversation}
-                href={`/devices/${deviceId}/projects/${projectId}/sessions/${session.sessionId}/conversations/${conversation.id}`}
-                closeMobile={closeMobile}
-              />
-            ))}
+            {conversations
+              .filter(
+                (conversation) =>
+                  !pins.includes(
+                    conversationKey(session.sessionId, conversation.id),
+                  ),
+              )
+              .map((conversation) => (
+                <ConversationRow
+                  key={conversation.id}
+                  sessionId={session.sessionId}
+                  projectId={projectId}
+                  conversation={conversation}
+                  href={`/devices/${deviceId}/projects/${projectId}/sessions/${session.sessionId}/conversations/${conversation.id}`}
+                  closeMobile={closeMobile}
+                />
+              ))}
             {more && (
               <p className="px-2 text-xs text-muted-foreground">
                 Only the first 200 conversations are listed.

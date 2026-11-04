@@ -1,8 +1,10 @@
 "use client";
-import { type Folder, Plus } from "lucide-react";
+import { Plus, SquarePen } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import { NavigationDragProvider } from "@/components/layout/navigation-drag";
+import { NavigationSection } from "@/components/layout/navigation-section";
 import { SidebarAction } from "@/components/layout/sidebar-action";
 import { ProjectNavigation } from "@/components/projects/project-navigation";
 import { ProjectRemovalDialog } from "@/components/projects/project-removal-dialog";
@@ -10,12 +12,26 @@ import {
   type Project,
   useMachineProjects,
 } from "@/components/projects/projects-provider";
+import { useConversationPins } from "@/components/sessions/conversation-preferences";
+import { ConversationRow } from "@/components/sessions/conversation-row";
 import { Button } from "@/components/ui/button";
-import { orderPinnedProjects } from "@/lib/project-pins";
-import { cn } from "@/lib/utils";
-import { StandaloneNavigation } from "./standalone-navigation";
+import { conversationKey } from "@/lib/conversation-pins";
+import { splitPinnedItems } from "@/lib/navigation-sections";
+import { usePinnedConversations } from "./use-pinned-conversations";
+import { useStandaloneNavigation } from "./use-standalone-navigation";
 
-export function ProjectTree({
+export function ProjectTree(props: {
+  deviceId: string;
+  closeMobile?: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <NavigationDragProvider key={props.deviceId} deviceId={props.deviceId}>
+      <ProjectTreeContent {...props} />
+    </NavigationDragProvider>
+  );
+}
+function ProjectTreeContent({
   deviceId,
   closeMobile = () => {},
   compact = false,
@@ -26,59 +42,115 @@ export function ProjectTree({
 }) {
   const { projects, connected, error, pinnedIds, pinError, setPinned } =
     useMachineProjects(deviceId);
+  const standalone = useStandaloneNavigation(deviceId, closeMobile);
+  const preferences = useConversationPins();
+  const pinnedConversations = usePinnedConversations(
+    deviceId,
+    preferences.pins,
+  );
   const [removing, setRemoving] = useState<Project>();
   const [actionError, setActionError] = useState<string>();
+  const [recentsOpen, setRecentsOpen] = useState(true);
   const router = useRouter();
   const base = `/devices/${encodeURIComponent(deviceId)}`;
   const pathname = usePathname();
-  function link(href: string, label: string, Icon: typeof Folder) {
+  const projectGroups = splitPinnedItems(
+    projects ?? [],
+    (p) => p.id,
+    pinnedIds,
+  );
+  const conversationGroups = splitPinnedItems(
+    standalone.sessions ?? [],
+    (s) => conversationKey(s.sessionId, s.conversationId),
+    preferences.pins,
+  );
+
+  function projectRow(project: Project) {
+    const pinned = pinnedIds.includes(project.id);
     return (
-      <SidebarAction
-        key={href}
+      <ProjectNavigation
+        key={`${deviceId}:${project.id}`}
+        project={project}
+        deviceId={deviceId}
         compact={compact}
-        nativeButton={false}
-        render={<Link href={href} onClick={closeMobile} />}
-        aria-label={label}
-        title={compact ? label : undefined}
-        aria-current={pathname === href ? "page" : undefined}
-        className={cn(
-          "navigation-row",
-          pathname === href && "bg-sidebar-accent",
-        )}
-      >
-        <Icon />
-        {!compact && <span className="truncate">{label}</span>}
-      </SidebarAction>
+        pinned={pinned}
+        closeMobile={closeMobile}
+        onPin={() => {
+          try {
+            setPinned(project.id, !pinned);
+            setActionError(undefined);
+          } catch (cause) {
+            setActionError(
+              cause instanceof Error
+                ? cause.message
+                : "Could not save project pins.",
+            );
+          }
+        }}
+        onRemove={() => setRemoving(project)}
+      />
     );
   }
-  const projectLinks =
-    projects &&
-    orderPinnedProjects(projects, pinnedIds).map((p) => {
-      const pinned = pinnedIds.includes(p.id);
-      return (
-        <ProjectNavigation
-          key={`${deviceId}:${p.id}`}
-          project={p}
-          deviceId={deviceId}
-          compact={compact}
-          pinned={pinned}
-          closeMobile={closeMobile}
-          onPin={() => {
-            try {
-              setPinned(p.id, !pinned);
-              setActionError(undefined);
-            } catch (cause) {
-              setActionError(
-                cause instanceof Error
-                  ? cause.message
-                  : "Could not save project pins.",
-              );
+  function conversationRow(
+    session: NonNullable<typeof standalone.sessions>[number],
+  ) {
+    return (
+      <ConversationRow
+        key={session.sessionId}
+        sessionId={session.sessionId}
+        conversation={{ id: session.conversationId, name: session.name }}
+        href={`${standalone.base}/${session.sessionId}`}
+        compact={compact}
+        closeMobile={closeMobile}
+      />
+    );
+  }
+  const pinnedRows = (
+    <>
+      {projectGroups.pinned.map(projectRow)}
+      {pinnedConversations.map(({ key, session, conversation, loading }) =>
+        session && conversation ? (
+          <ConversationRow
+            key={key}
+            sessionId={session.sessionId}
+            projectId={session.projectId || undefined}
+            conversation={conversation}
+            href={
+              session.projectId
+                ? `${base}/projects/${session.projectId}/sessions/${session.sessionId}/conversations/${conversation.id}`
+                : `${standalone.base}/${session.sessionId}`
             }
-          }}
-          onRemove={() => setRemoving(p)}
-        />
-      );
-    });
+            compact={compact}
+            closeMobile={closeMobile}
+          />
+        ) : (
+          <div
+            key={key}
+            className="flex items-center px-2 text-xs text-muted-foreground"
+          >
+            <span className="flex-1">
+              {loading ? "Loading pinned chat…" : "Unavailable pinned chat"}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                try {
+                  preferences.setPin(key, false);
+                } catch (cause) {
+                  setActionError(
+                    cause instanceof Error ? cause.message : "Could not unpin.",
+                  );
+                }
+              }}
+            >
+              Unpin
+            </Button>
+          </div>
+        ),
+      )}
+    </>
+  );
   const removal = removing && (
     <ProjectRemovalDialog
       key={removing.id}
@@ -94,71 +166,113 @@ export function ProjectTree({
       }}
     />
   );
+  const message =
+    actionError ?? pinError ?? preferences.error ?? standalone.error;
   if (compact)
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-        {link(`${base}/projects/new`, "Add project", Plus)}
-        {projectLinks}
+        <SidebarAction
+          compact
+          nativeButton={false}
+          aria-label="Add project"
+          title="Add project"
+          render={<Link href={`${base}/projects/new`} onClick={closeMobile} />}
+        >
+          <Plus />
+        </SidebarAction>
+        {pinnedRows}
+        {projectGroups.regular.map(projectRow)}
+        {conversationGroups.regular.map(conversationRow)}
         {removal}
-        {(actionError || pinError) && (
+        {message && (
           <span role="alert" className="sr-only">
-            {actionError ?? pinError}
+            {message}
           </span>
         )}
-        <StandaloneNavigation
-          deviceId={deviceId}
-          compact
-          closeMobile={closeMobile}
-        />
       </div>
     );
   return (
-    <div className="min-w-0 space-y-6 px-2">
+    <div className="min-w-0 space-y-4 px-2">
       {removal}
-      {(actionError || pinError) && (
+      {message && (
         <p role="alert" className="px-3 text-xs text-destructive">
-          {actionError ?? pinError}
+          {message}
         </p>
       )}
-      <StandaloneNavigation deviceId={deviceId} closeMobile={closeMobile}>
-        <section aria-label="Projects">
-          <div className="mb-2 flex items-center justify-between pl-3">
-            <h3 className="text-xs font-medium text-muted-foreground">
-              Projects
-            </h3>
-            <Button
-              nativeButton={false}
-              variant="ghost"
-              size="icon-xs"
-              aria-label="Add project"
-              title="Add project"
-              render={
-                <Link href={`${base}/projects/new`} onClick={closeMobile} />
-              }
-            >
-              <Plus className="size-4" />
-            </Button>
-          </div>
-          {projectLinks}
-          {!connected ? (
-            <p className="px-3 text-xs text-muted-foreground">
-              Connect this machine to see projects.
-            </p>
-          ) : error ? (
-            <p role="alert" className="px-3 text-xs text-destructive">
-              {error}
-            </p>
-          ) : !projects ? (
-            <p className="px-3 text-xs text-muted-foreground">
-              Loading projects…
-            </p>
-          ) : !projects.length ? (
-            <p className="px-3 text-xs text-muted-foreground">
-              No projects yet.
-            </p>
-          ) : null}
-        </section>
-      </StandaloneNavigation>
+      <NavigationSection label="Pinned" dropTarget="pinned">
+        {pinnedRows}
+        {!projectGroups.pinned.length && !preferences.pins.length && (
+          <p className="px-3 text-xs text-muted-foreground">No pinned items.</p>
+        )}
+      </NavigationSection>
+      <NavigationSection
+        label="Projects"
+        dropTarget="projects"
+        actions={[
+          {
+            id: "add-project",
+            label: "Add project",
+            icon: Plus,
+            primary: true,
+            onSelect: () => {
+              router.push(`${base}/projects/new`);
+              closeMobile();
+            },
+          },
+        ]}
+      >
+        {projectGroups.regular.map(projectRow)}
+        {!connected ? (
+          <p className="px-3 text-xs text-muted-foreground">
+            Connect this machine to see projects.
+          </p>
+        ) : error ? (
+          <p role="alert" className="px-3 text-xs text-destructive">
+            {error}
+          </p>
+        ) : !projects ? (
+          <p className="px-3 text-xs text-muted-foreground">
+            Loading projects…
+          </p>
+        ) : !projectGroups.regular.length ? (
+          <p className="px-3 text-xs text-muted-foreground">
+            {projects.length ? "All projects are pinned." : "No projects yet."}
+          </p>
+        ) : null}
+      </NavigationSection>
+      <NavigationSection
+        label="Recents"
+        open={recentsOpen}
+        onOpenChange={setRecentsOpen}
+        dropTarget="recents"
+        actions={[
+          {
+            id: "create-conversation",
+            label: "New conversation",
+            shortcutLabel: "New conversation in Recents",
+            icon: SquarePen,
+            primary: true,
+            disabled: !connected || standalone.creating,
+            onSelect: () => {
+              setRecentsOpen(true);
+              void standalone.create();
+            },
+          },
+        ]}
+      >
+        {conversationGroups.regular.map(conversationRow)}
+        {!standalone.error && !conversationGroups.regular.length && (
+          <p className="px-3 text-xs text-muted-foreground">
+            {!connected
+              ? "Connect this machine to see Recents."
+              : !standalone.sessions
+                ? "Loading conversations…"
+                : standalone.sessions.length
+                  ? "All conversations are pinned."
+                  : "No conversations yet."}
+          </p>
+        )}
+      </NavigationSection>
     </div>
   );
 }

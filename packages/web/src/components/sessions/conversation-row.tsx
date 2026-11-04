@@ -3,7 +3,10 @@ import { MessageSquare, Pencil, Pin, PinOff } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { NavigationMenu } from "@/components/layout/navigation-menu";
+import {
+  type NavigationAction,
+  NavigationMenu,
+} from "@/components/layout/navigation-menu";
 import { NavigationRow } from "@/components/layout/navigation-row";
 import { SidebarAction } from "@/components/layout/sidebar-action";
 import { Button } from "@/components/ui/button";
@@ -22,12 +25,14 @@ import { sessionsChanged } from "./use-project-sessions";
 
 export function ConversationRow({
   sessionId,
+  projectId,
   conversation,
   href,
   compact = false,
   closeMobile = () => {},
 }: {
   sessionId: string;
+  projectId?: string;
   conversation: { id: number; name: string };
   href: string;
   compact?: boolean;
@@ -42,8 +47,9 @@ export function ConversationRow({
   const [name, setName] = useState(conversation.name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const actions = [
+  const actions: NavigationAction[] = [
     {
+      id: "rename",
       label: "Rename",
       icon: Pencil,
       onSelect: () => {
@@ -53,6 +59,7 @@ export function ConversationRow({
       },
     },
     {
+      id: "toggle-pin",
       label: pinned ? "Unpin" : "Pin to top",
       icon: pinned ? PinOff : Pin,
       disabled: !preferences.ready || !!preferences.error,
@@ -86,17 +93,18 @@ export function ConversationRow({
       {!compact && (
         <span className="min-w-0 flex-1 truncate">{conversation.name}</span>
       )}
-      {!compact && pinned && (
-        <Pin
-          className="size-3! shrink-0 text-muted-foreground"
-          aria-label="Pinned conversation"
-        />
-      )}
     </SidebarAction>
   );
   return (
     <>
       <NavigationMenu
+        kind="conversation"
+        dragItem={{
+          kind: "conversation",
+          sessionId,
+          id: conversation.id,
+          projectId,
+        }}
         label={`Actions for ${conversation.name}`}
         actions={actions}
       >

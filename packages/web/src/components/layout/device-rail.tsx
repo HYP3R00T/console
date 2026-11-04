@@ -92,8 +92,9 @@ export function DeviceRail() {
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "size-1.5 shrink-0",
-                    !full && "absolute right-1 bottom-1",
+                    "size-1.5 shrink-0 rounded-full",
+                    !full &&
+                      "absolute right-1 bottom-1 ring-2 ring-client-surface",
                     status === "Connected"
                       ? "bg-emerald-500"
                       : status === "Connecting"
