@@ -94,15 +94,19 @@ Project appearance updates accept 32 preset icon IDs and eight colors. Invalid I
 
 Pi Durable 1.4 owns each session's SQLite transcript, tasks, documents and inbox. Console's
 `harnesses.sqlite` maps projects to numbered sessions, each opened by exactly one Durable Harness.
-Session files live under `~/.local/share/console/sessions`. No environment setup is required.
-Startup resumes available-project sessions; browser disconnect never cancels admitted work.
+Session files live under `~/.local/share/console/sessions`. Each standalone session uses a private
+`workspaces/<sessionId>` directory under that root. Console retains the directory across restarts.
+Startup resumes standalone and available-project sessions; browser disconnect never cancels admitted work.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/v1/projects/:id/sessions` | Project-owned harness/session index. |
 | POST | `/v1/projects/:id/sessions` | `{}`; create the next numbered session and Main, 201. |
+| GET | `/v1/standalone` | Standalone sessions newest first. |
+| POST | `/v1/standalone` | `{}`; create a numbered standalone conversation, 201. |
+| GET | `/v1/standalone/:sessionId` | Standalone session and root conversation ID; rejects project sessions. |
 | GET | `/v1/sessions/:sessionId/conversations` | Session metadata and first 200 conversations; `more` reports truncation. |
-| POST | `/v1/sessions/:sessionId/conversations` | `{}`; create the next numbered conversation in that session, 201. |
+| POST | `/v1/sessions/:sessionId/conversations` | `{}`; create the next numbered conversation in a project session, 201. |
 | POST | `/v1/sessions/:sessionId/conversations/:conversationId/messages` | `{content,requestId,model?,thinkingLevel?}`; validated choices and UUID deduplication, durable admission, 202. |
 | GET | `/v1/sessions/:sessionId/conversations/:conversationId/submissions` | Latest safe completion status; supports failure display after reconnect. |
 | GET | `/v1/sessions/:sessionId/conversations/:conversationId/submissions/:submissionId` | Persisted admission/completion state, scoped to its conversation. |
@@ -130,3 +134,11 @@ inherit Main's stored model/thinking settings; no creation dialog/configuration 
 Message selection is validated before admission. Changing model/thinking while working or queued
 returns 409; unsupported thinking levels return 400. Model changes clear an incompatible previous
 thinking choice. Duplicate message keys return the original admission before revalidating preferences.
+
+## HTTP connection policy
+
+`http/connection.ts` configures origin restrictions, CORS, health and the connection handshake.
+`createApp` accepts an optional HttpConnectionPolicy at composition time. Its authorization hook
+runs before feature handlers. The default policy retains local website origins and unauthenticated
+access. The entrypoint chooses the listener address; future deployment/authentication integration
+can supply a different policy while retaining provider, project and session route contracts.

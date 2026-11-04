@@ -50,3 +50,49 @@ test("unapproved browser origins are rejected rather than reflected", async (t) 
     assert.equal(response.headers["access-control-allow-origin"], undefined);
   }
 });
+
+test("the HTTP boundary can enforce access before feature routes and allow authenticated preflights", async (t) => {
+  const app = createApp({}, undefined, undefined, undefined, {
+    origins: ["https://console.example"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: false,
+    authorize: async (request, reply) => {
+      if (request.headers.authorization !== "Bearer test")
+        reply.code(401).send({ error: "Sign in required" });
+    },
+  });
+  app.get("/v1/example", () => ({ value: 42 }));
+  t.after(() => app.close());
+  const headers = { origin: "https://console.example" };
+  assert.equal(
+    (await app.inject({ url: "/v1/example", headers })).statusCode,
+    401,
+  );
+  assert.equal(
+    (
+      await app.inject({
+        url: "/v1/example",
+        headers: { ...headers, authorization: "Bearer test" },
+      })
+    ).statusCode,
+    200,
+  );
+  assert.equal(
+    (await app.inject({ url: "/v1/connection", headers })).statusCode,
+    401,
+  );
+  const preflight = await app.inject({
+    method: "OPTIONS",
+    url: "/v1/example",
+    headers: {
+      ...headers,
+      "access-control-request-method": "GET",
+      "access-control-request-headers": "authorization",
+    },
+  });
+  assert.equal(preflight.statusCode, 204);
+  assert.match(
+    String(preflight.headers["access-control-allow-headers"]),
+    /Authorization/,
+  );
+});

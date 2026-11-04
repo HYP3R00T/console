@@ -39,6 +39,11 @@ export class HarnessRuntime {
     }
     return current;
   }
+  async standaloneWorkspace(sessionId: string) {
+    const path = join(this.directory, "workspaces", sessionId);
+    await mkdir(path, { recursive: true, mode: 0o700 });
+    return path;
+  }
   async claim() {
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
     if (!this.lock) {

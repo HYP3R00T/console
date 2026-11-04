@@ -76,6 +76,21 @@ export function registerHarnessRoutes(
           .code(201)
           .send(await service.operation(() => service.create(req.params.id))),
     );
+    routes.get("/v1/standalone", () => service.listStandalone());
+    routes.post<{ Body: Record<string, never> }>(
+      "/v1/standalone",
+      { schema: { body: creation } },
+      async (_req, reply) =>
+        reply
+          .code(201)
+          .send(await service.operation(() => service.createStandalone())),
+    );
+    routes.get<{ Params: { sessionId: string } }>(
+      "/v1/standalone/:sessionId",
+      { schema: { params: params({ sessionId: uuid }) } },
+      (req) =>
+        service.operation(() => service.standalone(req.params.sessionId)),
+    );
     routes.get<{ Params: { sessionId: string } }>(
       "/v1/sessions/:sessionId/conversations",
       { schema: { params: params({ sessionId: uuid }) } },

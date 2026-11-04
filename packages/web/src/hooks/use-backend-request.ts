@@ -1,74 +1,20 @@
 "use client";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { useConnection } from "@/components/connection-provider";
 
-export class BackendRequestError extends Error {
-  constructor(
-    message: string,
-    readonly code?: string,
-  ) {
-    super(message);
-  }
-}
+export { BackendRequestError } from "@/lib/backend/client";
 
 export function useBackendRequest() {
-  const { origin } = useConnection();
-  const latest = useRef(origin);
-  latest.current = origin;
-  const scope = useRef<
-    { origin: string; controller: AbortController } | undefined
-  >(undefined);
-  useEffect(
-    () => () => {
-      const current = scope.current;
-      if (current && current.origin === origin) current.controller.abort();
-    },
-    [origin],
-  );
+  const { origin, client } = useConnection();
+  const latest = useRef(client);
+  latest.current = client;
   const request = useCallback(
-    async <T>(
-      path: string,
-      init: RequestInit = {},
-      timeoutMs = 20000,
-    ): Promise<T> => {
-      if (!origin || latest.current !== origin)
-        throw new Error("Connect this backend first.");
-      if (
-        scope.current?.origin !== origin ||
-        scope.current.controller.signal.aborted
-      ) {
-        scope.current = { origin, controller: new AbortController() };
-      }
-      const signal = AbortSignal.any([
-        AbortSignal.timeout(timeoutMs),
-        scope.current.controller.signal,
-        ...(init.signal ? [init.signal] : []),
-      ]);
-      const response = await fetch(`${origin}${path}`, {
-        ...init,
-        headers: {
-          ...(init.body ? { "Content-Type": "application/json" } : {}),
-          ...init.headers,
-        },
-        credentials: "omit",
-        redirect: "error",
-        cache: "no-store",
-        signal,
-      });
-      const data = await response.json();
-      signal.throwIfAborted();
-      if (latest.current !== origin)
-        throw new Error("The backend connection changed.");
-      if (!response.ok)
-        throw new BackendRequestError(
-          typeof data.error === "string"
-            ? data.error
-            : `Backend returned HTTP ${response.status}.`,
-          typeof data.code === "string" ? data.code : undefined,
-        );
-      return data as T;
+    <T>(path: string, init?: RequestInit, timeoutMs?: number): Promise<T> => {
+      if (!client || latest.current !== client)
+        return Promise.reject(new Error("Connect this backend first."));
+      return client.request<T>(path, init, timeoutMs);
     },
-    [origin],
+    [client],
   );
-  return { origin, request };
+  return { origin, client, request };
 }

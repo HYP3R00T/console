@@ -3,6 +3,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { openDatabase } from "../storage/database.ts";
 
+// Project IDs are UUIDs. This reserved owner groups machine-level conversations.
+export const standaloneOwner = "";
+
 export type HarnessRecord = {
   id: string;
   sessionId: string;
@@ -46,7 +49,7 @@ export class HarnessStore {
   }
   list(projectId?: string): HarnessRecord[] {
     return (
-      projectId
+      projectId !== undefined
         ? this.db
             .prepare(
               "SELECT * FROM harnesses WHERE projectId=? ORDER BY number,id",
@@ -56,6 +59,11 @@ export class HarnessStore {
             .prepare("SELECT * FROM harnesses ORDER BY projectId,number,id")
             .all()
     ) as HarnessRecord[];
+  }
+  listStandalone(): HarnessRecord[] {
+    return this.db
+      .prepare("SELECT * FROM harnesses WHERE projectId=? ORDER BY number DESC")
+      .all(standaloneOwner) as HarnessRecord[];
   }
   session(id: string) {
     return this.db
@@ -76,7 +84,7 @@ export class HarnessStore {
         id: randomUUID(),
         sessionId: randomUUID(),
         projectId,
-        name: `Session ${number}`,
+        name: `${projectId === standaloneOwner ? "Conversation" : "Session"} ${number}`,
         number,
         provider,
         modelId,

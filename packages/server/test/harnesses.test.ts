@@ -634,3 +634,76 @@ test("switching models clears unsupported thinking preferences", async (t) => {
   assert.equal((await root.agent(context)).thinkingLevel, "off");
   assert.equal(f.faux.state.callCount, 2);
 });
+
+test("standalone chats stay separate from projects and retain workspaces and transcripts on restart", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "console-standalone-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  let f = await fixture(directory);
+  t.after(() => f.app.close());
+  const project = await f.projects.register("Project", directory);
+  const projectSession = f.service.store.list(project.id)[0];
+  const create = () =>
+    f.app.inject({ method: "POST", url: "/v1/standalone", payload: {} });
+  const one = await create();
+  const two = await create();
+  assert.equal(one.statusCode, 201, one.body);
+  assert.equal(two.statusCode, 201, two.body);
+  const first = one.json();
+  const second = two.json();
+  assert.equal(first.name, "Conversation 1");
+  assert.equal(second.name, "Conversation 2");
+  const detail = `/v1/standalone/${first.sessionId}`;
+  const id = (await f.app.inject(detail)).json().conversationId;
+  const conversations = `/v1/sessions/${first.sessionId}/conversations`;
+  const chat = `${conversations}/${id}`;
+  assert.equal(
+    (await f.app.inject(`/v1/standalone/${projectSession.sessionId}`))
+      .statusCode,
+    404,
+  );
+  assert.equal(
+    (await f.app.inject({ method: "POST", url: conversations, payload: {} }))
+      .statusCode,
+    409,
+  );
+  assert.deepEqual(
+    (await f.app.inject(`/v1/projects/${project.id}/sessions`)).json().sessions,
+    [{ ...projectSession }],
+  );
+  assert.deepEqual(
+    (await f.app.inject("/v1/standalone"))
+      .json()
+      .sessions.map((item: { sessionId: string }) => item.sessionId),
+    [second.sessionId, first.sessionId],
+  );
+
+  const { conversation, harness } = await f.service.conversation(
+    first.sessionId,
+    String(id),
+  );
+  const workspace = join(directory, "sessions", "workspaces", first.sessionId);
+  assert.equal((await conversation.agent(context)).cwd, workspace);
+  assert.equal(statSync(workspace).mode & 0o777, 0o700);
+  const { writeFileSync, readFileSync } = await import("node:fs");
+  writeFileSync(join(workspace, "keep.txt"), "persistent workspace");
+  f.faux.setResponses([fauxAssistantMessage("Standalone answer")]);
+  const message = await f.app.inject({
+    method: "POST",
+    url: `${chat}/messages`,
+    payload: { model, requestId: randomUUID(), content: "Hello" },
+  });
+  assert.equal(message.statusCode, 202, message.body);
+  await harness.waitForIdle(context);
+  await f.app.close();
+  f = await fixture(directory);
+  assert.equal((await f.app.inject(detail)).json().conversationId, id);
+  assert.match(
+    (await f.app.inject(`${chat}/history`)).body,
+    /Standalone answer/,
+  );
+  assert.equal(
+    readFileSync(join(workspace, "keep.txt"), "utf8"),
+    "persistent workspace",
+  );
+  assert.equal(f.faux.state.callCount, 0);
+});

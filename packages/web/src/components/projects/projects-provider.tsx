@@ -43,7 +43,7 @@ type State = ReturnType<typeof useBackendRequest> & {
 };
 const Context = createContext<State | null>(null);
 export function ProjectsProvider({ children }: { children: ReactNode }) {
-  const { origin, request } = useBackendRequest();
+  const { origin, client, request } = useBackendRequest();
   const [pins, setPins] = useState<ProjectPins>({});
   const [pinsReady, setPinsReady] = useState(false);
   const [pinError, setPinError] = useState<string>();
@@ -111,6 +111,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     <Context
       value={{
         origin,
+        client,
         request,
         refresh,
         projects: current?.projects,
@@ -134,6 +135,7 @@ export function useMachineProjects(deviceId: string) {
   return {
     ...state,
     connected,
+    client: connected ? state.client : undefined,
     device,
     projects: connected ? state.projects : undefined,
     settings: connected ? state.settings : undefined,

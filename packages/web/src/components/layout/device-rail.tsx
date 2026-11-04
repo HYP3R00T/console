@@ -180,7 +180,7 @@ export function DeviceRail() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={connection.disconnect}
+                        onClick={registry.disconnect}
                       >
                         Disconnect
                       </Button>
@@ -189,7 +189,7 @@ export function DeviceRail() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={connection.disconnect}
+                        onClick={registry.disconnect}
                       >
                         Cancel connection
                       </Button>

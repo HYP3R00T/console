@@ -26,11 +26,11 @@ Browser → selected loopback backend → GET /v1/connection
 | `packages/web/src/app/layout.tsx` | Shared navigation and connection provider. |
 | `packages/web/src/app/globals.css` | Preset tokens and Tailwind integration; zero radius and Geist typography. |
 
-The connection provider starts disconnected and holds the selected origin only in memory. Explicit
+The connection provider holds live status in memory. DeviceProvider remembers the last explicitly selected connection by bookmark ID and probes it on reload. Explicit
 Connect validates the URL and checks the API. Each successful check schedules another after five
 seconds; checks time out after five seconds. Disconnect, replacement and unmount abort obsolete
 requests so they cannot restore an old connection. Failure stops monitoring; reconnect is explicit.
-The provider persists across Next.js navigation, not browser reloads.
+Disconnect, Cancel and Forget clear the remembered choice.
 
 ## Connection boundary
 
@@ -120,12 +120,32 @@ credentials and favorite models belong to that backend, not browser appearance.
 The main content pane currently displays route content. A multi-pane workspace for conversations,
 files and previews is a future increment; no window/docking framework is installed yet.
 
-`ProjectTree` lists real backend project registrations. New conversation and Recents still open
-frontend examples, without a session or execution backend. The older conversation preview routes
-are fixtures, not a domain schema or implementation of Durable. Authentication and SSH
-are not offered as nonworking controls.
+`ProjectTree` lists backend project registrations. Standalone sessions use a reserved owner in
+the harness index and a private `sessions/workspaces/<sessionId>` working directory. They share
+the Durable runtime and message APIs with project sessions. Project archival only touches sessions
+owned by that project. Standalone history and workspace files persist across restart.
 
-`DeviceProvider` sits inside `ConnectionProvider`, above route content. It persists only device
+Connection implementation is isolated behind `BackendConnector.open` and `BackendClient` in
+`packages/web/src/lib/backend/`. The local HTTP connector validates the loopback endpoint,
+performs the handshake and owns fetch/EventSource creation. Its client supplies requests,
+subscriptions, health probes and close. ConnectionProvider owns one client and closes it on
+replacement, disconnect, failed health checks or unmount. Client close aborts HTTP requests and
+closes subscriptions immediately, including when the next client uses the same URL.
+Feature hooks consume the client without constructing network connections.
+
+A future connector can establish an SSH tunnel through a companion or resolve an HTTPS endpoint,
+then return a client handling its credentials and stream authentication. The existing bookmark
+format and URL policy currently support local HTTP only. Remote profile persistence, credential
+storage, tunnel management and sign-in need their own implementation. EC2 and Kubernetes are
+deployment locations that can expose the same HTTP endpoint through a gateway.
+
+The server's `http/connection.ts` owns origin checks, CORS, health and handshake routes.
+`createApp` accepts an HTTP connection policy, including an optional authorization hook applied
+before feature handlers. CORS preflights complete before authorization. Deployment composition
+chooses this policy and the listener address. Domain services and route handlers retain their
+current contracts. The production entrypoint selects the existing local unauthenticated policy.
+
+`DeviceProvider` sits inside `ConnectionProvider`, above route content. It persists device
 IDs, display names and normalized loopback URLs in `localStorage` (`console.devices.v1`). Its
 `select` operation is called by explicit Connect, not rail navigation. Adding only bookmarks;
 forgetting the selected/connected device aborts its connection. Corrupt stored lists are reported
@@ -198,13 +218,12 @@ secondary catalog pricing (input/output/cache read/cache write). Model rows have
 The desktop provider catalog is 320px wide. Provider and model names share the same text size
 and weight; metadata remains secondary.
 
-Workspace navigation separates Projects from Recents (conversations outside projects), with a
-New conversation entry. New conversation and Recents open frontend examples only: they create no conversations,
-folders or files; expanded project rows toggle sessions and their context menu opens settings. The sidebar omits the Preview badge; the content view retains its explicit
-preview notice. Recents does not represent a live activity feed or persisted history yet.
+Workspace navigation separates Projects from Recents. New conversation creates one standalone
+Durable session on the connected machine and opens its chat immediately. Recents lists those
+conversations newest first. Project rows expand in place and their context menu opens settings.
 
 The workspace New conversation action aligns vertically with Home in the primary column.
-Collapsed workspace navigation exposes direct project/Recents folder shortcuts; only the top
+Collapsed workspace navigation exposes direct project and conversation shortcuts; only the top
 chevron expands the panel. The footer uses the label Machine settings.
 
 ## Projects
@@ -371,7 +390,7 @@ Durable withdraws queued inputs and interrupts running conversations. If work fa
 the project stays active. After sessions close, one registry update hides the project and its
 sessions. The stored path remains reserved and the Durable databases stay in place. Startup skips
 archived projects. Restore clears the archive timestamp and retains project and session IDs.
-Project triggers, permanent deletion, forks, subagents and standalone conversation creation are deferred.
+Project triggers, permanent deletion, forks and subagents are deferred.
 
 Session numbers use a unique `(projectId, number)` index and `BEGIN IMMEDIATE` allocation. The first
 number is 1; later numbers increase monotonically. Existing index rows gain numbers in creation/ID

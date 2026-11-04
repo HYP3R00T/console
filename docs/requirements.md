@@ -4,11 +4,11 @@ The current increment connects a local website to an explicitly selected local b
 its AI providers, sets up projects, and runs text conversations through project-owned Durable sessions.
 
 - Fastify listens on `127.0.0.1:3000`; Next.js listens on `127.0.0.1:3001`.
-- The website starts disconnected, with a full-width layout and two navigation columns.
+- On first use the website starts disconnected, with a full-width layout and two navigation columns.
 - The client column animates between 256px expanded and a 56px rail over 200ms; reduced motion skips the transition. It lists devices, Home, Add device and Client preferences.
 - Selecting a device changes the viewed workspace without connecting it automatically.
-- The contextual second column is absent on Home; devices show registered projects, conversation previews and Machine settings, while Preferences shows its categories.
-- Projects, sessions and project conversations are real backend records; each session opens one internal Durable Harness. Subagents, forks and standalone conversations remain frontend examples.
+- The contextual second column is absent on Home; devices show registered projects, standalone conversations and Machine settings, while Preferences shows its categories.
+- Projects, sessions and project conversations are real backend records; each session opens one internal Durable Harness. Forks and subagents are deferred.
 - The first column chooses Home, a device or Preferences. Appearance and saved-device category navigation lives in the second column; device disclosures in the first column own backend connection actions.
 - `/settings/connections/new` saves a backend name and loopback URL, then opens its workspace.
 - Device names and URLs persist only in this browser; saving a device does not connect it.
@@ -28,7 +28,7 @@ its AI providers, sets up projects, and runs text conversations through project-
 - Connect checks the backend's connection response before showing Connected.
 - Connected browsers recheck every five seconds. A failed check clears the connection and shows an error.
 - Disconnect and Cancel abort pending checks without stopping or modifying the backend.
-- Connection state survives page navigation, but reload starts disconnected. Device bookmarks and appearance use browser storage.
+- Reload rechecks the last explicitly connected device. Disconnect, Cancel and Forget clear that choice. Device bookmarks and appearance use browser storage.
 - Both apps retain separate startup commands and native terminal output.
 
 Authentication is deliberately deferred. The browser accepts only loopback backend URLs;
@@ -36,7 +36,10 @@ the backend permits browser requests only from the local website's two supported
 These reachability restrictions are not user authentication: other local processes can call the API.
 There is no Console user/token management or server-side device connection registry. Project sessions support text-only agent execution.
 Provider credentials and favorites are backend-owned; Console client authentication remains deferred.
-SSH, cloud exposure and nonlocal browser hosting require a separate authenticated transport design.
+Connectivity must be an extension boundary. Feature components use a connected backend client
+for both commands and subscriptions. Replacement/disconnect cancels that client's requests and
+streams. The server applies connection policy before feature handlers. Future remote endpoints,
+authentication and tunnels belong at this boundary; the current implementation supplies local HTTP.
 Existing data from earlier experiments remains untouched and unused.
 
 ## AI providers
@@ -66,13 +69,12 @@ secondary catalog pricing (input/output/cache read/cache write). Model rows have
 The desktop provider catalog is 320px wide. Provider and model names share the same text size
 and weight; metadata remains secondary.
 
-Workspace navigation separates Projects from Recents (conversations outside projects), with a
-New conversation entry. New conversation and Recents open frontend examples only: they create no conversations,
-folders or files. Expanded project rows toggle their harness/session navigation; the project context menu opens Edit settings. The sidebar omits the Preview badge; the content view retains its explicit
-preview notice. Recents does not represent a live activity feed or persisted history yet.
+Workspace navigation separates Projects from Recents. New conversation creates one standalone
+Durable session on the connected machine and opens its chat immediately. Recents lists those
+conversations newest first. Project rows expand in place and their context menu opens settings.
 
 The workspace New conversation action aligns vertically with Home in the primary column.
-Collapsed workspace navigation exposes direct project/Recents folder shortcuts; only the top
+Collapsed workspace navigation exposes direct project and conversation shortcuts; only the top
 chevron expands the panel. The footer uses the label Machine settings.
 
 ## Project registration
@@ -126,7 +128,7 @@ Save changes is shown immediately left of Remove only for unsaved name/icon/colo
 - Backend startup reopens and resumes sessions for available projects. The session-wide Stop API withdraws queued input and aborts ordinary work; no chat Stop session control is shown.
 - Text history survives graceful/abrupt restarts; automatic recovery follows Durable retry rules, not exactly-once provider billing.
 - Archive requires idle sessions. If work is running or queued, warn and offer Stop all and archive. Stop must complete before archiving. Restore recovers the same project, sessions and conversations without restarting interrupted work. Project triggers are planned and must remain disabled after restore.
-- No filesystem/process tools, sandbox, fork/subagent APIs or standalone session creation yet.
+- No filesystem/process tools, sandbox, or fork/subagent APIs.
 - Harness creation itself is not idempotent on request retry. Session lists report the first 200 conversations; SSE and history are bounded network projections.
 
 Project context menus own New session. Session context menus and plus own New conversation.
