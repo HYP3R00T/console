@@ -145,23 +145,25 @@ export function ProjectNavigation({
           >
             {row}
           </NavigationMenu>
-          <CollapsibleContent className="pt-0.5">
-            {state.error ? (
-              <p role="alert" className="px-4 text-xs text-destructive">
-                {state.error}
-              </p>
-            ) : (
-              <ProjectSessions
-                deviceId={deviceId}
-                projectId={project.id}
-                sessions={state.sessions}
-                busy={busy}
-                createConversation={(sessionId) =>
-                  void create("conversation", sessionId)
-                }
-                closeMobile={closeMobile}
-              />
-            )}
+          <CollapsibleContent className="project-disclosure">
+            <div className="pt-0.5">
+              {state.error ? (
+                <p role="alert" className="px-4 text-xs text-destructive">
+                  {state.error}
+                </p>
+              ) : (
+                <ProjectSessions
+                  deviceId={deviceId}
+                  projectId={project.id}
+                  sessions={state.sessions}
+                  busy={busy}
+                  createConversation={(sessionId) =>
+                    void create("conversation", sessionId)
+                  }
+                  closeMobile={closeMobile}
+                />
+              )}
+            </div>
           </CollapsibleContent>
         </Collapsible>
       )}
