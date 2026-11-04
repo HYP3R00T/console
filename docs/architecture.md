@@ -322,7 +322,7 @@ missing defaults for existing projects without replacing existing conversations 
 | `server/src/harnesses/runtime.ts` | Single-flight open, process ownership lock, private session files, enabled-provider model gate, registry and shutdown. |
 | `server/src/harnesses/documents.ts` | Conversation labels, latest admission reference and session-wide conversation naming counter. |
 | `server/src/harnesses/service.ts` | Default sessions, numbering, project/model/thinking checks, lifecycle, deduplication and session-wide Stop API. |
-| `server/src/harnesses/view.ts` | Explicit text-only client projection; no credentials, raw system prompts or provider errors. |
+| `server/src/harnesses/view.ts` | Explicit text and bounded project-tool client projection; no credentials, raw system prompts or provider errors. |
 | `server/src/harnesses/routes.ts` | Validated session HTTP commands/history and bounded SSE delivery. |
 | `web/src/components/sessions/use-project-sessions.ts` | Backend-scoped project session snapshots and refresh notifications. |
 | `web/src/components/sessions/project-sessions.tsx` | Session/conversation disclosures, context menu and immediate conversation creation. |
@@ -365,8 +365,7 @@ a later access can reopen it, but automatic in-process failure recovery is not i
 
 Creating a session/conversation does not require a model. The composer selects an enabled available favorite model and only that model's supported thinking levels. Message admission rechecks both before changing the stored agent and admitting input. Model/thinking changes are rejected while ordinary work or queued input exists. Unstarring hides/disallows new submissions to that selection; already admitted work
 is retained. The runtime rechecks provider enabled state when resolving models for new phases; it
-does not retract an upstream request already in flight. There are no filesystem/process tools or
-execution environment yet. Storing `cwd` is a workspace assignment, not confinement.
+does not retract an upstream request already in flight. Read-only project tools use the execution interface described below. There are no write/process tools or OS sandbox. Storing `cwd` is a workspace assignment, not confinement.
 
 SSE sends a complete current snapshot, then complete snapshots from a Durable conversation watch; its metadata watch also notifies clients when the latest admission reference changes; reconnection
 replaces the baseline instead of replaying missed events. The projection sends the newest 50 active
@@ -411,3 +410,34 @@ and failures still surface. The transcript uses the shared Scroll Area, with Jum
 only when more than 64 pixels above the bottom. ResizeObserver tracks transcript/viewport changes.
 The square arrow submits; Enter sends and Shift+Enter inserts a newline. Attachments and slash
 commands are not implemented and have no placeholder controls.
+
+## Project inspection execution boundary
+
+Durable remains in the trusted backend and owns transcripts, checkpoints and tool results. Project
+sessions install `console.project-inspection` when their Harness opens, including existing sessions
+on reopen. Standalone sessions retain ordinary chat with no project tools. A per-request section
+supplies current project ID/name/directory from the host registry, not model arguments. Project
+content is untrusted data; the prompt asks the model to inspect files and cite paths/line numbers.
+
+`harnesses/project-inspection.ts` defines tool schemas and replay-safe read operations.
+`execution/types.ts` defines the injectable ProjectExecutor contract and host-owned project scope.
+`execution/local.ts` performs all inspection I/O. A later sandbox worker can implement that contract;
+no worker, shell, writes or permission-approval mechanism is delivered here. The local adapter runs
+with the backend account's authority and reports isolation `none`. Canonical path checks reject
+traversal and external symlinks, but are not kernel isolation or race-proof confinement against
+concurrently replaced paths. Any readable file inside the project can enter the model context.
+
+Listing returns at most 200 immediate entries. Text reads scan at most 256 KiB, use 1-based line
+offset/limit (up to 200 lines) and return at most 16,000 characters. Search is literal/case-sensitive:
+at most 1,000 visited entries, approximately 4 MiB read and 100 matches; it skips symlinks, binary
+files and common generated/dependency folders. Truncation/skips are explicit. Each operation checks
+cancellation and a five-second cooperative deadline between filesystem calls; an outstanding OS
+filesystem call is not forcibly interrupted. Regular-file validation avoids reading devices/FIFOs.
+Failures distinguish missing paths, OS permission denial, outside-project requests and generic errors.
+
+Durable persists calls/results in its existing transcript. Read operations are replay-safe: unfinished
+reads may rerun after a crash and observe changed files; committed results remain stored evidence.
+`harnesses/view.ts` exposes only the known inspection tool names, calls, bounded result previews,
+failures and active names. It never exposes raw system sections or arbitrary tool diagnostics.
+`web/.../sessions/tool-activity.tsx` uses the shared shadcn Collapsible for calls/results in chat;
+SSE reconnect and paged history use the same projection. No additional file-browsing HTTP API exists.

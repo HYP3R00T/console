@@ -1,7 +1,7 @@
 # Requirements
 
 The current increment connects a local website to an explicitly selected local backend, configures
-its AI providers, sets up projects, and runs text conversations through project-owned Durable sessions.
+its AI providers, sets up projects, and runs conversations with read-only project inspection through project-owned Durable sessions.
 
 - Fastify listens on `127.0.0.1:3000`; Next.js listens on `127.0.0.1:3001`.
 - On first use the website starts disconnected, with a full-width layout and two navigation columns.
@@ -34,7 +34,7 @@ its AI providers, sets up projects, and runs text conversations through project-
 Authentication is deliberately deferred. The browser accepts only loopback backend URLs;
 the backend permits browser requests only from the local website's two supported origins.
 These reachability restrictions are not user authentication: other local processes can call the API.
-There is no Console user/token management or server-side device connection registry. Project sessions support text-only agent execution.
+There is no Console user/token management or server-side device connection registry. Project sessions support text responses and read-only inspection tools.
 Provider credentials and favorites are backend-owned; Console client authentication remains deferred.
 Connectivity must be an extension boundary. Feature components use a connected backend client
 for both commands and subscriptions. Replacement/disconnect cancels that client's requests and
@@ -52,7 +52,7 @@ Existing data from earlier experiments remains untouched and unused.
 - Model overview/search exposes catalog IDs/names, context/output limits, supported inputs, thinking levels and catalog pricing.
 - Favorite choices persist per backend. The composer model-picker API returns only starred models that Pi considers available from enabled providers; no favorites means an empty picker list.
 - Configured/enabled means stored credentials, not a successful live inference or proof of model entitlement. No billable validation call is made.
-- Provider metadata refreshes in connected clients every ten seconds and after mutations. Session SSE and composer model/thinking selection are implemented; tools and rich agent events remain deferred.
+- Provider metadata refreshes in connected clients every ten seconds and after mutations. Session SSE and composer model/thinking selection are implemented; read-only project tools and their activity are available; richer agent events remain deferred.
 
 Provider settings use shadcn Scroll Area for both catalogs. On desktop, each list fills the
 remaining content-pane height and scrolls independently; smaller screens stack the catalogs.
@@ -128,7 +128,7 @@ Save changes is shown immediately left of Remove only for unsaved name/icon/colo
 - Backend startup reopens and resumes sessions for available projects. The session-wide Stop API withdraws queued input and aborts ordinary work; no chat Stop session control is shown.
 - Text history survives graceful/abrupt restarts; automatic recovery follows Durable retry rules, not exactly-once provider billing.
 - Archive requires idle sessions. If work is running or queued, warn and offer Stop all and archive. Stop must complete before archiving. Restore recovers the same project, sessions and conversations without restarting interrupted work. Project triggers are planned and must remain disabled after restore.
-- No filesystem/process tools, sandbox, or fork/subagent APIs.
+- Read-only project listing, file reads and literal text search use a shared execution interface. No write/process tools, OS sandbox, or fork/subagent APIs.
 - Harness creation itself is not idempotent on request retry. Session lists report the first 200 conversations; SSE and history are bounded network projections.
 
 Project context menus own New session. Session context menus and plus own New conversation.

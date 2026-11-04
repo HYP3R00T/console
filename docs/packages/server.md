@@ -66,7 +66,7 @@ cancellation/removal races, private persistence, credential redaction, favorites
 `projects.sqlite` lives beside the provider database and uses private filesystem permissions.
 Registration requires an existing readable/writable/traversable absolute directory; symlink aliases
 resolve to one canonical path. Missing directories remain registered and unavailable. Responses are
-uncached, schemas reject unknown fields, and internal failures are sanitized. Preset icons/colors and display names are editable. No filesystem browser, directory rename or file/tool execution. Project sessions support text generation. `test/projects.test.ts` verifies persistence,
+uncached, schemas reject unknown fields, and internal failures are sanitized. Preset icons/colors and display names are editable. No filesystem browser or directory rename. Project sessions support text generation and read-only inspection tools. `test/projects.test.ts` verifies persistence,
 alias/concurrent duplicates, invalid input, availability, origin rejection and preservation of files.
 
 ## Project defaults and creation
@@ -117,7 +117,7 @@ Startup resumes standalone and available-project sessions; browser disconnect ne
 Conversation/submission IDs are numeric Durable IDs, scoped to the session UUID. Creation requires an available project; model-free defaults are created on project registration. New
 input requires an enabled available favorite model and a supported thinking level. Duplicate message retries
 return their original record even if model preferences changed. Creation itself is not deduplicated.
-Project archive preserves source files and Durable databases. Archived sessions are excluded from startup recovery. Tools, forks, subagents, project triggers and per-conversation Resume are deferred.
+Project archive preserves source files and Durable databases. Archived sessions are excluded from startup recovery. Write/process tools, forks, subagents, project triggers and per-conversation Resume are deferred.
 
 SSE uses explicit safe text projections, 50 recent entries, 32 streams and bounded slow-client handling.
 History retains older entries. SQLite file ownership excludes a competing local runtime; no distributed
@@ -142,3 +142,13 @@ thinking choice. Duplicate message keys return the original admission before rev
 runs before feature handlers. The default policy retains local website origins and unauthenticated
 access. The entrypoint chooses the listener address; future deployment/authentication integration
 can supply a different policy while retaining provider, project and session route contracts.
+
+## Read-only project inspection
+
+Project conversations receive list_directory, read_file and search_text through a built-in Durable
+extension and the ProjectExecutor interface. Scope is the registered project directory; standalone
+chats do not receive these tools. The current local adapter has no OS sandbox. It checks paths,
+limits output/work and returns safe failure codes; writes, subprocesses and network tools are absent.
+See architecture for limits, replay semantics and the limitations of application path checks.
+`test/execution.test.ts` and `test/project-inspection.test.ts` verify real-file evidence, failures,
+bounds, session reopening and abrupt-crash recovery with committed tool results using a fake model.

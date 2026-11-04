@@ -5,6 +5,7 @@ import { useMachineProjects } from "@/components/projects/projects-provider";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatComposer } from "./chat-composer";
+import { ToolActivity } from "./tool-activity";
 import { type ModelRef, useChatModels } from "./use-chat-models";
 import { type ChatMessage, useConversation } from "./use-conversation";
 
@@ -219,19 +220,47 @@ export function Chat({
           {messages.map((message) => (
             <article key={message.id} className="space-y-2 px-3 py-5">
               <p className="text-xs font-medium text-muted-foreground">
-                {message.role === "user" ? "You" : "Assistant"}
+                {message.role === "user"
+                  ? "You"
+                  : message.role === "tool"
+                    ? `${message.toolName} · ${message.failed ? "Failed" : "Completed"}`
+                    : "Assistant"}
               </p>
-              <p className="whitespace-pre-wrap break-words text-sm leading-7">
-                {message.text ||
-                  (message.failed ? "Response interrupted or failed." : "")}
-              </p>
-              {message.failed && message.text && (
+              {message.role === "tool" ? (
+                <ToolActivity
+                  label={message.failed ? "View error" : "View result"}
+                  content={message.text}
+                  failed={message.failed}
+                />
+              ) : (
+                <p className="whitespace-pre-wrap break-words text-sm leading-7">
+                  {message.text ||
+                    (message.failed ? "Response interrupted or failed." : "")}
+                </p>
+              )}
+              {message.toolCalls?.map((call) => (
+                <ToolActivity
+                  key={call.id}
+                  label={call.name}
+                  content={call.arguments}
+                />
+              ))}
+              {message.role !== "tool" && message.failed && message.text && (
                 <p className="text-xs text-destructive">
                   Response interrupted or failed.
                 </p>
               )}
             </article>
           ))}
+          {!!stream?.data?.activeTools?.length && (
+            <p
+              role="status"
+              className="px-3 py-2 text-xs text-muted-foreground"
+            >
+              Inspecting project ·{" "}
+              {stream.data.activeTools.map((tool) => tool.name).join(", ")}
+            </p>
+          )}
           {stream?.data?.partial && (
             <article className="space-y-2 px-3 py-5">
               <p className="text-xs text-muted-foreground">

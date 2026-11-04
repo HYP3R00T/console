@@ -124,7 +124,7 @@ and register it. Both sidebar modes show real registrations. Expand a project ro
 as unavailable. Reload rechecks the remembered device before displaying it as connected.
 
 Project routes: `/devices/[deviceId]/projects/new` and `/devices/[deviceId]/projects/[projectId]`.
-Project appearance settings and text-only Durable sessions are implemented. The shared backend
+Project appearance settings and Durable sessions with read-only inspection are implemented. The shared backend
 request hook handles provider and project requests; project state is isolated by connected origin.
 
 ## Add project modes
@@ -177,8 +177,8 @@ and disappears at the bottom. Short conversations have no jump control. HTTP adm
 shows committed text and partial answers. Browser close only detaches observation. Uncertain delivery
 retains content, model/thinking choices and request ID in sessionStorage for explicit Retry.
 
-Reload still starts disconnected; reconnect restores saved history. Load earlier pages history.
-Markdown, attachments, tool execution, forks, subagents and automatic history-gap filling remain
+Reload rechecks the remembered connection; reconnect restores saved history. Load earlier pages history.
+Markdown, attachments, write/process tools, forks, subagents and automatic history-gap filling remain
 deferred. Session lists refresh after local creation and poll every ten seconds. Unknown/other-project
 sessions cannot be displayed through a mismatched project route. Standalone conversations use the same chat at
 `/devices/[deviceId]/conversations/[sessionId]`. The backend Stop API remains session-wide, with no chat control.
@@ -195,3 +195,11 @@ The remembered bookmark is rechecked on reload.
 Future tunnel/authentication integrations implement the connection contracts and extend bookmark
 configuration where needed. Current supported endpoints remain loopback HTTP/HTTPS. Feature hooks
 consume paths and snapshots independent of how the connection was established.
+
+## Project tool activity
+
+Project chat displays inspection call arguments and completed/failed result previews using shadcn
+Collapsible, plus an active-tool status during inspection. Results persist through existing history
+and reconnect APIs. Result previews are limited to 4,000 characters and mark truncation; model tool
+results retain the executor's larger bounded output. No source viewer or shell console is added.
+Live-provider tool choice and interactive disclosure visuals still require manual verification.

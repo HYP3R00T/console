@@ -4,15 +4,18 @@ import type { BackendClient } from "@/lib/backend/client";
 export type ChatMessage = {
   id: string;
   entryId: number;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool";
   text: string;
   failed: boolean;
+  toolName?: string;
+  toolCalls?: { id: string; name: string; arguments: string }[];
 };
 export type ChatSnapshot = {
   id: number;
   messages: ChatMessage[];
   busy: boolean;
   partial: string;
+  activeTools?: { name: string; status: string }[];
   queued: number;
   hasEarlier: boolean;
   thinkingLevel?: string;
