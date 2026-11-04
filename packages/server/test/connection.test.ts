@@ -7,7 +7,9 @@ test("the local connection endpoint needs no credentials and identifies the prot
   t.after(() => app.close());
   const response = await app.inject("/v1/connection");
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json(), { product: "console", apiVersion: 1 });
+  assert.equal(response.json().product, "console");
+  assert.equal(response.json().apiVersion, 1);
+  assert.match(response.json().backendId, /^[0-9a-f-]{36}$/i);
   assert.equal(response.headers["cache-control"], "no-store");
 });
 

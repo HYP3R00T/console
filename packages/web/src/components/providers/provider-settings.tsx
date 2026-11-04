@@ -35,7 +35,7 @@ export function ProviderSettings() {
       <div className="space-y-4">
         <h1 className="text-xl font-semibold">Providers</h1>
         <p className="text-sm text-muted-foreground">
-          Connect this device from the device panel.
+          Connect this machine from Manage devices.
         </p>
       </div>
     );

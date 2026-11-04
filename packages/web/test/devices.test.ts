@@ -1,6 +1,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { newDevice, parseDevices } from "../src/lib/devices.ts";
+import {
+  newDevice,
+  parseConnectedDevices,
+  parseDevices,
+} from "../src/lib/devices.ts";
+
+test("remembered connections retain multiple IDs, migrate the old selection and ignore forgotten devices", () => {
+  const a = newDevice([], "A", "http://localhost:3000", "a");
+  const b = newDevice([a], "B", "http://localhost:4000", "b");
+  const saved = [a, b];
+  assert.deepEqual(
+    parseConnectedDevices('["a","b","a","forgotten"]', null, saved),
+    ["a", "b"],
+  );
+  assert.deepEqual(parseConnectedDevices(null, "b", saved), ["b"]);
+  assert.deepEqual(parseConnectedDevices("[]", "a", saved), []);
+  assert.throws(() => parseConnectedDevices("[123]", null, saved));
+  const identified = {
+    ...a,
+    backendId: "11111111-1111-4111-8111-111111111111",
+  };
+  assert.deepEqual(parseDevices(JSON.stringify([identified])), [identified]);
+});
 
 test("device bookmarks normalize URLs and round-trip without connection state", () => {
   const device = newDevice(

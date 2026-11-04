@@ -129,7 +129,7 @@ export function ProjectSetup() {
       <div className="space-y-3">
         <h1 className="text-xl font-semibold">Add project</h1>
         <p className="text-sm text-muted-foreground">
-          Connect this machine from the first column.
+          Connect this machine from Manage devices.
         </p>
       </div>
     );

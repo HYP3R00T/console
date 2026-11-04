@@ -1,20 +1,18 @@
 "use client";
-
-import { Monitor, Plus, Search, Trash2 } from "lucide-react";
+import { Monitor, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { useConnection } from "@/components/connection-provider";
+import { useConnections } from "@/components/connection-provider";
 import { useDevices } from "@/components/devices/device-provider";
 import { ConnectionStatus } from "@/components/layout/connection-status";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -24,106 +22,126 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { Device } from "@/lib/devices";
 
 export function ConnectionsSettings() {
   const registry = useDevices();
-  const connection = useConnection();
+  const { states } = useConnections();
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string>();
+  const [editing, setEditing] = useState<Device>();
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
   const devices = registry.devices.filter((device) =>
     `${device.name} ${device.url}`.toLowerCase().includes(search.toLowerCase()),
   );
   return (
-    <div className="flex flex-1 flex-col gap-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            Saved devices
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Client device bookmarks.
-          </p>
-        </div>
-        <Button
-          nativeButton={false}
-          render={<Link href="/settings/connections/new" />}
-        >
+    <div className="flex flex-1 flex-col gap-6">
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-xl font-semibold">Manage devices</h1>
+        <Button nativeButton={false} render={<Link href="/devices/new" />}>
           <Plus />
           Add device
         </Button>
-      </div>
+      </header>
       {(registry.error || error) && (
         <p role="alert" className="text-sm text-destructive">
           {error ?? registry.error}
         </p>
       )}
       {!registry.ready ? (
-        <p className="text-sm text-muted-foreground">Loading devices…</p>
-      ) : !registry.devices.length ? (
-        <Empty className="min-h-80 border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Monitor />
-            </EmptyMedia>
-            <EmptyTitle>No devices</EmptyTitle>
-            <EmptyDescription>Add a local backend to begin.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <p>Loading devices…</p>
       ) : (
-        <div className="space-y-4">
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-2.5 left-3 size-3.5 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              placeholder="Search devices…"
-              aria-label="Search devices"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </div>
-          <div className="border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Device</TableHead>
-                  <TableHead>Backend URL</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right pr-4">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {devices.map((device) => (
-                  <TableRow key={device.id}>
-                    <TableCell className="pl-4 font-medium">
-                      <div className="flex items-center gap-2">
-                        <Monitor className="size-4 text-muted-foreground" />
-                        {device.name}
-                      </div>
+        <>
+          <Input
+            className="max-w-sm border-0 bg-muted/40"
+            placeholder="Search devices"
+            aria-label="Search devices"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <Table className="block md:table">
+            <TableHeader className="hidden md:table-header-group">
+              <TableRow>
+                <TableHead>Device</TableHead>
+                <TableHead>Connection</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="block md:table-row-group">
+              {devices.map((device) => {
+                const connection = states[device.id];
+                return (
+                  <TableRow
+                    key={device.id}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 py-4 md:table-row md:py-0"
+                  >
+                    <TableCell className="min-w-0 p-0 md:p-2">
+                      <Link
+                        className="flex min-w-0 items-center gap-2 font-medium hover:underline"
+                        href={`/devices/${encodeURIComponent(device.id)}`}
+                      >
+                        <Monitor className="size-4 shrink-0" />
+                        <span className="truncate">{device.name}</span>
+                      </Link>
                     </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {device.url}
-                    </TableCell>
-                    <TableCell>
-                      {connection.origin === device.url ? (
-                        <ConnectionStatus />
-                      ) : (
-                        <Badge variant="outline" className="font-normal">
-                          Not connected
-                        </Badge>
+                    <TableCell className="col-span-2 row-start-2 max-w-sm whitespace-normal p-0 md:p-2">
+                      <p className="break-all font-mono text-xs text-muted-foreground">
+                        {device.url}
+                      </p>
+                      {connection?.checkedAt && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Checked{" "}
+                          {new Date(connection.checkedAt).toLocaleTimeString()}
+                        </p>
+                      )}
+                      {connection?.error && (
+                        <p
+                          role="alert"
+                          className="mt-1 whitespace-normal text-xs text-destructive"
+                        >
+                          {connection.error}
+                        </p>
                       )}
                     </TableCell>
-                    <TableCell className="pr-4">
-                      <div className="flex justify-end gap-2">
+                    <TableCell className="col-start-2 row-start-1 p-0 md:p-2">
+                      <ConnectionStatus deviceId={device.id} />
+                    </TableCell>
+                    <TableCell className="col-span-2 p-0 md:p-2">
+                      <div className="flex items-center justify-end gap-2">
+                        {connection?.status === "connected" ||
+                        connection?.status === "connecting" ? (
+                          <Button
+                            variant="outline"
+                            aria-label={`${connection.status === "connecting" ? "Cancel connection to" : "Disconnect"} ${device.name}`}
+                            onClick={() => registry.disconnect(device.id)}
+                          >
+                            {connection.status === "connecting"
+                              ? "Cancel"
+                              : "Disconnect"}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            aria-label={`Connect ${device.name}`}
+                            onClick={() => registry.connect(device)}
+                          >
+                            Connect
+                          </Button>
+                        )}
                         <Button
-                          nativeButton={false}
-                          variant="outline"
-                          render={
-                            <Link
-                              href={`/devices/${encodeURIComponent(device.id)}/settings`}
-                            />
-                          }
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Edit ${device.name}`}
+                          onClick={() => {
+                            setEditing(device);
+                            setName(device.name);
+                            setUrl(device.url);
+                            setError(undefined);
+                          }}
                         >
-                          Open
+                          <Pencil className="size-4" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -133,37 +151,107 @@ export function ConnectionsSettings() {
                             try {
                               registry.remove(device.id);
                               setError(undefined);
-                            } catch {
+                            } catch (cause) {
                               setError(
-                                "This browser could not update the saved device list.",
+                                cause instanceof Error
+                                  ? cause.message
+                                  : "Could not forget device.",
                               );
                             }
                           }}
                         >
-                          <Trash2 />
+                          <Trash2 className="size-4" />
                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
-                {!devices.length && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={4}
-                      className="h-24 text-center text-muted-foreground"
-                    >
-                      No devices match your search.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Removing a connection leaves its backend running.
-          </p>
-        </div>
+                );
+              })}
+              {!devices.length && (
+                <TableRow>
+                  <TableCell
+                    colSpan={4}
+                    className="py-12 text-center text-muted-foreground"
+                  >
+                    {registry.devices.length
+                      ? "No matching devices."
+                      : "No saved devices."}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </>
       )}
+      <Dialog
+        open={!!editing}
+        onOpenChange={(open) => {
+          if (!open) setEditing(undefined);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit connection</DialogTitle>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!editing) return;
+              try {
+                registry.edit(editing.id, name, url);
+                setEditing(undefined);
+                setError(undefined);
+              } catch (cause) {
+                setError(
+                  cause instanceof Error
+                    ? cause.message
+                    : "Could not save device.",
+                );
+              }
+            }}
+          >
+            <Field>
+              <FieldLabel htmlFor="edit-device-name">Name</FieldLabel>
+              <Input
+                id="edit-device-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                required
+                maxLength={80}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="edit-device-url">Backend URL</FieldLabel>
+              <Input
+                id="edit-device-url"
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                required
+                type="url"
+              />
+            </Field>
+            <p className="text-xs text-muted-foreground">
+              Saving disconnects this device. Reconnect to verify its identity.
+            </p>
+            {error && (
+              <p role="alert" className="text-xs text-destructive">
+                {error}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                type="button"
+                onClick={() => setEditing(undefined)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Save changes</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import type { BackendConnection } from "../connection.ts";
 /** A connected backend, including the lifetime of its requests and subscriptions. */
 export interface BackendClient {
   readonly origin: string;
+  readonly backendId?: string;
   probe(signal: AbortSignal): Promise<BackendConnection>;
   request<T>(path: string, init?: RequestInit, timeoutMs?: number): Promise<T>;
   subscribe(

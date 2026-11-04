@@ -5,7 +5,6 @@ import {
   ChevronLeft,
   Folder,
   KeyRound,
-  Monitor,
   Palette,
   Settings2,
 } from "lucide-react";
@@ -54,11 +53,6 @@ export function AppSidebar() {
         {preferences ? (
           <nav aria-label="Preference categories" className="space-y-1 px-2">
             {[
-              {
-                label: "Saved devices",
-                href: "/settings/connections",
-                icon: Monitor,
-              },
               {
                 label: "Appearance",
                 href: "/settings/appearance",

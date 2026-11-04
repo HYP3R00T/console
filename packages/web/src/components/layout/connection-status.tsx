@@ -1,30 +1,33 @@
 "use client";
-
-import { CircleCheck, CircleDashed, LoaderCircle } from "lucide-react";
 import { useConnection } from "@/components/connection-provider";
-import { Badge } from "@/components/ui/badge";
-
-export function ConnectionStatus() {
-  const { status } = useConnection();
-  const Icon =
-    status === "connected"
-      ? CircleCheck
-      : status === "connecting"
-        ? LoaderCircle
-        : CircleDashed;
+import { cn } from "@/lib/utils";
+export function ConnectionStatus({ deviceId }: { deviceId?: string }) {
+  const { status } = useConnection(deviceId);
   return (
-    <Badge
-      variant="outline"
-      className="gap-1.5 font-normal"
+    <span
       role="status"
-      aria-live="polite"
+      className="inline-flex items-center gap-2 whitespace-nowrap text-xs"
     >
-      <Icon className={status === "connecting" ? "animate-spin" : ""} />
+      <span
+        aria-hidden="true"
+        className={cn(
+          "size-1.5 shrink-0",
+          status === "connected"
+            ? "bg-emerald-500"
+            : status === "connecting"
+              ? "bg-amber-500"
+              : status === "error"
+                ? "bg-red-500"
+                : "bg-muted-foreground/50",
+        )}
+      />
       {status === "connected"
         ? "Connected"
         : status === "connecting"
           ? "Connecting"
-          : "Disconnected"}
-    </Badge>
+          : status === "error"
+            ? "Connection failed"
+            : "Disconnected"}
+    </span>
   );
 }

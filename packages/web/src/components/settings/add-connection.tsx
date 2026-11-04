@@ -18,8 +18,8 @@ export function AddConnection() {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      const device = registry.add(name, url);
-      router.push(`/devices/${encodeURIComponent(device.id)}`);
+      registry.add(name, url);
+      router.push("/devices");
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not save this device.",
@@ -33,10 +33,10 @@ export function AddConnection() {
           nativeButton={false}
           variant="ghost"
           className="-ml-2 mb-4"
-          render={<Link href="/settings/connections" />}
+          render={<Link href="/devices" />}
         >
           <ArrowLeft />
-          Connections
+          Manage devices
         </Button>
         <h1 className="text-xl font-semibold tracking-tight">Add device</h1>
       </div>
@@ -77,7 +77,7 @@ export function AddConnection() {
           <Button
             nativeButton={false}
             variant="outline"
-            render={<Link href="/settings/connections" />}
+            render={<Link href="/devices" />}
           >
             Cancel
           </Button>

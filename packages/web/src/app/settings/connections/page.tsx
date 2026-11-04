@@ -1,4 +1,4 @@
-import { ConnectionsSettings } from "@/components/settings/connections-settings";
+import { redirect } from "next/navigation";
 export default function Connections() {
-  return <ConnectionsSettings />;
+  redirect("/devices");
 }

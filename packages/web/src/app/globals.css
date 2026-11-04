@@ -146,41 +146,13 @@
   }
 }
 
-.device-details {
-  height: var(--collapsible-panel-height);
-  overflow: hidden;
-}
-
-.device-details[data-starting-style],
-.device-details[data-ending-style] {
-  height: 0;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .device-details {
-    transition: height 200ms ease-out;
-  }
-}
-
-/* Navigation uses surface tones; disclosure state never acts as selection. */
-.device-card {
-  transition: background-color 150ms;
-}
-
-.device-card:hover {
-  background-color: var(--sidebar-accent);
-}
-
+/* Disclosure state never acts as selection. */
 .navigation-row[aria-expanded] {
   background-color: transparent;
 }
 
 .navigation-row[aria-expanded]:hover {
   background-color: var(--sidebar-accent);
-}
-
-.device-card .navigation-row:hover {
-  background-color: transparent;
 }
 
 .tree-children {

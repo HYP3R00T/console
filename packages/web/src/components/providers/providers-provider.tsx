@@ -21,13 +21,14 @@ type State = {
 };
 const Context = createContext<State | null>(null);
 export function ProvidersProvider({ children }: { children: ReactNode }) {
-  const { origin, request } = useBackendRequest();
+  const { origin, client, request } = useBackendRequest();
   const refreshVersion = useRef(0);
-  const latest = useRef(origin);
-  latest.current = origin;
+  const latest = useRef(client);
+  latest.current = client;
   const scope = useRef<AbortController | undefined>(undefined);
   const [snapshot, setSnapshot] = useState<{
     origin: string;
+    client: typeof client;
     overview?: ProviderOverview;
     error?: string;
   }>();
@@ -41,16 +42,17 @@ export function ProvidersProvider({ children }: { children: ReactNode }) {
         !Number.isInteger(overview.activeCount)
       )
         throw new Error("Invalid provider response.");
-      if (latest.current === origin && version === refreshVersion.current)
-        setSnapshot({ origin, overview });
+      if (latest.current === client && version === refreshVersion.current)
+        setSnapshot({ origin, client, overview });
     } catch (error) {
       if (
-        latest.current === origin &&
+        latest.current === client &&
         version === refreshVersion.current &&
         !scope.current?.signal.aborted
       )
         setSnapshot((previous) => ({
           origin,
+          client,
           overview: previous?.origin === origin ? previous.overview : undefined,
           error:
             error instanceof Error
@@ -58,7 +60,7 @@ export function ProvidersProvider({ children }: { children: ReactNode }) {
               : "Could not load providers.",
         }));
     }
-  }, [origin, request]);
+  }, [origin, client, request]);
   useEffect(() => {
     const controller = new AbortController();
     scope.current = controller;
@@ -69,7 +71,10 @@ export function ProvidersProvider({ children }: { children: ReactNode }) {
       controller.abort();
     };
   }, [refresh]);
-  const current = snapshot?.origin === origin ? snapshot : undefined;
+  const current =
+    snapshot?.origin === origin && snapshot?.client === client
+      ? snapshot
+      : undefined;
   return (
     <Context
       value={{

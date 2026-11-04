@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Folder,
   KeyRound,
-  Monitor,
   Palette,
   Settings2,
 } from "lucide-react";
@@ -38,26 +37,15 @@ export function ContextRail() {
         <ChevronRight />
       </SidebarAction>
       {preferences ? (
-        <>
-          <SidebarAction
-            compact
-            nativeButton={false}
-            render={<Link href="/settings/connections" />}
-            aria-label="Saved devices"
-            title="Saved devices"
-          >
-            <Monitor />
-          </SidebarAction>
-          <SidebarAction
-            compact
-            nativeButton={false}
-            render={<Link href="/settings/appearance" />}
-            aria-label="Appearance"
-            title="Appearance"
-          >
-            <Palette />
-          </SidebarAction>
-        </>
+        <SidebarAction
+          compact
+          nativeButton={false}
+          render={<Link href="/settings/appearance" />}
+          aria-label="Appearance"
+          title="Appearance"
+        >
+          <Palette />
+        </SidebarAction>
       ) : deviceId ? (
         <>
           {deviceSettings ? (

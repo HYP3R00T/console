@@ -65,11 +65,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(projectPinsStorageKey, JSON.stringify(next));
     setPins(next);
   }
-  const latest = useRef(origin);
-  latest.current = origin;
+  const latest = useRef(client);
+  latest.current = client;
   const version = useRef(0);
   const [snapshot, setSnapshot] = useState<{
     origin: string;
+    client: typeof client;
     settings?: MachineSettings;
     projects?: Project[];
     error?: string;
@@ -87,17 +88,18 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         typeof settings.projectsRoot !== "string"
       )
         throw new Error("Invalid project response.");
-      if (latest.current === origin && version.current === current)
-        setSnapshot({ origin, projects: data.projects, settings });
+      if (latest.current === client && version.current === current)
+        setSnapshot({ origin, client, projects: data.projects, settings });
     } catch (cause) {
-      if (latest.current === origin && version.current === current)
+      if (latest.current === client && version.current === current)
         setSnapshot({
           origin,
+          client,
           error:
             cause instanceof Error ? cause.message : "Could not load projects.",
         });
     }
-  }, [origin, request]);
+  }, [origin, client, request]);
   useEffect(() => {
     void refresh();
     const timer = setInterval(() => void refresh(), 10000);
@@ -106,7 +108,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       ++version.current;
     };
   }, [refresh]);
-  const current = snapshot?.origin === origin ? snapshot : undefined;
+  const current =
+    snapshot?.origin === origin && snapshot?.client === client
+      ? snapshot
+      : undefined;
   return (
     <Context
       value={{

@@ -7,7 +7,9 @@ import { ProjectStore, projectDatabasePath } from "./projects/store.ts";
 
 import { ProviderService } from "./providers/service.ts";
 import { ProviderStore, providerDatabasePath } from "./providers/store.ts";
+import { claimInstance } from "./storage/instance-lock.ts";
 
+const releaseInstance = claimInstance(dirname(projectDatabasePath()));
 const providers = new ProviderService(
   new ProviderStore(providerDatabasePath()),
 );
@@ -25,10 +27,13 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     if (stopping) return;
     stopping = true;
-    void app.close().catch((error: unknown) => {
-      app.log.error(error);
-      process.exitCode = 1;
-    });
+    void app
+      .close()
+      .finally(releaseInstance)
+      .catch((error: unknown) => {
+        app.log.error(error);
+        process.exitCode = 1;
+      });
   });
 }
 
@@ -37,5 +42,9 @@ try {
 } catch (error) {
   app.log.error(error);
   process.exitCode = 1;
-  await app.close();
+  try {
+    await app.close();
+  } finally {
+    releaseInstance();
+  }
 }

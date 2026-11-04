@@ -28,6 +28,7 @@ export const localHttpConnector: BackendConnector = {
 
 function createLocalClient(origin: string): BackendClient {
   const lifetime = new AbortController();
+  let backendId: string | undefined;
   function url(path: string) {
     // Keep future credentials scoped to this backend, including malformed paths.
     const target = new URL(path, origin);
@@ -41,8 +42,17 @@ function createLocalClient(origin: string): BackendClient {
   }
   return {
     origin,
-    probe: (signal) =>
-      checkConnection(origin, AbortSignal.any([signal, lifetime.signal])),
+    get backendId() {
+      return backendId;
+    },
+    probe: async (signal) => {
+      const result = await checkConnection(
+        origin,
+        AbortSignal.any([signal, lifetime.signal]),
+      );
+      backendId = result.backendId;
+      return result;
+    },
     async request<T>(
       path: string,
       init: RequestInit = {},

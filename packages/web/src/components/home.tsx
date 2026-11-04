@@ -1,6 +1,6 @@
 "use client";
 
-import { Monitor, Plus } from "lucide-react";
+import { Monitor, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useDevices } from "@/components/devices/device-provider";
 import { useDeviceStatus } from "@/components/devices/use-device-status";
@@ -22,13 +22,40 @@ export function Home() {
         </div>
         <Button
           nativeButton={false}
-          render={<Link href="/settings/connections/new" />}
+          render={<Link href="/devices" />}
           variant="outline"
         >
-          <Plus />
-          Add device
+          <Settings2 />
+          Manage devices
         </Button>
       </header>
+      <section
+        aria-label="Connection summary"
+        className="grid gap-3 sm:grid-cols-3"
+      >
+        {[
+          ["Saved machines", registry.devices.length],
+          [
+            "Connected",
+            registry.devices.filter(
+              (device) => deviceStatus(device) === "Connected",
+            ).length,
+          ],
+          [
+            "Connection errors",
+            registry.devices.filter(
+              (device) => deviceStatus(device) === "Connection failed",
+            ).length,
+          ],
+        ].map(([label, count]) => (
+          <div key={label} className="bg-muted/30 p-5">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">
+              {registry.ready ? count : "—"}
+            </p>
+          </div>
+        ))}
+      </section>
       {registry.error && (
         <p role="alert" className="text-sm text-destructive">
           {registry.error}

@@ -1,18 +1,16 @@
 "use client";
-
-import { useConnection } from "@/components/connection-provider";
-import { useDevices } from "@/components/devices/device-provider";
+import { useConnections } from "@/components/connection-provider";
 import type { Device } from "@/lib/devices";
-
 export function useDeviceStatus() {
-  const connection = useConnection();
-  const registry = useDevices();
-  return (device: Device) =>
-    connection.origin === device.url
+  const { states } = useConnections();
+  return (device: Device) => {
+    const status = states[device.id]?.status;
+    return status === "connected"
       ? "Connected"
-      : registry.selectedId === device.id && connection.status === "connecting"
+      : status === "connecting"
         ? "Connecting"
-        : registry.selectedId === device.id && connection.status === "error"
+        : status === "error"
           ? "Connection failed"
-          : "Not connected";
+          : "Disconnected";
+  };
 }

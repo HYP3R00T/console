@@ -5,92 +5,117 @@ import {
   type ReactNode,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
-import { useConnection } from "@/components/connection-provider";
+import { useConnections } from "@/components/connection-provider";
 import {
+  connectedDevicesKey,
   type Device,
   devicesStorageKey,
+  legacyConnectedDeviceKey,
   newDevice,
+  parseConnectedDevices,
   parseDevices,
 } from "@/lib/devices";
-
-const selectedDeviceKey = "console.connected-device.v1";
 
 type DevicesState = {
   devices: Device[];
   ready: boolean;
   error?: string;
-  selectedId?: string;
-  select: (device: Device) => void;
-  disconnect: () => void;
+  connect: (device: Device) => void;
+  disconnect: (id: string) => void;
   add: (name: string, url: string) => Device;
+  edit: (id: string, name: string, url: string) => void;
   remove: (id: string) => void;
 };
 const Context = createContext<DevicesState | null>(null);
-
 export function DeviceProvider({ children }: { children: ReactNode }) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string>();
-  const [selectedId, setSelectedId] = useState<string>();
-  const { connect, disconnect: disconnectBackend, origin } = useConnection();
-
+  const { manager, states } = useConnections();
+  const remembered = useRef(new Set<string>());
   useEffect(() => {
     try {
       const saved = parseDevices(localStorage.getItem(devicesStorageKey));
       setDevices(saved);
-      const remembered = localStorage.getItem(selectedDeviceKey);
-      const device = saved.find((item) => item.id === remembered);
-      if (device) {
-        setSelectedId(device.id);
-        void connect(device.url);
-      }
+      remembered.current = new Set(
+        parseConnectedDevices(
+          localStorage.getItem(connectedDevicesKey),
+          localStorage.getItem(legacyConnectedDeviceKey),
+          saved,
+        ),
+      );
+      for (const device of saved)
+        if (remembered.current.has(device.id))
+          void manager.connect(device.id, device.url, device.backendId);
     } catch {
       setError(
         "Saved devices could not be read. Your existing browser data has not been changed.",
       );
     }
     setReady(true);
-  }, [connect]);
-
-  function remember(id?: string) {
+  }, [manager]);
+  useEffect(() => {
+    if (!ready || error) return;
+    const next = devices.map((device) => {
+      const identity = states[device.id]?.backendId;
+      return identity && device.backendId !== identity
+        ? { ...device, backendId: identity }
+        : device;
+    });
+    if (next.some((device, index) => device !== devices[index])) {
+      try {
+        localStorage.setItem(devicesStorageKey, JSON.stringify(next));
+        setDevices(next);
+      } catch {
+        setError("Backend identity could not be saved in this browser.");
+      }
+    }
+  }, [states, devices, ready, error]);
+  function remember() {
     try {
-      if (id) localStorage.setItem(selectedDeviceKey, id);
-      else localStorage.removeItem(selectedDeviceKey);
+      localStorage.setItem(
+        connectedDevicesKey,
+        JSON.stringify([...remembered.current]),
+      );
+      localStorage.removeItem(legacyConnectedDeviceKey);
     } catch {
-      // Keep connection controls usable when browser storage is unavailable.
+      setError("Connection choices could not be saved in this browser.");
     }
   }
-
-  function disconnect() {
+  function disconnect(id: string) {
+    remembered.current.delete(id);
     remember();
-    setSelectedId(undefined);
-    disconnectBackend();
+    manager.disconnect(id);
   }
-
   function save(next: Device[]) {
-    if (!ready) throw new Error("Wait for saved devices to load.");
-    if (error)
+    if (!ready || error)
       throw new Error(
-        "Saved devices could not be read. Reload after resolving browser storage access; the existing list will not be overwritten.",
+        "Resolve saved-device storage access before editing the list.",
       );
     localStorage.setItem(devicesStorageKey, JSON.stringify(next));
     setDevices(next);
-    setError(undefined);
   }
-
   return (
     <Context
       value={{
         devices,
         ready,
         error,
-        selectedId,
-        select: (device) => {
-          setSelectedId(device.id);
-          remember(device.id);
-          void connect(device.url);
+        connect: (device) => {
+          void manager
+            .connect(device.id, device.url, device.backendId)
+            .then((connected) => {
+              if (
+                connected &&
+                manager.snapshot()[device.id]?.status === "connected"
+              ) {
+                remembered.current.add(device.id);
+                remember();
+              }
+            });
         },
         disconnect,
         add: (name, url) => {
@@ -98,11 +123,23 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
           save([...devices, device]);
           return device;
         },
+        edit: (id, name, url) => {
+          const previous = devices.find((device) => device.id === id);
+          if (!previous) throw new Error("Device not found.");
+          const replacement = newDevice(
+            devices.filter((device) => device.id !== id),
+            name,
+            url,
+            id,
+          );
+          save(
+            devices.map((device) => (device.id === id ? replacement : device)),
+          );
+          disconnect(id);
+        },
         remove: (id) => {
-          const device = devices.find((item) => item.id === id);
-          save(devices.filter((item) => item.id !== id));
-          if (selectedId === id || (device && origin === device.url))
-            disconnect();
+          save(devices.filter((device) => device.id !== id));
+          disconnect(id);
         },
       }}
     >
@@ -110,7 +147,6 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     </Context>
   );
 }
-
 export function useDevices() {
   const state = useContext(Context);
   if (!state) throw new Error("DeviceProvider is required");

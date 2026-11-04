@@ -1,4 +1,4 @@
 import { redirect } from "next/navigation";
 export default function Settings() {
-  redirect("/settings/connections");
+  redirect("/settings/appearance");
 }
