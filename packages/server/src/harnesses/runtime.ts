@@ -3,8 +3,11 @@ import { join } from "node:path";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { createRegistry, Harness } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
+import { LocalProjectExecutor } from "../execution/local.ts";
+import type { ProjectExecutor, ProjectScope } from "../execution/types.ts";
 import type { ProviderService } from "../providers/service.ts";
 import { openDatabase } from "../storage/database.ts";
+import { projectInspection } from "./project-inspection.ts";
 
 /** One manager owns every open session in this process. Opening is single-flight. */
 export class HarnessRuntime {
@@ -13,9 +16,20 @@ export class HarnessRuntime {
   private lock?: ReturnType<typeof openDatabase>;
   private directory: string;
   private providers: ProviderService;
-  constructor(directory: string, providers: ProviderService) {
+  private project: (sessionId: string) => Promise<ProjectScope | undefined>;
+  private executor: ProjectExecutor;
+  constructor(
+    directory: string,
+    providers: ProviderService,
+    project: (
+      sessionId: string,
+    ) => Promise<ProjectScope | undefined> = async () => undefined,
+    executor: ProjectExecutor = new LocalProjectExecutor(),
+  ) {
     this.directory = directory;
     this.providers = providers;
+    this.project = project;
+    this.executor = executor;
   }
   open(sessionId: string) {
     if (this.closing) throw new Error("Runtime is closing.");
@@ -77,6 +91,16 @@ export class HarnessRuntime {
       },
     });
     try {
+      const registry = createRegistry();
+      if (await this.project(sessionId)) {
+        registry.install(
+          projectInspection(this.executor, async () => {
+            const project = await this.project(sessionId);
+            if (!project) throw new Error("Project unavailable.");
+            return project;
+          }),
+        );
+      }
       const harness = await Harness.open(
         storage,
         {
@@ -90,7 +114,7 @@ export class HarnessRuntime {
               }),
             );
           },
-          registry: createRegistry(), // No filesystem/process tools until an execution policy exists.
+          registry,
           identity: { attribution: null },
           settings: {
             stream: { timeoutMs: 120000, maxRetries: 0 },

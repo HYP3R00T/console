@@ -45,7 +45,18 @@ export class HarnessService {
     this.store = store;
     this.projects = projects;
     this.providers = providers;
-    this.runtime = new HarnessRuntime(directory, providers);
+    this.runtime = new HarnessRuntime(
+      directory,
+      providers,
+      async (sessionId) => {
+        const record = store.session(sessionId);
+        if (!record || record.projectId === standaloneOwner) return undefined;
+        const project = await projects.get(record.projectId);
+        if (!project.available)
+          throw new HarnessError(409, "Project directory is unavailable.");
+        return { id: project.id, name: project.name, directory: project.path };
+      },
+    );
     projects.afterRegister = (id) =>
       this.operation(() => this.serial(id, () => this.ensureDefault(id)));
     projects.beforeArchive = (id, stop) =>
