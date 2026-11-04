@@ -122,9 +122,9 @@ Save changes is shown immediately left of Remove only for unsaved name/icon/colo
 
 ## Project actions and pinning
 
-- Right-click project entries in expanded or compact navigation for Edit, Pin to top/Unpin and Archive. Project clicks still expand/collapse rather than opening settings; the gear shortcut is removed. Keyboard context-menu invocation and library long-press behavior expose the same actions.
+- Project menus in expanded or compact navigation offer New conversation, New session, Edit, Pin to top/Unpin and Remove. Project clicks still expand/collapse rather than opening settings; the gear shortcut is removed. Keyboard context-menu invocation and library long-press behavior expose the same actions.
 - Pinning is a client preference persisted in this browser per backend URL. Newest pins sort first; unpinned projects keep backend order. Removed/unknown IDs do not create sidebar entries. No cross-tab synchronization is implemented.
-- Sidebar and settings Archive share a confirmation dialog that names the project and path. Restore is available under Machine settings → Projects → Archive.
+- Sidebar and settings Remove share a confirmation dialog that names the project and path. Restore is available under Machine settings → Projects → Archive.
 
 ## Durable project increment
 
@@ -140,7 +140,13 @@ Save changes is shown immediately left of Remove only for unsaved name/icon/colo
 - Read-only project listing, file reads and literal text search use a shared execution interface. No write/process tools, OS sandbox, or fork/subagent APIs.
 - Harness creation itself is not idempotent on request retry. Session lists report the first 200 conversations; SSE and history are bounded network projections.
 
-Project context menus own New session. Session context menus and plus own New conversation.
+Project compose creates in default Session 1. Project menus own New session and New conversation.
+A single session is visually flattened; multiple sessions use numbered group headings with their own
+conversation actions. Creating a session reveals the groups without navigating away from the current chat.
+Project/session rows share hover backgrounds with their action buttons. Menus support both dots and right-click.
+Conversation menus offer backend-persisted Rename and browser-local Pin/Unpin scoped by backend and session.
+Pins reorder within the session or Recents; they do not move conversations. Renaming preserves IDs, history
+and unsent drafts. Cross-project moves, bulk chat archive, unread markers and conversation deletion are deferred.
 The first session is Session 1 (default); numbers are allocated atomically. Existing session UUIDs
 and transcripts survive numbering migration. No separate harness entry or New harness button is
 shown. The composer uses an icon-only square arrow, model selection followed by model-specific

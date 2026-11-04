@@ -110,7 +110,7 @@ and weight; metadata remains secondary.
 
 Workspace navigation separates Projects from Recents. New conversation creates one standalone
 Durable session on the connected machine and opens its chat immediately. Recents lists those
-conversations newest first. Project rows expand in place and their context menu opens settings.
+conversations with pinned entries first, then newest first. Project rows expand in place and their context menu opens settings.
 
 The workspace New conversation action aligns vertically with Home in the primary column.
 Collapsed workspace navigation exposes direct project and conversation shortcuts; only the top
@@ -203,3 +203,17 @@ Collapsible, plus an active-tool status during inspection. Results persist throu
 and reconnect APIs. Result previews are limited to 4,000 characters and mark truncation; model tool
 results retain the executor's larger bounded output. No source viewer or shell console is added.
 Live-provider tool choice and interactive disclosure visuals still require manual verification.
+
+## Project and conversation actions
+
+With one session, project disclosure shows conversations directly. Additional sessions reveal
+numbered group headings with compose and dots menus. Project compose always creates in Session 1;
+group compose creates in its own session. New session preserves the current chat selection.
+Project dots/right-click menus share New conversation, New session, Pin/Unpin, Edit and Remove.
+Remove retains the existing archive confirmation and recovery path.
+
+Project and Recents conversation rows share Rename and Pin/Unpin menus. Rename is backend-owned;
+conversation pins are browser-local in console.conversation-pins.v1, scoped by backend URL and
+session/conversation ID. Pins sort first within each group; remaining order stays unchanged.
+Actions share row hover backgrounds, appear on hover/focus and remain visible on touch screens.
+Refreshes retain loaded session metadata and keep the chat mounted, preserving unsent drafts.

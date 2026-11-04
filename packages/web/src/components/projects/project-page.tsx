@@ -1,8 +1,9 @@
 "use client";
-import { Archive, RefreshCw } from "lucide-react";
+import { RefreshCw, SquarePen, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { ProjectSessions } from "@/components/sessions/project-sessions";
+import { useProjectNavigation } from "@/components/sessions/use-project-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,16 +48,54 @@ export function ProjectPage({ settings = false }: { settings?: boolean }) {
       />
     );
   return (
-    <div className="space-y-8">
+    <ProjectWorkspace key={project.id} deviceId={deviceId} project={project} />
+  );
+}
+function ProjectWorkspace({
+  project,
+  deviceId,
+}: {
+  project: Project;
+  deviceId: string;
+}) {
+  const { state, create, busy, error } = useProjectNavigation(
+    deviceId,
+    project.id,
+    project.available,
+  );
+  return (
+    <div className="space-y-6">
       <header className="flex items-center gap-3">
         <ProjectIcon
           icon={project.icon}
           color={project.color}
           className="size-5"
         />
-        <h1 className="text-xl font-semibold">{project.name}</h1>
+        <h1 className="flex-1 text-xl font-semibold">{project.name}</h1>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`New conversation in ${project.name}`}
+          disabled={busy || !project.available}
+          onClick={() => void create("conversation")}
+        >
+          <SquarePen className="size-4" />
+        </Button>
       </header>
-      <ProjectSessions deviceId={deviceId} projectId={project.id} />
+      {(error || state.error) && (
+        <p role="alert" className="text-xs text-destructive">
+          {error ?? state.error}
+        </p>
+      )}
+      <ProjectSessions
+        deviceId={deviceId}
+        projectId={project.id}
+        sessions={state.sessions}
+        busy={busy}
+        createConversation={(sessionId) =>
+          void create("conversation", sessionId)
+        }
+      />
     </div>
   );
 }
@@ -154,8 +193,8 @@ function ProjectEditor({
             disabled={busy}
             onClick={() => setConfirm(true)}
           >
-            <Archive className="size-3.5" />
-            Archive
+            <X className="size-3.5" />
+            Remove
           </Button>
         </div>
       </header>

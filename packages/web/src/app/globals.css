@@ -192,3 +192,22 @@
   width: 12px;
   border-top-width: 1px;
 }
+
+.navigation-actions {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.navigation-row-group:hover > .navigation-actions,
+.navigation-row-group:focus-within > .navigation-actions,
+.navigation-row-group:has([data-popup-open]) > .navigation-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .navigation-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
