@@ -74,7 +74,7 @@ export function ConversationRow({
     <SidebarAction
       compact={compact}
       nativeButton={false}
-      className={compact ? undefined : "h-9 px-2 hover:bg-transparent"}
+      className={compact ? undefined : "h-7 px-2 hover:bg-transparent"}
       render={<Link href={href} onClick={closeMobile} />}
       aria-label={conversation.name}
       title={
@@ -82,7 +82,7 @@ export function ConversationRow({
       }
       aria-current={pathname === href ? "page" : undefined}
     >
-      <MessageSquare />
+      {compact && <MessageSquare />}
       {!compact && (
         <span className="min-w-0 flex-1 truncate">{conversation.name}</span>
       )}

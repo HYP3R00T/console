@@ -129,7 +129,7 @@ export function ProjectTree({
             <Button
               nativeButton={false}
               variant="ghost"
-              size="icon"
+              size="icon-xs"
               aria-label="Add project"
               title="Add project"
               render={

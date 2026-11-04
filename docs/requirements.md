@@ -12,7 +12,10 @@ its AI providers, sets up projects, and runs conversations with read-only projec
 - The first column chooses Home, a device or Preferences. Appearance category navigation lives in the second column; Manage devices owns all backend connection actions.
 - `/devices/new` saves a backend name and loopback URL, then returns to Manage devices without connecting.
 - Device names and URLs persist only in this browser; saving a device does not connect it.
-- The shadcn Base UI Lyra/Zinc preset uses Geist, Lucide icons and zero corner radii.
+- The shadcn Base UI Lyra/Zinc preset uses Geist, Lucide icons and a shared 10px base corner radius (8px controls/rows, 6px menu items, 10px popups and 14px composer).
+- Primary-rail icons share its 28px center. Conversation controls are 28px high with 2px gaps; project headings are 32px high. Row actions hide after pointer exit despite retained mouse focus, while keyboard focus/menu-open states remain accessible.
+- Only the active conversation has a persistent highlight in the workspace tree. Project rows retain their icon and toggle on click without a separate disclosure arrow. Expanded conversation rows use text labels; compact rail shortcuts retain icons.
+- Sidebar row surfaces stay separated; inline icon actions use 24px targets/14px icons. Scrollbar thumbs have rounded ends.
 - Column separation uses surface tones rather than divider borders: the dark theme runs from lightest client navigation to intermediate context to darkest content, with matching light-theme surfaces.
 - Device selection shades its navigation row without an outline; device rows do not expand. Tree branches and remaining borders default to dashed strokes, with tree connectors ending at the final row.
 - Appearance supports system, light and dark; mobile context navigation uses a sheet.

@@ -1,13 +1,5 @@
 "use client";
-import {
-  ChevronRight,
-  Layers,
-  Pencil,
-  Pin,
-  PinOff,
-  SquarePen,
-  X,
-} from "lucide-react";
+import { Layers, Pencil, Pin, PinOff, SquarePen, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
@@ -94,13 +86,12 @@ export function ProjectNavigation({
   ];
   const row = (menu: ReactNode) => (
     <NavigationRow
-      selected={pathname.startsWith(href)}
       actions={
         <>
           <Button
             variant="ghost"
             size="icon"
-            className="size-8"
+            className="size-6 [&_svg]:size-3.5"
             aria-label={`New conversation in ${project.name}`}
             title="New conversation in default session"
             disabled={disabled}
@@ -112,8 +103,7 @@ export function ProjectNavigation({
         </>
       }
     >
-      <CollapsibleTrigger className="flex h-9 w-full min-w-0 items-center gap-2 px-2 text-left text-sm [&[aria-expanded=true]>svg:first-child]:rotate-90">
-        <ChevronRight className="size-3 shrink-0" />
+      <CollapsibleTrigger className="flex h-8 w-full rounded-md outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring min-w-0 items-center gap-2 px-2 text-left text-sm">
         <ProjectIcon icon={project.icon} color={project.color} />
         <span className="min-w-0 flex-1 truncate">{project.name}</span>
         {pinned && (
@@ -155,7 +145,7 @@ export function ProjectNavigation({
           >
             {row}
           </NavigationMenu>
-          <CollapsibleContent>
+          <CollapsibleContent className="pt-0.5">
             {state.error ? (
               <p role="alert" className="px-4 text-xs text-destructive">
                 {state.error}

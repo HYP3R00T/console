@@ -35,7 +35,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible={isMobile ? "offcanvas" : "none"} className="w-full!">
       <SidebarHeader className="px-0 pb-3 pt-2">
-        <div className="flex w-[55px] shrink-0 justify-center">
+        <div className="flex w-14 shrink-0 justify-center">
           <SidebarAction
             compact
             aria-label="Collapse workspace"

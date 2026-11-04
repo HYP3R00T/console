@@ -53,7 +53,7 @@ cookie is used; only loopback URLs are accepted. Corrupt bookmark storage is not
 ## UI foundation
 
 The official CLI installed the user-selected preset `bddBUJXM`: Base UI Lyra, Zinc, Geist and
-Lucide. The theme radius is set to zero. `components.json` configures future component installs;
+Lucide. The theme uses a 10px base radius with smaller controls/menu items and larger popup/composer shells. `components.json` configures future component installs;
 use library components from `src/components/ui` before creating a custom primitive.
 
 `src/components/layout` owns the shell/sidebar, `devices` owns bookmark state, `workspace` owns machine views and project navigation,
@@ -61,7 +61,7 @@ and `settings` owns saved-device management, Add device and Appearance views. `c
 lives in `src/lib/connection.ts` and `src/lib/devices.ts`. See [architecture](../architecture.md).
 
 For another component, run `pnpm dlx shadcn@latest add <component> --cwd packages/web` from the root.
-Generated code still needs repository formatting and checks. Match the zero-radius theme.
+Generated code still needs repository formatting and checks. Match the shared radius scale; do not reintroduce hardcoded square controls.
 
 ## Commands and verification
 
@@ -215,5 +215,20 @@ Remove retains the existing archive confirmation and recovery path.
 Project and Recents conversation rows share Rename and Pin/Unpin menus. Rename is backend-owned;
 conversation pins are browser-local in console.conversation-pins.v1, scoped by backend URL and
 session/conversation ID. Pins sort first within each group; remaining order stays unchanged.
-Actions share row hover backgrounds, appear on hover/focus and remain visible on touch screens.
+Actions share row hover backgrounds, appear on hover or keyboard focus and remain visible while a menu is open or on touch screens.
 Refreshes retain loaded session metadata and keep the chat mounted, preserving unsent drafts.
+
+Conversation controls are 28px high with 2px between adjacent row surfaces; project headings are
+32px high, with 4px disclosure clearance.
+Only hover/selection shade the row; keyboard focus retains a ring without latching its background.
+Inline actions use 24px controls/14px icons; compact rail controls use 32px surfaces within the
+existing 36px vertical slot. Scroll Area thumbs and native WebKit thumbs have rounded ends.
+
+Sidebar actions use block flex layout so auto margins center compact links and avoid inline baseline
+spacing. Rail header anchors share the full 56px width. Pointer clicks retain focus without latching
+actions visible; :focus-visible reveals actions for keyboard users.
+
+Project rows toggle by clicking the icon/name without a chevron, and hover rather than remain
+highlighted for an active child. Only the selected conversation retains a background. Expanded
+conversation rows use text without a leading icon; compact shortcuts still use icons. Child text
+aligns with its parent label, reclaiming horizontal space for conversation names.

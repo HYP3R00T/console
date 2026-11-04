@@ -37,7 +37,7 @@ export function DeviceRail() {
     return (
       <>
         <div className="flex w-full items-center">
-          <div className="flex w-[55px] shrink-0 justify-center">
+          <div className="flex w-14 shrink-0 justify-center">
             <SidebarAction
               compact
               aria-label={full ? "Collapse devices" : "Expand devices"}

@@ -64,7 +64,7 @@ export function NavigationMenu({
           <Button
             variant="ghost"
             size="icon"
-            className="size-8"
+            className="size-6 [&_svg]:size-3.5"
             aria-label={label}
             title={label}
           />

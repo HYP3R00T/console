@@ -24,7 +24,7 @@ Browser → selected loopback backend → GET /v1/connection
 | `packages/web/src/components/ui/` | CLI-installed shadcn Base UI components; no custom primitive library. |
 | `packages/web/src/components/home.tsx` | Cross-device overview of saved bookmarks and current connection status. |
 | `packages/web/src/app/layout.tsx` | Shared navigation and connection provider. |
-| `packages/web/src/app/globals.css` | Preset tokens and Tailwind integration; zero radius and Geist typography. |
+| `packages/web/src/app/globals.css` | Preset tokens and Tailwind integration; shared radius scale and Geist typography. |
 
 ConnectionProvider owns a ConnectionManager with independent lifetimes keyed by saved device ID.
 DeviceProvider remembers successful connections by bookmark ID and rechecks all of them on reload.
@@ -156,7 +156,7 @@ This is not machine-global coordination across users, containers or separate dat
 Programmatic test app instances remain available with isolated storage and ports.
 
 `components.json` records `base-lyra`, Zinc and Lucide. The shared preset code is `bddBUJXM`;
-Geist comes from `next/font`, and the theme radius is overridden to zero. `next-themes` owns
+Geist comes from `next/font`, and the theme uses a 10px base radius. `next-themes` owns
 appearance with a system default. Tailwind/PostCSS and `shadcn/tailwind.css` supply styling.
 The installed UI source is formatted to repository conventions, with small semantic/lint fixes;
 the sidebar's unused cookie write is omitted. No global lint rules are disabled for generated code.
@@ -299,7 +299,7 @@ The editor tracks the last successfully saved name/icon/color separately from it
 
 `project-context-menu.tsx` wraps both project navigation modes in the library context menu. `project-removal-dialog.tsx` owns the shared archive workflow used by the menu and editor. ProjectsProvider owns validated browser-local pin preferences, scoped by backend URL; `lib/project-pins.ts` validates persistence and orders known projects without mutating backend snapshots. No pin field or API is added to the backend.
 
-Project context-menu triggers use a flex-column formatting context. This preserves automatic horizontal margins on compact inline-flex action buttons and stretches expanded disclosure rows to the available width; a plain block wrapper would left-align compact buttons.
+Project context-menu triggers use a flex-column formatting context. This stretches expanded disclosure rows to the available width. SidebarAction now uses flex display so compact automatic margins also work in ordinary block wrappers.
 
 ## Durable sessions
 
@@ -460,3 +460,24 @@ IDs, transcripts and submission records remain unchanged. Conversation pins live
 console.conversation-pins.v1, keyed by backend URL and session UUID plus conversation ID.
 They are browser preferences, not backend state, with no cross-tab synchronization.
 Metadata refresh keeps the active chat mounted so renaming/group updates preserve unsent drafts.
+
+Shared library components use token-driven rounded corners: controls and navigation rows use md,
+menu items sm, popup shells lg and the composer xl. Structural column edges stay flush.
+Custom navigation rows round their shared hover/selected surface, including action buttons. Rows have vertical clearance; focus keeps its keyboard ring
+without persistently shading the parent. Row action buttons are 24px with 14px icons;
+this preserves the existing disclosure, selection, compact alignment and resize behavior.
+
+Scroll Area thumbs and native WebKit overflow thumbs are rounded and inset. Native scrollbars
+in other engines use their thin, theme-colored platform rendering. Remaining square rules are
+intentional seams in joined toggle controls, transparent input-group internals and line-style tabs.
+
+SidebarAction uses flex display rather than inline-flex: compact auto margins center links in block
+wrappers and full-width rows have no baseline slack. Both header anchors span the 56px rail.
+Conversation controls use 28px height with 2px row spacing; projects use 32px headings. Action
+visibility uses hover, :focus-visible and menu-open state rather than :focus-within, so mouse
+focus cannot latch controls visible after the pointer leaves. Touch retains visible actions.
+
+Workspace project rows have no persistent selection background or disclosure chevron. The project
+icon/name is still a keyboard-accessible CollapsibleTrigger with aria-expanded. Only the active
+conversation receives persistent selection styling. Expanded project/Recents conversations omit
+the leading chat icon, keeping indented text labels; compact conversation shortcuts retain icons.
