@@ -7,6 +7,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import { ProjectsProvider } from "@/components/projects/projects-provider";
 import { ProvidersProvider } from "@/components/providers/providers-provider";
+import { ConversationPreferences } from "@/components/sessions/conversation-preferences";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
@@ -31,9 +32,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <DeviceProvider>
               <ProvidersProvider>
                 <ProjectsProvider>
-                  <TooltipProvider>
-                    <AppShell>{children}</AppShell>
-                  </TooltipProvider>
+                  <ConversationPreferences>
+                    <TooltipProvider>
+                      <AppShell>{children}</AppShell>
+                    </TooltipProvider>
+                  </ConversationPreferences>
                 </ProjectsProvider>
               </ProvidersProvider>
             </DeviceProvider>

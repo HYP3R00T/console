@@ -102,11 +102,12 @@ Startup resumes standalone and available-project sessions; browser disconnect ne
 | --- | --- | --- |
 | GET | `/v1/projects/:id/sessions` | Project-owned harness/session index. |
 | POST | `/v1/projects/:id/sessions` | `{}`; create the next numbered session and Main, 201. |
-| GET | `/v1/standalone` | Standalone sessions newest first. |
+| GET | `/v1/standalone` | Standalone sessions newest first, with root conversation name and ID. |
 | POST | `/v1/standalone` | `{}`; create a numbered standalone conversation, 201. |
 | GET | `/v1/standalone/:sessionId` | Standalone session and root conversation ID; rejects project sessions. |
 | GET | `/v1/sessions/:sessionId/conversations` | Session metadata and first 200 conversations; `more` reports truncation. |
 | POST | `/v1/sessions/:sessionId/conversations` | `{}`; create the next numbered conversation in a project session, 201. |
+| PUT | `/v1/sessions/:sessionId/conversations/:conversationId` | `{name}`; rename project or standalone conversation, 1–120 nonblank characters. IDs/history unchanged. |
 | POST | `/v1/sessions/:sessionId/conversations/:conversationId/messages` | `{content,requestId,model?,thinkingLevel?}`; validated choices and UUID deduplication, durable admission, 202. |
 | GET | `/v1/sessions/:sessionId/conversations/:conversationId/submissions` | Latest safe completion status; supports failure display after reconnect. |
 | GET | `/v1/sessions/:sessionId/conversations/:conversationId/submissions/:submissionId` | Persisted admission/completion state, scoped to its conversation. |

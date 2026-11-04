@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMachineProjects } from "@/components/projects/projects-provider";
 export type SessionRecord = {
   id: string;
@@ -19,62 +19,75 @@ export type Session = {
 export function sessionsChanged() {
   window.dispatchEvent(new Event("console:sessions-changed"));
 }
-export function useProjectSessions(deviceId: string, projectId: string) {
-  const { connected, origin, request } = useMachineProjects(deviceId);
-  const [revision, setRevision] = useState(0);
+export function useProjectSessions(
+  deviceId: string,
+  projectId: string,
+  enabled = true,
+) {
+  const { connected, origin, client, request } = useMachineProjects(deviceId);
   const [snapshot, setSnapshot] = useState<{
     key: string;
+    client: typeof client;
     sessions?: Session[];
     error?: string;
   }>();
-  const key = `${connected ? origin : ""}:${projectId}:${revision}`;
-  const refresh = useCallback(() => setRevision((value) => value + 1), []);
+  const key = `${connected ? origin : ""}:${projectId}`;
   useEffect(() => {
-    if (!connected) return;
-    const controller = new AbortController();
+    if (!connected || !enabled) return;
+    let controller: AbortController | undefined;
     let timer: ReturnType<typeof setTimeout>;
+    let stopped = false;
     const load = async () => {
+      clearTimeout(timer);
+      controller?.abort();
+      const operation = new AbortController();
+      controller = operation;
       try {
         const data = await request<{ sessions: SessionRecord[] }>(
           `/v1/projects/${projectId}/sessions`,
-          { signal: controller.signal },
+          { signal: operation.signal },
         );
         const sessions = await Promise.all(
           data.sessions.map((session) =>
             request<Session>(
               `/v1/sessions/${session.sessionId}/conversations`,
-              { signal: controller.signal },
+              { signal: operation.signal },
             ),
           ),
         );
-        if (!controller.signal.aborted) setSnapshot({ key, sessions });
+        if (!operation.signal.aborted) setSnapshot({ key, client, sessions });
       } catch (cause) {
-        if (!controller.signal.aborted)
-          setSnapshot({
+        if (!operation.signal.aborted)
+          setSnapshot((previous) => ({
             key,
+            client,
+            sessions:
+              previous?.key === key && previous.client === client
+                ? previous.sessions
+                : undefined,
             error:
               cause instanceof Error
                 ? cause.message
                 : "Could not load sessions.",
-          });
+          }));
       } finally {
-        if (!controller.signal.aborted)
+        if (!stopped && !operation.signal.aborted)
           timer = setTimeout(() => void load(), 10000);
       }
     };
     void load();
-    window.addEventListener("console:sessions-changed", refresh);
+    window.addEventListener("console:sessions-changed", load);
     return () => {
-      controller.abort();
+      stopped = true;
+      controller?.abort();
       clearTimeout(timer);
-      window.removeEventListener("console:sessions-changed", refresh);
+      window.removeEventListener("console:sessions-changed", load);
     };
-  }, [connected, key, projectId, request, refresh]);
+  }, [connected, enabled, key, client, projectId, request]);
   return {
-    ...(snapshot?.key === key ? snapshot : {}),
+    ...(snapshot?.key === key && snapshot?.client === client ? snapshot : {}),
     connected,
     request,
-    refresh,
-    revision,
+    refresh: sessionsChanged,
   };
 }

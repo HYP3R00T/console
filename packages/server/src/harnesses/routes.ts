@@ -76,7 +76,9 @@ export function registerHarnessRoutes(
           .code(201)
           .send(await service.operation(() => service.create(req.params.id))),
     );
-    routes.get("/v1/standalone", () => service.listStandalone());
+    routes.get("/v1/standalone", () =>
+      service.operation(() => service.listStandalone()),
+    );
     routes.post<{ Body: Record<string, never> }>(
       "/v1/standalone",
       { schema: { body: creation } },
@@ -108,6 +110,35 @@ export function registerHarnessRoutes(
               service.addConversation(req.params.sessionId),
             ),
           ),
+    );
+    routes.put<{ Params: Scope; Body: { name: string } }>(
+      base,
+      {
+        schema: {
+          params: conversationParams,
+          body: {
+            type: "object",
+            additionalProperties: false,
+            required: ["name"],
+            properties: {
+              name: {
+                type: "string",
+                minLength: 1,
+                maxLength: 120,
+                pattern: "\\S",
+              },
+            },
+          },
+        },
+      },
+      (req) =>
+        service.operation(() =>
+          service.renameConversation(
+            req.params.sessionId,
+            req.params.conversationId,
+            req.body.name,
+          ),
+        ),
     );
     routes.post<{
       Params: Scope;

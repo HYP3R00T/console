@@ -41,21 +41,34 @@ function StandaloneChat({
   }>();
   const [error, setError] = useState<string>();
   useEffect(() => {
-    const controller = new AbortController();
-    void request<{ session: SessionRecord; conversationId: number }>(
-      `/v1/standalone/${encodeURIComponent(sessionId)}`,
-      { signal: controller.signal },
-    )
-      .then(setData)
-      .catch((cause) => {
-        if (!controller.signal.aborted)
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : "Could not load conversation.",
-          );
-      });
-    return () => controller.abort();
+    let pending: AbortController;
+    const load = () => {
+      pending?.abort();
+      const controller = new AbortController();
+      pending = controller;
+      setError(undefined);
+      void request<{ session: SessionRecord; conversationId: number }>(
+        `/v1/standalone/${encodeURIComponent(sessionId)}`,
+        { signal: controller.signal },
+      )
+        .then((value) => {
+          if (!controller.signal.aborted) setData(value);
+        })
+        .catch((cause) => {
+          if (!controller.signal.aborted)
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : "Could not load conversation.",
+            );
+        });
+    };
+    load();
+    window.addEventListener("console:sessions-changed", load);
+    return () => {
+      pending.abort();
+      window.removeEventListener("console:sessions-changed", load);
+    };
   }, [request, sessionId]);
   if (error)
     return (

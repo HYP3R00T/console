@@ -1,5 +1,5 @@
 "use client";
-import { Archive } from "lucide-react";
+import { X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,10 +63,10 @@ export function ProjectRemovalDialog({
     >
       <DialogContent showCloseButton={!busy}>
         <DialogHeader>
-          <DialogTitle>Archive {project.name}?</DialogTitle>
+          <DialogTitle>Remove {project.name}?</DialogTitle>
           <DialogDescription>
-            Sessions and conversations can be restored from Machine settings →
-            Projects. Source files stay on this machine.
+            Sessions and conversations are archived and can be restored from
+            Machine settings → Projects. Source files stay on this machine.
           </DialogDescription>
         </DialogHeader>
         <p className="break-all font-mono text-xs text-muted-foreground">
@@ -74,7 +74,7 @@ export function ProjectRemovalDialog({
         </p>
         {!connected && (
           <p role="status" className="text-xs text-muted-foreground">
-            Connect this machine to archive the project.
+            Connect this machine to remove the project.
           </p>
         )}
         {error && (
@@ -96,12 +96,12 @@ export function ProjectRemovalDialog({
             disabled={busy || !connected}
             onClick={() => void archive(needsStop)}
           >
-            <Archive className="size-3.5" />
+            <X className="size-3.5" />
             {busy
-              ? "Archiving…"
+              ? "Removing…"
               : needsStop
-                ? "Stop all and archive"
-                : "Archive project"}
+                ? "Stop all and remove"
+                : "Remove project"}
           </Button>
         </DialogFooter>
       </DialogContent>

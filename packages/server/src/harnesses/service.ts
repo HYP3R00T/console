@@ -134,8 +134,16 @@ export class HarnessService {
     await this.projects.get(projectId);
     return { sessions: this.store.list(projectId) };
   }
-  listStandalone() {
-    return { sessions: this.store.listStandalone() };
+  async listStandalone() {
+    const records = await Promise.all(
+      this.store.listStandalone().map(async (record) => {
+        const { session, conversationId } = await this.standalone(
+          record.sessionId,
+        );
+        return { ...session, conversationId };
+      }),
+    );
+    return { sessions: records };
   }
   async createStandalone() {
     const record = this.store.insert(standaloneOwner);
@@ -148,7 +156,11 @@ export class HarnessService {
       throw new HarnessError(404, "Standalone conversation not found.");
     const harness = await this.ready(record);
     const root = await harness.root(context);
-    return { session: record, conversationId: root.id };
+    const info = await harness.snapshot(ConversationInfo, root.id, context);
+    return {
+      session: { ...record, name: info?.name ?? record.name },
+      conversationId: root.id,
+    };
   }
 
   async model(model: ModelRef) {
@@ -292,6 +304,27 @@ export class HarnessService {
     if (!conversation)
       throw new HarnessError(404, "Conversation not found in this session.");
     return { record, harness, conversation };
+  }
+  renameConversation(sessionId: string, id: string, name: string) {
+    return this.serial(sessionId, async () => {
+      const trimmed = name.trim();
+      if (!trimmed || trimmed.length > 120)
+        throw new HarnessError(
+          400,
+          "Use a conversation name between 1 and 120 characters.",
+        );
+      const { record, harness, conversation } = await this.conversation(
+        sessionId,
+        id,
+      );
+      if (record.projectId !== standaloneOwner)
+        this.projects.assertWritable(record.projectId);
+      await harness.commit(async (tx) => {
+        const info = await tx.doc(ConversationInfo, conversation.id);
+        info.name = trimmed;
+      }, context);
+      return { id: conversation.id, name: trimmed };
+    });
   }
   private async admit(
     sessionId: string,

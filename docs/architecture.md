@@ -445,3 +445,18 @@ reads may rerun after a crash and observe changed files; committed results remai
 failures and active names. It never exposes raw system sections or arbitrary tool diagnostics.
 `web/.../sessions/tool-activity.tsx` uses the shared shadcn Collapsible for calls/results in chat;
 SSE reconnect and paged history use the same projection. No additional file-browsing HTTP API exists.
+
+## Navigation presentation and conversation labels
+
+The project/session/conversation ownership model is unchanged. A single session is flattened in
+navigation; multiple sessions render grouped headings. Project compose resolves Session 1; group
+compose targets that session explicitly. New session refreshes navigation without changing selection.
+Shared navigation rows and menus keep compose/menu buttons inside the same hover surface.
+
+Conversation Rename commits only Durable ConversationInfo.name through the session-serialized
+service and existing project archive gate. PUT accepts a nonblank name of at most 120 characters.
+Standalone list/detail derive their label from root conversation metadata and expose its actual ID.
+IDs, transcripts and submission records remain unchanged. Conversation pins live separately in
+console.conversation-pins.v1, keyed by backend URL and session UUID plus conversation ID.
+They are browser preferences, not backend state, with no cross-tab synchronization.
+Metadata refresh keeps the active chat mounted so renaming/group updates preserve unsent drafts.

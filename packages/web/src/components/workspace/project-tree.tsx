@@ -1,24 +1,16 @@
 "use client";
-import { ChevronRight, type Folder, Pin, Plus } from "lucide-react";
+import { type Folder, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { SidebarAction } from "@/components/layout/sidebar-action";
-import { ProjectContextMenu } from "@/components/projects/project-context-menu";
-import { ProjectIcon } from "@/components/projects/project-icon";
+import { ProjectNavigation } from "@/components/projects/project-navigation";
 import { ProjectRemovalDialog } from "@/components/projects/project-removal-dialog";
 import {
   type Project,
   useMachineProjects,
 } from "@/components/projects/projects-provider";
-import { ProjectSessions } from "@/components/sessions/project-sessions";
-import { sessionsChanged } from "@/components/sessions/use-project-sessions";
 import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { orderPinnedProjects } from "@/lib/project-pins";
 import { cn } from "@/lib/utils";
 import { StandaloneNavigation } from "./standalone-navigation";
@@ -32,18 +24,10 @@ export function ProjectTree({
   closeMobile?: () => void;
   compact?: boolean;
 }) {
-  const {
-    projects,
-    connected,
-    error,
-    pinnedIds,
-    pinError,
-    setPinned,
-    request,
-  } = useMachineProjects(deviceId);
+  const { projects, connected, error, pinnedIds, pinError, setPinned } =
+    useMachineProjects(deviceId);
   const [removing, setRemoving] = useState<Project>();
   const [actionError, setActionError] = useState<string>();
-  const [creatingSession, setCreatingSession] = useState(false);
   const router = useRouter();
   const base = `/devices/${encodeURIComponent(deviceId)}`;
   const pathname = usePathname();
@@ -70,64 +54,15 @@ export function ProjectTree({
   const projectLinks =
     projects &&
     orderPinnedProjects(projects, pinnedIds).map((p) => {
-      const href = `${base}/projects/${encodeURIComponent(p.id)}`;
       const pinned = pinnedIds.includes(p.id);
-      const row = compact ? (
-        <SidebarAction
-          compact
-          nativeButton={false}
-          render={<Link href={href} onClick={closeMobile} />}
-          aria-label={p.name}
-          aria-description="Right-click or press Shift+F10 for project actions."
-          title={`${p.name}${pinned ? " · pinned" : ""}`}
-        >
-          <ProjectIcon icon={p.icon} color={p.color} />
-        </SidebarAction>
-      ) : (
-        <Collapsible className="group/project">
-          <div
-            className={cn(
-              "flex items-center",
-              pathname.startsWith(href) && "bg-sidebar-accent",
-            )}
-          >
-            <CollapsibleTrigger
-              aria-description="Right-click or press Shift+F10 for project actions."
-              className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-sm hover:bg-sidebar-accent [&[aria-expanded=true]>svg:first-child]:rotate-90"
-            >
-              <ChevronRight className="size-3 shrink-0 transition-transform" />
-              <ProjectIcon icon={p.icon} color={p.color} />
-              <span className="truncate">{p.name}</span>
-              {pinned && (
-                <Pin
-                  className="ml-auto size-3 shrink-0 text-muted-foreground"
-                  aria-label="Pinned project"
-                />
-              )}
-              {!p.available && (
-                <span
-                  className="size-1.5 shrink-0 bg-destructive"
-                  title="Directory unavailable"
-                />
-              )}
-            </CollapsibleTrigger>
-          </div>
-          <CollapsibleContent className="overflow-hidden">
-            <ProjectSessions
-              compact
-              deviceId={deviceId}
-              projectId={p.id}
-              closeMobile={closeMobile}
-            />
-          </CollapsibleContent>
-        </Collapsible>
-      );
       return (
-        <ProjectContextMenu
-          key={p.id}
-          name={p.name}
-          href={href}
+        <ProjectNavigation
+          key={`${deviceId}:${p.id}`}
+          project={p}
+          deviceId={deviceId}
+          compact={compact}
           pinned={pinned}
+          closeMobile={closeMobile}
           onPin={() => {
             try {
               setPinned(p.id, !pinned);
@@ -141,38 +76,7 @@ export function ProjectTree({
             }
           }}
           onRemove={() => setRemoving(p)}
-          onEdit={closeMobile}
-          creatingSession={creatingSession || !connected || !p.available}
-          onNewSession={() => {
-            if (creatingSession) return;
-            setCreatingSession(true);
-            setActionError(undefined);
-            void request<{ sessionId: string }>(
-              `/v1/projects/${p.id}/sessions`,
-              { method: "POST", body: "{}" },
-            )
-              .then(async (session) => {
-                sessionsChanged();
-                const data = await request<{ conversations: { id: number }[] }>(
-                  `/v1/sessions/${session.sessionId}/conversations`,
-                );
-                closeMobile();
-                router.push(
-                  `${href}/sessions/${session.sessionId}/conversations/${data.conversations[0].id}`,
-                );
-              })
-              .catch((cause) =>
-                setActionError(
-                  cause instanceof Error
-                    ? cause.message
-                    : "Could not create session.",
-                ),
-              )
-              .finally(() => setCreatingSession(false));
-          }}
-        >
-          {row}
-        </ProjectContextMenu>
+        />
       );
     });
   const removal = removing && (

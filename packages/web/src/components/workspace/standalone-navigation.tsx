@@ -1,13 +1,18 @@
 "use client";
 
-import { MessageSquare, SquarePen } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { SquarePen } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { SidebarAction } from "@/components/layout/sidebar-action";
 import { useMachineProjects } from "@/components/projects/projects-provider";
+import { useConversationPins } from "@/components/sessions/conversation-preferences";
+import { ConversationRow } from "@/components/sessions/conversation-row";
 import type { SessionRecord } from "@/components/sessions/use-project-sessions";
+import { sessionsChanged } from "@/components/sessions/use-project-sessions";
+import { conversationKey, orderConversations } from "@/lib/conversation-pins";
 import { cn } from "@/lib/utils";
+
+type StandaloneRecord = SessionRecord & { conversationId: number };
 
 export function StandaloneNavigation({
   deviceId,
@@ -23,14 +28,14 @@ export function StandaloneNavigation({
   const { connected, origin, request } = useMachineProjects(deviceId);
   const [snapshot, setSnapshot] = useState<{
     key: string;
-    sessions?: SessionRecord[];
+    sessions?: StandaloneRecord[];
     error?: string;
   }>();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string>();
   const [revision, setRevision] = useState(0);
   const router = useRouter();
-  const pathname = usePathname();
+  const preferences = useConversationPins();
   const base = `/devices/${encodeURIComponent(deviceId)}/conversations`;
   const key = `${origin}:${revision}`;
   useEffect(() => {
@@ -39,7 +44,7 @@ export function StandaloneNavigation({
     let timer: ReturnType<typeof setTimeout>;
     async function load() {
       try {
-        const data = await request<{ sessions: SessionRecord[] }>(
+        const data = await request<{ sessions: StandaloneRecord[] }>(
           "/v1/standalone",
           { signal: controller.signal },
         );
@@ -60,7 +65,10 @@ export function StandaloneNavigation({
       }
     }
     void load();
+    const refresh = () => setRevision((value) => value + 1);
+    window.addEventListener("console:sessions-changed", refresh);
     return () => {
+      window.removeEventListener("console:sessions-changed", refresh);
       controller.abort();
       clearTimeout(timer);
     };
@@ -74,7 +82,7 @@ export function StandaloneNavigation({
         method: "POST",
         body: "{}",
       });
-      setRevision((current) => current + 1);
+      sessionsChanged();
       closeMobile();
       router.push(`${base}/${session.sessionId}`);
     } catch (cause) {
@@ -93,7 +101,7 @@ export function StandaloneNavigation({
       <SidebarAction
         compact={compact}
         aria-label="New conversation"
-        title="New conversation"
+        title="New conversation outside a project"
         disabled={!connected || creating}
         onClick={() => void create()}
       >
@@ -127,27 +135,21 @@ export function StandaloneNavigation({
                 : "Loading conversations…"}
           </p>
         )}
-        {current?.sessions?.map((session) => {
-          const href = `${base}/${session.sessionId}`;
-          return (
-            <SidebarAction
-              key={session.sessionId}
-              compact={compact}
-              nativeButton={false}
-              render={<Link href={href} onClick={closeMobile} />}
-              aria-label={session.name}
-              title={compact ? session.name : undefined}
-              aria-current={pathname === href ? "page" : undefined}
-              className={cn(
-                "navigation-row",
-                pathname === href && "bg-sidebar-accent",
-              )}
-            >
-              <MessageSquare />
-              {!compact && <span className="truncate">{session.name}</span>}
-            </SidebarAction>
-          );
-        })}
+        {orderConversations(
+          current?.sessions ?? [],
+          (session) =>
+            conversationKey(session.sessionId, session.conversationId),
+          preferences.pins,
+        ).map((session) => (
+          <ConversationRow
+            key={session.sessionId}
+            sessionId={session.sessionId}
+            conversation={{ id: session.conversationId, name: session.name }}
+            href={`${base}/${session.sessionId}`}
+            compact={compact}
+            closeMobile={closeMobile}
+          />
+        ))}
       </section>
     </>
   );
