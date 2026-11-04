@@ -14,6 +14,7 @@ its AI providers, sets up projects, and runs conversations with read-only projec
 - Device names and URLs persist only in this browser; saving a device does not connect it.
 - The shadcn Base UI Lyra/Zinc preset uses Geist, Lucide icons and a shared 10px base corner radius (8px controls/rows, 6px menu items, 10px popups and 14px composer).
 - Primary-rail icons share its 28px center. Conversation controls are 28px high with 2px gaps; project headings are 32px high. Row actions hide after pointer exit despite retained mouse focus, while keyboard focus/menu-open states remain accessible.
+- Project disclosures reveal/collapse with a short height/opacity transition; reduced-motion preferences skip it.
 - Only the active conversation has a persistent highlight in the workspace tree. Project rows retain their icon and toggle on click without a separate disclosure arrow. Expanded conversation rows use text labels; compact rail shortcuts retain icons.
 - Sidebar row surfaces stay separated; inline icon actions use 24px targets/14px icons. Scrollbar thumbs have rounded ends.
 - Column separation uses surface tones rather than divider borders: the dark theme runs from lightest client navigation to intermediate context to darkest content, with matching light-theme surfaces.

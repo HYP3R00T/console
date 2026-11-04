@@ -232,3 +232,7 @@ Project rows toggle by clicking the icon/name without a chevron, and hover rathe
 highlighted for an active child. Only the selected conversation retains a background. Expanded
 conversation rows use text without a leading icon; compact shortcuts still use icons. Child text
 aligns with its parent label, reclaiming horizontal space for conversation names.
+
+Project conversation lists use the existing Base UI Collapsible with a scoped 180ms height reveal
+and 140ms fade, including collapse. Reduced motion skips both. The icon/name remains the trigger;
+there is no chevron or persistent project selection. Git/model/tool collapsibles are unaffected.

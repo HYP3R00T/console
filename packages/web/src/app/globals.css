@@ -233,3 +233,23 @@
     scrollbar-color: var(--border) transparent;
   }
 }
+
+/* Base UI measures the panel and retains it until its exit transition finishes.
+   Keep spacing inside the panel so the closed height can reach zero. */
+.project-disclosure {
+  height: var(--collapsible-panel-height);
+  overflow: hidden;
+  opacity: 1;
+}
+.project-disclosure[data-starting-style],
+.project-disclosure[data-ending-style] {
+  height: 0;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .project-disclosure {
+    transition:
+      height 180ms ease-out,
+      opacity 140ms ease-out;
+  }
+}

@@ -481,3 +481,9 @@ Workspace project rows have no persistent selection background or disclosure che
 icon/name is still a keyboard-accessible CollapsibleTrigger with aria-expanded. Only the active
 conversation receives persistent selection styling. Expanded project/Recents conversations omit
 the leading chat icon, keeping indented text labels; compact conversation shortcuts retain icons.
+
+Project disclosure animation is scoped to .project-disclosure rather than changing every shared
+Collapsible. Base UI supplies measured --collapsible-panel-height and starting/ending attributes,
+and retains closing content until transitions finish. Height transitions for 180ms and opacity for
+140ms; spacing belongs to an inner wrapper so closed height reaches zero. The settled open panel
+returns to auto height for async list updates. Reduced-motion users receive immediate disclosure.
