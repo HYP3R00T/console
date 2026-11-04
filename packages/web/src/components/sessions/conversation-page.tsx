@@ -17,7 +17,7 @@ export function ConversationPage() {
   if (!state.connected)
     return (
       <p className="text-sm text-muted-foreground">
-        Connect this machine from the first column.
+        Connect this machine from Manage devices.
       </p>
     );
   if (!project)

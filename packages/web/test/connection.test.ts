@@ -34,7 +34,11 @@ test("a URL-only connection validates the protocol without sending credentials",
     "fetch",
     async (url: string, options: RequestInit) => {
       requests.push({ url, options });
-      return Response.json({ product: "console", apiVersion: 1 });
+      return Response.json({
+        product: "console",
+        apiVersion: 1,
+        backendId: "11111111-1111-4111-8111-111111111111",
+      });
     },
   );
   const result = await checkConnection(

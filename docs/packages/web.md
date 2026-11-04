@@ -4,26 +4,26 @@ A Next.js/React client at `http://127.0.0.1:3001/` with a full-width shadcn Base
 
 ## Routes and workflow
 
-- `/`: cross-device overview showing saved devices, current connection state and Add device.
+- `/`: cross-device overview showing saved devices, independent connection states and summary counts.
 - `/devices/[deviceId]`: selected device workspace.
 - `/devices/[deviceId]/settings`: redirects to provider settings.
 - `/devices/[deviceId]/settings/providers`: provider sign-in/enable/remove, model metadata and favorites.
 - `/devices/[deviceId]/conversations/[sessionId]`: standalone Durable conversation.
-- `/settings`: redirects to saved devices.
-- `/settings/connections`: browser-local bookmarks, search, open, forget and Add device.
-- `/settings/connections/new`: name and local URL form; opens the saved device without connecting.
+- `/settings`: redirects to Appearance.
+- `/devices`: browser-local bookmarks, search, connect/disconnect, edit, forget and Add device.
+- `/devices/new`: name and local URL form; returns to Manage devices without connecting.
+- `/settings/connections` and `/settings/connections/new`: redirect to the new device routes.
 - `/settings/appearance`: System, Light and Dark theme selection.
 
 Two navigation columns separate scope. The client column animates between 256px expanded and 56px collapsed over 200ms,
 respecting reduced motion and clipping overflow.
-It lists all devices and keeps Home, Add device and Client preferences accessible. Each expanded
-device row selects the workspace and independently expands/collapses its metadata vertically: URL,
-connection state, last successful check and Connect/Disconnect/Cancel. Row and details share one
-borderless card background; selected cards are shaded. Compact device icons navigate.
-Selecting a device never connects automatically.
+It lists all devices and keeps Home, Manage devices and Client preferences accessible. Device rows
+show initials/name and status squares; clicking navigates only, with no inline metadata expansion.
+Manage devices owns connection actions and editing. Home shows saved/connected/error counts.
+Selecting a device never connects it or disconnects another machine.
 
 The adjacent backend panel shows its registered project list and standalone conversations and Machine
-settings. Selecting Preferences instead places saved-device and Appearance categories in the second column.
+settings. Selecting Preferences instead places the Appearance category in the second column.
 Projects are directory registrations with Durable sessions. Uptime and
 connected-client metrics are unavailable and are not simulated.
 
@@ -45,9 +45,9 @@ conversation backgrounds are separate. Remaining borders default to dashed strok
 The right pane is route content today; split conversations and file/code/Markdown views remain future work.
 
 Device names and URLs are stored in this browser, not the backend. Reload preserves bookmarks
-and appearance but clears active selection/connection. Navigation preserves a connection.
+and appearance and rechecks every remembered successful connection. Navigation preserves all connections.
 A connected browser checks every five seconds; checks time out after five seconds. Disconnect
-or forgetting the active device aborts requests without stopping the backend. No token or API
+or forgetting a device aborts requests without stopping the backend. No token or API
 cookie is used; only loopback URLs are accepted. Corrupt bookmark storage is not overwritten.
 
 ## UI foundation
@@ -71,12 +71,12 @@ Next.js provides native output. Do not start, stop or restart the owner's develo
 
 Client tests cover connection policy and bookmark validation. Types/build check integration.
 Manual browser checks cover saved-device navigation/search/connect, reload persistence, pointer/keyboard resizing,
-independent column collapse, route-dependent context visibility, initially collapsed context entry, inline device disclosures, Home overview, width restoration, project registration/navigation, client/device scope switching, category navigation, theme controls and mobile navigation. There is no automated browser suite or cross-tab merge protocol.
+independent column collapse, route-dependent context visibility, initially collapsed context entry, navigation-only device rows, Manage devices, Home overview, width restoration, project registration/navigation, client/device scope switching, category navigation, theme controls and mobile navigation. There is no automated browser suite or cross-tab merge protocol.
 See [README](../../README.md#checks) for shared checks.
 
 ## AI provider settings
 
-Expand the first column and a device disclosure to connect/disconnect. Machine settings switches
+Use Manage devices to connect/disconnect each machine independently. Machine settings switches
 second-column content from the project tree to Providers/Projects categories; Back to workspace restores projects.
 The settings route opens Providers directly. Device identity/URL and provider-count shortcuts are
 not duplicated in the second column.
@@ -118,7 +118,7 @@ chevron expands the panel. The footer uses the label Machine settings.
 
 ## Register a project
 
-Connect a machine using its first-column disclosure. Use Add project beside Projects (or the plus
+Connect a machine using Manage devices. Use Add project beside Projects (or the plus
 in the compact workspace rail), enter a name and an absolute existing directory path on that machine,
 and register it. Both sidebar modes show real registrations. Expand a project row for its sessions; use right-click → Edit for name/icon/color, an inline path/status dot, metadata refresh and Git inspection. Archive asks for confirmation and preserves all files and chat history. Restore from Machine settings → Projects → Archive. Missing directories are retained
 as unavailable. Reload rechecks the remembered device before displaying it as connected.

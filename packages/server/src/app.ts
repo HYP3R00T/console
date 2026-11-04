@@ -22,7 +22,11 @@ export function createApp(
     ajv: { customOptions: { removeAdditional: false } },
     ...options,
   });
-  configureHttpConnection(app, connectionPolicy);
+  configureHttpConnection(
+    app,
+    connectionPolicy,
+    providers?.store.installationId(),
+  );
   if (providers) {
     registerProviderRoutes(app, providers);
     app.addHook("onClose", () => providers.close());

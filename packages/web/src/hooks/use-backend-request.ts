@@ -5,7 +5,8 @@ import { useConnection } from "@/components/connection-provider";
 export { BackendRequestError } from "@/lib/backend/client";
 
 export function useBackendRequest() {
-  const { origin, client } = useConnection();
+  const { client } = useConnection();
+  const origin = client?.origin;
   const latest = useRef(client);
   latest.current = client;
   const request = useCallback(

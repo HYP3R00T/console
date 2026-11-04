@@ -10,7 +10,11 @@ test("the local connector probes once and keeps API requests scoped with structu
     "fetch",
     async (url: string, init: RequestInit) => {
       requests.push({ url, init });
-      return Response.json({ product: "console", apiVersion: 1 });
+      return Response.json({
+        product: "console",
+        apiVersion: 1,
+        backendId: "11111111-1111-4111-8111-111111111111",
+      });
     },
   );
   const client = await localHttpConnector.open(
@@ -55,7 +59,11 @@ test("the local connector probes once and keeps API requests scoped with structu
 
 test("closing a client cancels in-flight HTTP, closes streams and suppresses late callbacks", async (t) => {
   t.mock.method(globalThis, "fetch", async () =>
-    Response.json({ product: "console", apiVersion: 1 }),
+    Response.json({
+      product: "console",
+      apiVersion: 1,
+      backendId: "11111111-1111-4111-8111-111111111111",
+    }),
   );
   class Events extends EventTarget {
     static instances: Events[] = [];
@@ -141,6 +149,12 @@ test("a cancelled connector never publishes a client after a late handshake", as
     controller.signal,
   );
   controller.abort(new Error("replaced"));
-  complete(Response.json({ product: "console", apiVersion: 1 }));
+  complete(
+    Response.json({
+      product: "console",
+      apiVersion: 1,
+      backendId: "11111111-1111-4111-8111-111111111111",
+    }),
+  );
   await assert.rejects(opening, /replaced/);
 });

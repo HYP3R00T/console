@@ -1,4 +1,4 @@
-import { AddConnection } from "@/components/settings/add-connection";
+import { redirect } from "next/navigation";
 export default function NewConnection() {
-  return <AddConnection />;
+  redirect("/devices/new");
 }

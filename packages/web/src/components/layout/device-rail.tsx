@@ -1,19 +1,18 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Home, Plus, Settings2 } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Home,
+  Monitor,
+  Settings2,
+} from "lucide-react";
 import Link from "next/link";
-import { useParams, usePathname, useRouter } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { useState } from "react";
-import { useConnection } from "@/components/connection-provider";
 import { useDevices } from "@/components/devices/device-provider";
 import { useDeviceStatus } from "@/components/devices/use-device-status";
 import { SidebarAction } from "@/components/layout/sidebar-action";
-import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import {
   Sheet,
   SheetContent,
@@ -26,11 +25,9 @@ import { cn } from "@/lib/utils";
 export function DeviceRail() {
   const [expanded, setExpanded] = useState(false);
   const registry = useDevices();
-  const connection = useConnection();
   const deviceStatus = useDeviceStatus();
   const params = useParams<{ deviceId?: string }>();
   const pathname = usePathname();
-  const router = useRouter();
   const { setOpenMobile, isMobile } = useSidebar();
   function navigate() {
     setOpenMobile(false);
@@ -114,7 +111,7 @@ export function DeviceRail() {
             );
             const deviceLink = (
               <SidebarAction
-                compact
+                compact={!full}
                 nativeButton={false}
                 render={
                   <Link
@@ -130,88 +127,24 @@ export function DeviceRail() {
                 {deviceContents}
               </SidebarAction>
             );
-            if (!full) return <div key={device.id}>{deviceLink}</div>;
-            return (
-              <Collapsible
-                key={device.id}
-                className={cn("device-card", selected && "bg-sidebar-accent")}
-              >
-                <CollapsibleTrigger
-                  render={
-                    <SidebarAction className="navigation-row group relative min-w-0" />
-                  }
-                  aria-label={`Details for ${device.name}, ${status}`}
-                  aria-current={selected ? "page" : undefined}
-                  onClick={() => {
-                    if (!selected)
-                      router.push(`/devices/${encodeURIComponent(device.id)}`);
-                  }}
-                >
-                  {deviceContents}
-                  <ChevronRight className="size-4 transition-transform group-aria-expanded:rotate-90" />
-                </CollapsibleTrigger>
-                <CollapsibleContent className="device-details">
-                  <div className="space-y-3 px-3 pb-3 pt-1 text-xs">
-                    <p className="break-all font-mono text-muted-foreground">
-                      {device.url}
-                    </p>
-                    <p>{status}</p>
-                    {status === "Connected" && connection.checkedAt && (
-                      <p className="text-muted-foreground">
-                        Last checked{" "}
-                        {new Date(connection.checkedAt).toLocaleTimeString()}
-                      </p>
-                    )}
-                    {status === "Connection failed" && (
-                      <p role="alert" className="break-words text-destructive">
-                        {connection.error}
-                      </p>
-                    )}
-                    {status !== "Connected" && status !== "Connecting" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => registry.select(device)}
-                      >
-                        Connect
-                      </Button>
-                    )}
-                    {status === "Connected" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={registry.disconnect}
-                      >
-                        Disconnect
-                      </Button>
-                    )}
-                    {status === "Connecting" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={registry.disconnect}
-                      >
-                        Cancel connection
-                      </Button>
-                    )}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            );
+            return <div key={device.id}>{deviceLink}</div>;
           })}
         </nav>
         <div className="flex w-full flex-col gap-2 px-2">
           <SidebarAction
             compact={!full}
             nativeButton={false}
-            render={
-              <Link href="/settings/connections/new" onClick={navigate} />
+            render={<Link href="/devices" onClick={navigate} />}
+            aria-label="Manage devices"
+            title="Manage devices"
+            className={
+              pathname === "/devices" || pathname === "/devices/new"
+                ? "bg-sidebar-accent"
+                : undefined
             }
-            aria-label="Add device"
-            title="Add device"
           >
-            <Plus />
-            {full && <span>Add device</span>}
+            <Monitor />
+            {full && <span>Manage devices</span>}
           </SidebarAction>
           <SidebarAction
             compact={!full}

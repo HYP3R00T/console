@@ -26,11 +26,11 @@ Browser → selected loopback backend → GET /v1/connection
 | `packages/web/src/app/layout.tsx` | Shared navigation and connection provider. |
 | `packages/web/src/app/globals.css` | Preset tokens and Tailwind integration; zero radius and Geist typography. |
 
-The connection provider holds live status in memory. DeviceProvider remembers the last explicitly selected connection by bookmark ID and probes it on reload. Explicit
-Connect validates the URL and checks the API. Each successful check schedules another after five
-seconds; checks time out after five seconds. Disconnect, replacement and unmount abort obsolete
-requests so they cannot restore an old connection. Failure stops monitoring; reconnect is explicit.
-Disconnect, Cancel and Forget clear the remembered choice.
+ConnectionProvider owns a ConnectionManager with independent lifetimes keyed by saved device ID.
+DeviceProvider remembers successful connections by bookmark ID and rechecks all of them on reload.
+Each connected client probes every five seconds with a five-second request timeout. Disconnect,
+replacement, failure and unmount cancel only that client's requests/streams. Failed monitoring stops
+until explicit reconnect. Route selection chooses the feature client without changing other lifetimes.
 
 ## Connection boundary
 
@@ -38,7 +38,7 @@ The client accepts HTTP or HTTPS origins on `localhost`, `127.0.0.1` and `[::1]`
 needed. Paths, query strings, fragments and embedded credentials are rejected. The default server
 listens on IPv4 loopback; an IPv6 URL works only if the chosen backend actually listens there.
 Fetch omits cookies, disables caching and refuses redirects. The response identifies the Console
-protocol, not a cryptographically authenticated server identity.
+protocol and persistent backend installation ID, not a cryptographically authenticated identity.
 
 Fastify permits only `http://127.0.0.1:3001` and `http://localhost:3001` as browser origins.
 Requests with other Origin headers are rejected; nonbrowser clients without Origin remain allowed.
@@ -52,8 +52,7 @@ the backend on source edits; Next.js owns web hot reload. No custom launcher is 
 ## Frontend shell and saved devices
 
 `AppShell` separates primary client navigation from a route-dependent context column and content.
-`DeviceRail` owns the primary column: 256px expanded, 56px compact, with inline shadcn Collapsible
-metadata. Its width animates over 200ms with overflow clipped and reduced motion respected;
+`DeviceRail` owns the primary column: 256px expanded, 56px compact, with navigation-only device rows. Its width animates over 200ms with overflow clipped and reduced motion respected;
 the toggle stays anchored. Home has no context column. Each device and Preferences is a distinct context; entering
 one starts with the 56px compact context rail. Navigation within the same context preserves its state.
 
@@ -76,19 +75,18 @@ Both chevron toggles retain their top-left anchor. The content pane has no shell
 keeps compact rails only when relevant and uses shadcn sheets for expanded navigation; switching
 contexts closes the mobile context sheet. `SidebarAction` composes ghost Buttons with 16px icons.
 
-Each full-width device row is an independent shadcn Collapsible trigger: clicking selects the
-workspace and toggles that device's metadata, with a 200ms height transition (reduced motion skips it).
-Compact device icons remain navigation links. Metadata shows the stored URL,
-client connection state and last successful check, with Connect/Disconnect/Cancel as appropriate.
-The card calls the existing DeviceProvider/ConnectionProvider lifecycle; it adds no new backend API. No
-uptime or connected-client metric is available. Machine settings remain in backend context navigation.
-`useDeviceStatus` keeps rail and Home status labels consistent.
+Device rows show initials/name and status only. Clicking navigates without disclosure or connection
+changes. Manage devices (`/devices`) owns Connect/Disconnect/Cancel, Edit, Forget, URL, checked time
+and errors. Editing clears the bookmark's recorded backend identity and disconnects that client;
+reconnecting verifies and accepts the new identity. Home shows only counts and workspace links.
+Neither Home nor Manage devices has a backend context panel. Machine settings remain in the
+backend context panel. `useDeviceStatus` shares per-bookmark labels across navigation and Home.
 
 Navigation surfaces use client/context tokens, with content retaining the base background. The
 client surface is lightest in dark mode; context is intermediate and content darkest. Column divider
 borders and the visible resize line are removed while the expanded resize hit target remains active.
-Selected device cards use a shared row/details background without an outline or metadata border.
-Disclosure state is not selection: tree/device triggers override the primitive's expanded background.
+Selected device rows use a shaded background without an outline.
+Disclosure state is not selection: tree triggers override the primitive's expanded background.
 
 Standalone conversation previews use nested lists with dashed elbow connectors, including main conversations,
 subagents and forks. The final sibling's vertical connector ends at its row center, while parent
@@ -96,26 +94,21 @@ branches continue only to siblings that actually exist. Conversation selection u
 and aria-current. Remaining borders default to dashed strokes; focus rings and form-control focus colors retain their
 accessibility styling. These are presentation rules, not new backend domain entities.
 
-The rail lists all saved devices with initials, accessible names and status indicators. Green means
-that device is the active connection, amber means connecting, red means the latest attempted device
-failed, and gray means not connected in this client. These are not independent fleet health checks: only one backend
-connection is supported. Route selection determines the viewed device independently of connection state.
+The rail lists all saved devices with initials, accessible names and status squares: green connected,
+amber connecting, red connection failed, gray disconnected. These describe independent client
+connections, not fleet uptime. The primary column selects Home, a machine, Manage devices or
+Client preferences. Preferences currently contains Appearance only. Machine settings replaces the
+project tree with Providers/Projects and Back to workspace; provider credentials remain backend-owned.
 
-The primary column selects Home, a device or Preferences. The adjacent panel shows either that
-device's projects/Machine settings or Preferences categories (Appearance and saved bookmarks).
-First-column device disclosures own connect/disconnect. Machine settings replaces the project tree
-with Providers and Projects settings categories and Back to workspace; it owns AI provider configuration and the default projects folder. Provider
-credentials and favorite models belong to that backend, not browser appearance.
-
-- `/`: cross-device overview of saved devices and the current connection state.
+- `/`: saved/connected/error counts and device workspace links.
+- `/devices`: device connection management.
+- `/devices/new`: save a bookmark, then return to Manage devices.
 - `/devices/[deviceId]`: selected device workspace.
-- `/devices/[deviceId]/settings`: redirects to the Providers category.
-- `/devices/[deviceId]/settings/providers`: provider sign-in, enable/remove controls, models and favorites.
-- `/devices/[deviceId]/preview/[conversationId]`: clearly marked frontend examples.
-- `/settings`: redirects to `/settings/connections`.
-- `/settings/connections`: search/open/forget browser-local bookmarks and Add device.
-- `/settings/connections/new`: save a named URL, then open its workspace without connecting.
-- `/settings/appearance`: System/Light/Dark theme selection.
+- `/devices/[deviceId]/settings`: redirects to Providers.
+- `/devices/[deviceId]/settings/providers`: provider authentication, models and favorites.
+- `/settings`: redirects to `/settings/appearance`.
+- `/settings/connections` and `/settings/connections/new`: redirect to the new management routes.
+- `/settings/appearance`: client-owned System/Light/Dark theme.
 
 The main content pane currently displays route content. A multi-pane workspace for conversations,
 files and previews is a future increment; no window/docking framework is installed yet.
@@ -128,8 +121,8 @@ owned by that project. Standalone history and workspace files persist across res
 Connection implementation is isolated behind `BackendConnector.open` and `BackendClient` in
 `packages/web/src/lib/backend/`. The local HTTP connector validates the loopback endpoint,
 performs the handshake and owns fetch/EventSource creation. Its client supplies requests,
-subscriptions, health probes and close. ConnectionProvider owns one client and closes it on
-replacement, disconnect, failed health checks or unmount. Client close aborts HTTP requests and
+subscriptions, health probes and close. ConnectionManager owns one client per bookmark and closes only that client on
+replacement, disconnect or failed health checks, and all clients on unmount. Client close aborts HTTP requests and
 closes subscriptions immediately, including when the next client uses the same URL.
 Feature hooks consume the client without constructing network connections.
 
@@ -145,11 +138,22 @@ before feature handlers. CORS preflights complete before authorization. Deployme
 chooses this policy and the listener address. Domain services and route handlers retain their
 current contracts. The production entrypoint selects the existing local unauthenticated policy.
 
-`DeviceProvider` sits inside `ConnectionProvider`, above route content. It persists device
-IDs, display names and normalized loopback URLs in `localStorage` (`console.devices.v1`). Its
-`select` operation is called by explicit Connect, not rail navigation. Adding only bookmarks;
-forgetting the selected/connected device aborts its connection. Corrupt stored lists are reported
-and not overwritten. Cross-tab concurrent editing is not coordinated in this increment.
+DeviceProvider sits inside ConnectionProvider. Browser storage `console.devices.v1` retains IDs,
+display names, normalized loopback URLs and the last accepted backendId. `console.connected-devices.v2`
+retains successful connection IDs; the previous single-ID key is read on migration. Failed new
+connections are not remembered. Disconnect/Cancel/Edit/Forget remove only their ID. Corrupt lists
+are reported without overwriting them. Cross-tab editing is not coordinated. `useBackendRequest`
+resolves the route device's client; provider/project snapshots are guarded by actual client identity
+to reject late results after navigation or reconnect. The manager rejects simultaneous connected
+aliases with the same backendId and fails a health check if the endpoint's identity changes.
+
+The backend handshake uses the existing private provider-store installation UUID. It survives process
+restart but is not a host hardware identifier or authentication token. The production `main.ts` claims
+`storage/instance-lock.ts` before opening services: an exclusive SQLite transaction in the fixed user
+data directory. It remains held through service shutdown, releases on process death and rejects a
+second entrypoint for the same OS user. The session-directory ownership lock remains in place.
+This is not machine-global coordination across users, containers or separate data directories.
+Programmatic test app instances remain available with isolated storage and ports.
 
 `components.json` records `base-lyra`, Zinc and Lucide. The shared preset code is `bddBUJXM`;
 Geist comes from `next/font`, and the theme radius is overridden to zero. `next-themes` owns

@@ -1,7 +1,28 @@
 import { backendOrigin } from "./connection.ts";
 
-export type Device = { id: string; name: string; url: string };
+export type Device = {
+  id: string;
+  name: string;
+  url: string;
+  backendId?: string;
+};
 export const devicesStorageKey = "console.devices.v1";
+export const connectedDevicesKey = "console.connected-devices.v2";
+export const legacyConnectedDeviceKey = "console.connected-device.v1";
+
+export function parseConnectedDevices(
+  value: string | null,
+  legacy: string | null,
+  devices: Device[],
+): string[] {
+  const ids: unknown =
+    value === null ? (legacy ? [legacy] : []) : JSON.parse(value);
+  if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string"))
+    throw new Error("Invalid remembered connections");
+  return [
+    ...new Set(ids.filter((id) => devices.some((device) => device.id === id))),
+  ];
+}
 
 export function parseDevices(value: string | null): Device[] {
   if (!value) return [];
@@ -27,7 +48,18 @@ export function parseDevices(value: string | null): Device[] {
       throw new Error("Duplicate saved device");
     ids.add(item.id);
     urls.add(url);
-    devices.push({ id: item.id, name: item.name.trim(), url });
+    if (
+      "backendId" in item &&
+      (typeof item.backendId !== "string" ||
+        !/^[0-9a-f-]{36}$/i.test(item.backendId))
+    )
+      throw new Error("Invalid backend identity");
+    devices.push({
+      id: item.id,
+      name: item.name.trim(),
+      url,
+      ...("backendId" in item ? { backendId: item.backendId as string } : {}),
+    });
   }
   return devices;
 }

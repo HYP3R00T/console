@@ -1,6 +1,7 @@
 export type BackendConnection = {
   origin: string;
   checkedAt: number;
+  backendId: string;
 };
 
 export function backendOrigin(value: string): string {
@@ -64,9 +65,12 @@ export async function checkConnection(
     !("product" in data) ||
     data.product !== "console" ||
     !("apiVersion" in data) ||
-    data.apiVersion !== 1
+    data.apiVersion !== 1 ||
+    !("backendId" in data) ||
+    typeof data.backendId !== "string" ||
+    !/^[0-9a-f-]{36}$/i.test(data.backendId)
   ) {
     throw new Error("This backend does not support Console API version 1.");
   }
-  return { origin, checkedAt: Date.now() };
+  return { origin, checkedAt: Date.now(), backendId: data.backendId };
 }

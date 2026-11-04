@@ -1,34 +1,34 @@
 # Requirements
 
-The current increment connects a local website to an explicitly selected local backend, configures
+The current increment connects a local website to multiple explicitly connected local backends, configures
 its AI providers, sets up projects, and runs conversations with read-only project inspection through project-owned Durable sessions.
 
 - Fastify listens on `127.0.0.1:3000`; Next.js listens on `127.0.0.1:3001`.
 - On first use the website starts disconnected, with a full-width layout and two navigation columns.
-- The client column animates between 256px expanded and a 56px rail over 200ms; reduced motion skips the transition. It lists devices, Home, Add device and Client preferences.
+- The client column animates between 256px expanded and a 56px rail over 200ms; reduced motion skips the transition. It lists devices, Home, Manage devices and Client preferences.
 - Selecting a device changes the viewed workspace without connecting it automatically.
 - The contextual second column is absent on Home; devices show registered projects, standalone conversations and Machine settings, while Preferences shows its categories.
 - Projects, sessions and project conversations are real backend records; each session opens one internal Durable Harness. Forks and subagents are deferred.
-- The first column chooses Home, a device or Preferences. Appearance and saved-device category navigation lives in the second column; device disclosures in the first column own backend connection actions.
-- `/settings/connections/new` saves a backend name and loopback URL, then opens its workspace.
+- The first column chooses Home, a device or Preferences. Appearance category navigation lives in the second column; Manage devices owns all backend connection actions.
+- `/devices/new` saves a backend name and loopback URL, then returns to Manage devices without connecting.
 - Device names and URLs persist only in this browser; saving a device does not connect it.
 - The shadcn Base UI Lyra/Zinc preset uses Geist, Lucide icons and zero corner radii.
 - Column separation uses surface tones rather than divider borders: the dark theme runs from lightest client navigation to intermediate context to darkest content, with matching light-theme surfaces.
-- Device selection shades the whole card without an outline; expansion alone does not change row backgrounds. Tree branches and remaining borders default to dashed strokes, with tree connectors ending at the final row.
+- Device selection shades its navigation row without an outline; device rows do not expand. Tree branches and remaining borders default to dashed strokes, with tree connectors ending at the final row.
 - Appearance supports system, light and dark; mobile context navigation uses a sheet.
 - Context visibility animates its occupied width to/from zero over 200ms without translating content; reduced-motion preferences disable the animation.
 - The desktop context panel resizes between 208–384px, collapses to a 56px icon rail and restores its last expanded width. Each newly entered device/Preferences context starts collapsed.
 - Chevron toggles stay anchored at the same top-left position. Toggling the first column preserves the second column's open/collapsed state.
-- Each expanded device row independently toggles its metadata vertically using shadcn Collapsible and selects that device. The row and details form one borderless shaded card. Details include URL, connection state, last successful check and explicit Connect/Disconnect/Cancel actions.
+- Device rows navigate only, with name/initials and a connection-status square. Manage devices (`/devices`) lists URLs, status, last check, errors and per-device Connect/Disconnect/Cancel, Edit and Forget controls.
 - The compact context rail has no active resize hit area or keyboard resize control. Resize is available only after explicit expansion, constrained to 208–384px; collapsing uses the toggle.
-- Home provides a cross-device overview using saved bookmarks and the current client connection state.
+- Home is a dashboard with saved/connected/error counts and workspace links. Manage devices is a separate primary navigation destination; neither shows the backend context sidebar.
 - Uptime, connected-client counts, file viewers and split conversations are not implemented.
 - Each preferences page owns its content pane. No device-selector popup is used.
 - The content pane has no navigation toolbar; it is reserved for route content and future workspace views.
 - Connect checks the backend's connection response before showing Connected.
 - Connected browsers recheck every five seconds. A failed check clears the connection and shows an error.
 - Disconnect and Cancel abort pending checks without stopping or modifying the backend.
-- Reload rechecks the last explicitly connected device. Disconnect, Cancel and Forget clear that choice. Device bookmarks and appearance use browser storage.
+- Reload rechecks every remembered successful connection independently. Disconnect, Cancel, Edit and Forget clear only that device choice. Device bookmarks and appearance use browser storage.
 - Both apps retain separate startup commands and native terminal output.
 
 Authentication is deliberately deferred. The browser accepts only loopback backend URLs;
@@ -41,6 +41,15 @@ for both commands and subscriptions. Replacement/disconnect cancels that client'
 streams. The server applies connection policy before feature handlers. Future remote endpoints,
 authentication and tunnels belong at this boundary; the current implementation supplies local HTTP.
 Existing data from earlier experiments remains untouched and unused.
+
+Multiple clients can remain connected simultaneously. Switching workspaces changes the feature
+client but does not disconnect other machines. Each client has independent monitoring, cancellation
+and stream cleanup. The handshake returns a persistent backend installation ID; duplicate connected
+aliases and unexpected identity changes are rejected. This is identity consistency, not authentication.
+Editing a connection clears its pinned identity and disconnects it; explicit reconnect accepts the new
+identity. The production entrypoint claims a startup lock in the fixed Console user directory before
+opening services. It enforces one instance for that OS user, not all host users/namespaces. The fixed
+listener port is also exclusive. Loopback URL and local-origin policies remain unchanged.
 
 ## AI providers
 

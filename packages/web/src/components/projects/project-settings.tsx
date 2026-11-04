@@ -50,7 +50,7 @@ export function ProjectSettings() {
       </header>
       {!connected ? (
         <p className="text-sm text-muted-foreground">
-          Connect this machine from the first column.
+          Connect this machine from Manage devices.
         </p>
       ) : (
         <form onSubmit={save} className="max-w-2xl space-y-5">

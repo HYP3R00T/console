@@ -5,7 +5,7 @@ A Node.js/TypeScript Fastify application, listening on `127.0.0.1:3000`.
 | Method | Path | Response |
 | --- | --- | --- |
 | GET | `/health` | HTTP 200, `{"status":"ok"}`; HTTP liveness only. |
-| GET | `/v1/connection` | HTTP 200, `{"product":"console","apiVersion":1}`; uncached protocol check. |
+| GET | `/v1/connection` | HTTP 200, `{"product":"console","apiVersion":1,"backendId":"<installation UUID>"}`; uncached protocol check. |
 
 The production/dev entrypoint also registers the provider endpoints below. API endpoints are unauthenticated in this local development
 increment. Browser origins are restricted to `http://127.0.0.1:3001` and `http://localhost:3001`
@@ -152,3 +152,14 @@ limits output/work and returns safe failure codes; writes, subprocesses and netw
 See architecture for limits, replay semantics and the limitations of application path checks.
 `test/execution.test.ts` and `test/project-inspection.test.ts` verify real-file evidence, failures,
 bounds, session reopening and abrupt-crash recovery with committed tool results using a fake model.
+
+## Backend identity and startup ownership
+
+The handshake exposes the existing persisted provider-store installation UUID as backendId.
+Clients pin that value after connecting and reject duplicate connected aliases or unexpected changes.
+This is not authentication or a hardware-machine identifier. The production entrypoint acquires
+an exclusive SQLite instance lock in the fixed Console OS-user directory before opening services,
+releases it after service shutdown, and relies on OS lock release after a crash. A second entrypoint
+for that user fails with an already-running error; the fixed port remains exclusive too. Different
+users/namespaces/data directories are not covered by a host-global lock. Tests use isolated app
+factories, ports and storage without starting extra production servers.

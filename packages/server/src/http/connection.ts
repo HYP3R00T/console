@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import cors from "@fastify/cors";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
@@ -18,6 +19,7 @@ export const localConnectionPolicy: HttpConnectionPolicy = {
 export function configureHttpConnection(
   app: FastifyInstance,
   policy: HttpConnectionPolicy,
+  backendId: string = randomUUID(),
 ) {
   app.addHook("onRequest", async (request, reply) => {
     const origin = request.headers.origin;
@@ -34,6 +36,6 @@ export function configureHttpConnection(
   app.get("/health", async () => ({ status: "ok" }));
   app.get("/v1/connection", async (_request, reply) => {
     reply.header("Cache-Control", "no-store");
-    return { product: "console", apiVersion: 1 };
+    return { product: "console", apiVersion: 1, backendId };
   });
 }
