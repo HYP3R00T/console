@@ -32,14 +32,14 @@ export function ProjectSessions({
     );
   const grouped = sessions.length > 1;
   return (
-    <div className="space-y-2 pl-4">
+    <div className="space-y-2 pl-6">
       {sessions.map(({ session, conversations, more }) => (
         <section
           key={session.sessionId}
           aria-label={
             grouped ? `Session ${session.number}` : "Project conversations"
           }
-          className={grouped ? "bg-muted/20" : undefined}
+          className={grouped ? "rounded-lg bg-muted/20 p-1" : undefined}
         >
           {grouped && (
             <NavigationMenu
@@ -60,7 +60,7 @@ export function ProjectSessions({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-8"
+                        className="size-6 [&_svg]:size-3.5"
                         disabled={busy}
                         aria-label={`New conversation in Session ${session.number}`}
                         title="New conversation"
@@ -72,7 +72,7 @@ export function ProjectSessions({
                     </>
                   }
                 >
-                  <h4 className="flex h-9 items-center gap-2 px-2 text-xs font-medium text-muted-foreground">
+                  <h4 className="flex h-7 items-center gap-2 px-2 text-xs font-medium text-muted-foreground">
                     <Layers className="size-4" />
                     Session {session.number}
                   </h4>
@@ -80,7 +80,7 @@ export function ProjectSessions({
               )}
             </NavigationMenu>
           )}
-          <div className={grouped ? "pl-3" : undefined}>
+          <div className={grouped ? "pl-6" : undefined}>
             {orderConversations(
               conversations,
               (conversation) =>

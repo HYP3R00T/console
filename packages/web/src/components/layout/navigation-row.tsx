@@ -14,13 +14,13 @@ export function NavigationRow({
   return (
     <div
       className={cn(
-        "navigation-row-group flex min-w-0 items-center hover:bg-sidebar-accent focus-within:bg-sidebar-accent",
+        "navigation-row-group my-px flex min-w-0 items-center rounded-md transition-colors hover:bg-sidebar-accent",
         selected && "bg-sidebar-accent",
       )}
     >
       <div className="min-w-0 flex-1">{children}</div>
       {actions && (
-        <div className="navigation-actions flex shrink-0 items-center">
+        <div className="navigation-actions flex shrink-0 items-center gap-0.5 pr-1">
           {actions}
         </div>
       )}

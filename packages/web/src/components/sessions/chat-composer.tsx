@@ -34,7 +34,7 @@ export function ChatComposer({
       : "Send message";
   return (
     <form
-      className="bg-muted/50 p-3"
+      className="rounded-xl bg-muted/50 p-3"
       onSubmit={(event) => {
         event.preventDefault();
         onSend();
