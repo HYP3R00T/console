@@ -175,6 +175,7 @@ export function registerHarnessRoutes(
         requestId: string;
         model?: { provider: string; modelId: string };
         thinkingLevel?: string;
+        whenBusy?: "steer" | "followUp";
         attachments?: AttachmentInput[];
       };
     }>(
@@ -195,6 +196,7 @@ export function registerHarnessRoutes(
               requestId: uuid,
               model,
               thinkingLevel: { type: "string", maxLength: 40 },
+              whenBusy: { enum: ["steer", "followUp"] },
               attachments: {
                 type: "array",
                 maxItems: 4,
@@ -232,10 +234,100 @@ export function registerHarnessRoutes(
                 {
                   model: req.body.model,
                   thinkingLevel: req.body.thinkingLevel,
+                  whenBusy: req.body.whenBusy,
                   attachments: req.body.attachments,
                 },
               ),
             ),
+          ),
+        ),
+    );
+    routes.post<{ Params: Scope }>(
+      `${base}/stop`,
+      {
+        schema: { params: conversationParams, body: creation },
+      },
+      (req) =>
+        service.operation(() =>
+          service.stopConversation(
+            req.params.sessionId,
+            req.params.conversationId,
+          ),
+        ),
+    );
+    routes.get<{ Params: Scope }>(
+      `${base}/queue`,
+      {
+        schema: { params: conversationParams },
+      },
+      async (req) => ({
+        items: await service.operation(() =>
+          service.queue(req.params.sessionId, req.params.conversationId),
+        ),
+      }),
+    );
+    routes.patch<{
+      Params: Scope & { submissionId: string };
+      Body: {
+        content: string;
+        whenBusy: "steer" | "followUp";
+        expectedContent: string;
+        expectedWhenBusy: "steer" | "followUp";
+      };
+    }>(
+      `${base}/queue/:submissionId`,
+      {
+        schema: {
+          params: params({
+            sessionId: uuid,
+            conversationId: recordId,
+            submissionId: recordId,
+          }),
+          body: {
+            type: "object",
+            additionalProperties: false,
+            required: [
+              "content",
+              "whenBusy",
+              "expectedContent",
+              "expectedWhenBusy",
+            ],
+            properties: {
+              content: { type: "string", maxLength: 32000 },
+              expectedContent: { type: "string", maxLength: 32000 },
+              whenBusy: { enum: ["steer", "followUp"] },
+              expectedWhenBusy: { enum: ["steer", "followUp"] },
+            },
+          },
+        },
+      },
+      (req) =>
+        service.operation(() =>
+          service.updateQueued(
+            req.params.sessionId,
+            req.params.conversationId,
+            req.params.submissionId,
+            req.body,
+          ),
+        ),
+    );
+    routes.delete<{ Params: Scope & { submissionId: string } }>(
+      `${base}/queue/:submissionId`,
+      {
+        schema: {
+          params: params({
+            sessionId: uuid,
+            conversationId: recordId,
+            submissionId: recordId,
+          }),
+        },
+      },
+      (req) =>
+        service.operation(() =>
+          service.withdrawQueued(
+            req.params.sessionId,
+            req.params.conversationId,
+            req.params.submissionId,
           ),
         ),
     );

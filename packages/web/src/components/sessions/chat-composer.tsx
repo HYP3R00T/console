@@ -1,5 +1,12 @@
 "use client";
-import { ArrowUp, ImagePlus, Paperclip, Plus } from "lucide-react";
+import {
+  ArrowUp,
+  CornerUpLeft,
+  ImagePlus,
+  Paperclip,
+  Plus,
+  Square,
+} from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { Button } from "@/components/ui/button";
@@ -21,6 +28,9 @@ export function ChatComposer({
   content,
   onChange,
   onSend,
+  onStop,
+  stopping = false,
+  imageSupported,
   sending,
   pending,
   working,
@@ -33,7 +43,10 @@ export function ChatComposer({
   onAttachmentsChange: (files: ChatAttachment[]) => void;
   content: string;
   onChange: (content: string) => void;
-  onSend: () => void;
+  onSend: (whenBusy?: "steer" | "followUp") => void;
+  onStop?: () => void;
+  stopping?: boolean;
+  imageSupported?: boolean;
   sending: boolean;
   pending: boolean;
   working: boolean;
@@ -48,7 +61,7 @@ export function ChatComposer({
   const unsupportedImages =
     !pending &&
     attachments.some((file) => file.mimeType.startsWith("image/")) &&
-    !models.model?.input?.includes("image");
+    !(imageSupported ?? models.model?.input?.includes("image"));
   const hasInput = !!content.trim() || attachments.length > 0;
   async function attach(files: File[]) {
     if (reading.current || sending || pending) return;
@@ -66,7 +79,7 @@ export function ChatComposer({
       setLoadingFiles(false);
     }
   }
-  const disabled = sending || pending || working || loadingFiles;
+  const disabled = sending || pending || loadingFiles;
   const label = pending
     ? "Retry message"
     : working
@@ -197,11 +210,46 @@ export function ChatComposer({
               role="status"
               className="min-w-0 truncate px-1 text-xs text-muted-foreground"
             >
-              Working · next message queues
+              Working · queued input uses the active model
             </span>
           )}
           <div className="ml-auto flex min-w-0 items-center gap-1">
             <ChatModelControl models={models} disabled={disabled} />
+            {working && onStop && (
+              <ControlTooltip label="Stop this conversation and withdraw queued messages">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Stop conversation"
+                  disabled={stopping}
+                  onClick={onStop}
+                >
+                  <Square className="size-3.5 fill-current" />
+                </Button>
+              </ControlTooltip>
+            )}
+            {working && (
+              <ControlTooltip label="Steer at the next safe boundary using the active model">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Steer conversation"
+                  disabled={
+                    sending ||
+                    pending ||
+                    loadingFiles ||
+                    unsupportedImages ||
+                    !hasInput ||
+                    stopping
+                  }
+                  onClick={() => onSend("steer")}
+                >
+                  <CornerUpLeft className="size-4" />
+                </Button>
+              </ControlTooltip>
+            )}
             <ControlTooltip label={label}>
               <Button
                 type="submit"

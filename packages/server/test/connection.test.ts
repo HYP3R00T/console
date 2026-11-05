@@ -33,6 +33,16 @@ test("the local website origins can read the connection endpoint without cookies
       headers: { origin, "access-control-request-method": "GET" },
     });
     assert.equal(preflight.statusCode, 204);
+    const editPreflight = await app.inject({
+      method: "OPTIONS",
+      url: "/v1/sessions/test/conversations/1/queue/2",
+      headers: { origin, "access-control-request-method": "PATCH" },
+    });
+    assert.equal(editPreflight.statusCode, 204);
+    assert.match(
+      String(editPreflight.headers["access-control-allow-methods"]),
+      /PATCH/,
+    );
   }
 });
 

@@ -22,6 +22,7 @@ import {
   readAttachment,
 } from "./attachments.ts";
 import { ConversationInfo, SessionInfo } from "./documents.ts";
+import { queueView } from "./queue.ts";
 import { HarnessRuntime } from "./runtime.ts";
 import {
   type HarnessRecord,
@@ -367,6 +368,7 @@ export class HarnessService {
     selection?: {
       model?: ModelRef;
       thinkingLevel?: string;
+      whenBusy?: "steer" | "followUp";
       attachments?: AttachmentInput[];
     },
   ) {
@@ -433,6 +435,7 @@ export class HarnessService {
     const submission = await conversation.submit(
       {
         type: "input",
+        whenBusy: selection?.whenBusy ?? "followUp",
         content: attached?.blocks ?? content,
         requestId,
         ...(attached
@@ -469,6 +472,7 @@ export class HarnessService {
     selection?: {
       model?: ModelRef;
       thinkingLevel?: string;
+      whenBusy?: "steer" | "followUp";
       attachments?: AttachmentInput[];
     },
   ) {
@@ -492,6 +496,98 @@ export class HarnessService {
     const file = readAttachment(entry, index);
     if (!file) throw new HarnessError(404, "Attachment not found.");
     return file;
+  }
+  async queue(sessionId: string, id: string) {
+    const { harness, conversation } = await this.conversation(sessionId, id);
+    const inbox = await harness.snapshot(InboxDoc, conversation.id, context);
+    return queueView(inbox?.items ?? []);
+  }
+  updateQueued(
+    sessionId: string,
+    id: string,
+    submissionId: string,
+    change: {
+      content: string;
+      whenBusy: "steer" | "followUp";
+      expectedContent: string;
+      expectedWhenBusy: "steer" | "followUp";
+    },
+  ) {
+    return this.serial(sessionId, async () => {
+      const { record, harness, conversation } = await this.conversation(
+        sessionId,
+        id,
+      );
+      if (record.projectId !== standaloneOwner)
+        this.projects.assertWritable(record.projectId);
+      await harness.commit(async (tx) => {
+        const inbox = await tx.doc(InboxDoc, conversation.id);
+        const item = inbox.items.find(
+          (item) => item.id === Number(submissionId),
+        );
+        if (!item || item.mode === "write")
+          throw new HarnessError(
+            409,
+            "This input has already started or left the queue.",
+          );
+        const before = queueView([item])[0];
+        if (
+          before.content !== change.expectedContent ||
+          before.whenBusy !== change.expectedWhenBusy
+        )
+          throw new HarnessError(
+            409,
+            "This queued input changed. Refresh before editing it.",
+          );
+        if (!change.content.trim() && !before.attachments.length)
+          throw new HarnessError(400, "Write a message or keep an attachment.");
+        if (typeof item.content === "string") item.content = change.content;
+        else {
+          const first = item.content[0];
+          if (first?.type !== "text")
+            throw new HarnessError(409, "This input cannot be edited here.");
+          first.text = change.content;
+        }
+        if (
+          item.entry?.kind === "console.input" &&
+          item.entry.data &&
+          typeof item.entry.data === "object" &&
+          !Array.isArray(item.entry.data)
+        )
+          item.entry.data.text = change.content;
+        item.mode = change.whenBusy;
+      }, context);
+      return { updated: true };
+    });
+  }
+  withdrawQueued(sessionId: string, id: string, submissionId: string) {
+    return this.serial(sessionId, async () => {
+      const { record, harness, conversation } = await this.conversation(
+        sessionId,
+        id,
+      );
+      if (record.projectId !== standaloneOwner)
+        this.projects.assertWritable(record.projectId);
+      const outcome = await harness.abortSubmission(
+        Number(submissionId) as SubmissionId,
+        context,
+        conversation.id,
+      );
+      if (outcome === "not_found")
+        throw new HarnessError(404, "Queued input not found.");
+      if (outcome === "already_placed")
+        throw new HarnessError(409, "This input has already started.");
+      return { withdrawn: true };
+    });
+  }
+  stopConversation(sessionId: string, id: string) {
+    return this.serial(sessionId, async () => {
+      const { record, conversation } = await this.conversation(sessionId, id);
+      if (record.projectId !== standaloneOwner)
+        this.projects.assertWritable(record.projectId);
+      await conversation.abort(context);
+      return { stopped: true };
+    });
   }
   stop(sessionId: string) {
     return this.serial(sessionId, async () => {

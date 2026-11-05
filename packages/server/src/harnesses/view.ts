@@ -1,6 +1,10 @@
-import type { ConversationView, EntryRecord } from "@earendil-works/pi-durable";
-
+import type {
+  ConversationView,
+  EntryRecord,
+  InboxState,
+} from "@earendil-works/pi-durable";
 import { attachedInput } from "./attachments.ts";
+import { queueView } from "./queue.ts";
 
 const inspectionTools = new Set(["list_directory", "read_file", "search_text"]);
 type ChatMessage = {
@@ -110,7 +114,7 @@ export function conversationView(view: ConversationView) {
   const generation = live?.generation as
     | { message?: { content?: unknown } }
     | undefined;
-  const inbox = view.docs["pi.inbox"] as { items?: unknown[] } | undefined;
+  const inbox = view.docs["pi.inbox"] as InboxState | undefined;
   const agent = view.docs["pi.agent"];
   return {
     id: view.conversation.id,
@@ -124,6 +128,7 @@ export function conversationView(view: ConversationView) {
       )
       .map(({ name, status }) => ({ name, status })),
     queued: inbox?.items?.length ?? 0,
+    queue: queueView(inbox?.items ?? []),
     model: agent?.model,
     thinkingLevel: agent?.thinkingLevel,
   };
