@@ -4,6 +4,7 @@ import {
   startTransition,
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
 } from "react";
@@ -11,9 +12,11 @@ import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { useBackendRequest } from "@/hooks/use-backend-request";
+import type { Execution } from "./conversation-state";
+import { executionNeedsAttention } from "./execution-labels";
+import { ExecutionStatus } from "./execution-status";
 
 type Configuration = {
   revision: string;
@@ -40,11 +43,14 @@ export function ConversationInspector({
   path,
   request,
   working,
+  execution,
 }: {
   path: string;
   request: ReturnType<typeof useBackendRequest>["request"];
   working: boolean;
+  execution?: Execution;
 }) {
+  const prefix = useId();
   const [data, setData] = useState<Configuration>();
   const [instructions, setInstructions] = useState<string>();
   const [revision, setRevision] = useState<string>();
@@ -136,26 +142,46 @@ export function ConversationInspector({
     }
   }
   const disabled = working || saving;
-  if (!data && !error && !loadError) return <ConversationInspectorLoading />;
   return (
     <div className="flex h-full min-h-0 flex-col p-4">
-      <Tabs defaultValue="tools" className="min-h-0 flex-1">
-        <TabsList className="w-full">
-          <TabsTrigger value="tools">Tools</TabsTrigger>
-          <TabsTrigger value="instructions">Instructions</TabsTrigger>
-        </TabsList>
-        {(error || loadError) && (
-          <p role="alert" className="text-xs text-destructive">
-            {error || loadError}
-          </p>
-        )}
-        {working && (
-          <p role="status" className="text-xs text-muted-foreground">
-            Editable when idle
-          </p>
-        )}
-        <TabsContent value="tools" className="min-h-0">
-          <ScrollArea className="h-full">
+      {(error || loadError) && (
+        <p role="alert" className="text-xs text-destructive">
+          {error || loadError}
+        </p>
+      )}
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="pr-2">
+          {executionNeedsAttention(execution) && (
+            <section
+              aria-labelledby={`${prefix}-execution-heading`}
+              className="border-b border-border pb-4"
+            >
+              <h2
+                id={`${prefix}-execution-heading`}
+                className="mb-3 text-sm font-semibold"
+              >
+                Execution
+              </h2>
+              <ExecutionStatus execution={execution} details />
+            </section>
+          )}
+          <section
+            id={`${prefix}-tools`}
+            aria-labelledby={`${prefix}-tools-heading`}
+            className="border-b border-border pb-5 pt-4"
+          >
+            <h2
+              id={`${prefix}-tools-heading`}
+              className="text-sm font-semibold"
+            >
+              Tools
+            </h2>
+            {!data && !loadError && <ConversationInspectorLoading />}
+            {working && (
+              <p className="py-2 text-xs text-muted-foreground">
+                Editable when idle
+              </p>
+            )}
             <div className="flex items-center justify-between py-3 text-xs text-muted-foreground">
               <span>
                 {data?.toolSource === "conversation" ? "Custom" : "Default"}
@@ -218,10 +244,24 @@ export function ConversationInspector({
                 </section>
               ),
             )}
-          </ScrollArea>
-        </TabsContent>
-        <TabsContent value="instructions" className="min-h-0">
-          <ScrollArea className="h-full">
+          </section>
+          <section
+            id={`${prefix}-instructions`}
+            aria-labelledby={`${prefix}-instructions-heading`}
+            className="py-5"
+          >
+            <h2
+              id={`${prefix}-instructions-heading`}
+              className="text-sm font-semibold"
+            >
+              Instructions
+            </h2>
+            {!data && !loadError && <ConversationInspectorLoading />}
+            {working && (
+              <p className="py-2 text-xs text-muted-foreground">
+                Editable when idle
+              </p>
+            )}
             <div className="space-y-4 py-3 pr-2">
               {data?.sections.map((section) => (
                 <details key={section.key}>
@@ -282,9 +322,9 @@ export function ConversationInspector({
                 </Button>
               </div>
             </div>
-          </ScrollArea>
-        </TabsContent>
-      </Tabs>
+          </section>
+        </div>
+      </ScrollArea>
     </div>
   );
 }

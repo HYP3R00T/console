@@ -42,7 +42,7 @@ HTTP commands mutate state; SSE observes conversation updates. Route files conta
 - Projects: `src/projects/routes.ts` exposes `/v1/projects`, creation/clone, per-project metadata/Git, archive/restore and `/v1/machine/settings` for the projects root.
 - Sessions: `src/harnesses/routes.ts` exposes project session creation/listing, `/v1/standalone` and session conversation routes.
   - Conversation messages: `POST /v1/sessions/:sessionId/conversations/:conversationId/messages` admits `{content, requestId, model?, thinkingLevel?, attachments?, whenBusy?}`.
-  - Conversation observation uses the same base path with `/events` for SSE, `/history` for older entries and `/submissions` for completion state.
+  - Conversation observation uses the same base path with `/events` for SSE, `/history` for older entries and `/submissions` for completion state. Snapshots and history pages include ascending raw entry IDs and their predecessor, including entries without visible messages. `/history?before=<entryId>` returns up to 50 earlier entries to fill a particular gap; it cannot be combined with a cursor. Legacy cursor pagination remains supported.
   - `/queue` lists waiting input without original attachment bytes. `PATCH /queue/:submissionId` edits text or changes `whenBusy` between `followUp` and `steer`; `expectedContent` and `expectedWhenBusy` reject stale edits. Attachments are retained. `DELETE` withdraws an unplaced input; inputs already placed cannot be edited or withdrawn.
   - `POST` to the conversation's `/stop` interrupts its work and withdraws its queued inputs without stopping sibling conversations. Steering joins at Durable's next safe boundary, rather than interrupting an in-flight provider request.
   - `POST /archive` hides an individual conversation; busy work requires `{stop:true}`. `POST /restore` restores an archived conversation. `GET /v1/archives/conversations` lists machine-wide conversation archives. `DELETE /archive` permanently erases an already archived conversation, subject to dependency and idle checks.
@@ -60,6 +60,10 @@ The current connection policy permits the local website origins and rejects othe
 - Existing-directory registration resolves canonical paths and rejects duplicates. Paths are immutable; names/icons/colors are editable.
 - New/clone setup uses the configured projects root, rejects occupied destinations and creates missing parents only when requested. Public HTTPS clones use isolated Git configuration; private Git authentication is not implemented. Git setup is bounded and cancels on HTTP disconnect, unlike admitted conversation work.
 - All conversations receive Durable’s bundled `read`, `write`, `edit` and `bash` tools. Their host-owned environment starts in the project directory or standalone workspace. These tools have the backend OS user’s access, including paths outside that directory; tool selection is not OS confinement. Project conversations also retain the bounded, path-checked `list_directory`, `read_file` and `search_text` inspection tools. Durable storage stays outside the execution environment.
+
+## Execution visibility
+
+SSE snapshots include an allowlisted execution projection: running/idle/finishing state, generation attempt and retry/poll deadlines, active tool identities/statuses, compaction progress and stable run-failure reasons. Run failures survive reconnect/reopen through Durable’s live document. Raw provider errors, tool output/details, failure diagnostics and compaction error strings are excluded from this projection; ordinary transcript tool results retain their existing bounded display behavior.
 
 ## Limits and verification
 

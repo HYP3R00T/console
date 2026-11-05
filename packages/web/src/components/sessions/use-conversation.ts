@@ -1,78 +1,46 @@
 "use client";
 import { startTransition, useEffect, useState } from "react";
 import type { BackendClient } from "@/lib/backend/client";
-import type { MessageAttachment } from "./attachment-list";
-export type ChatMessage = {
-  id: string;
-  entryId: number;
-  role: "user" | "assistant" | "tool";
-  text: string;
-  failed: boolean;
-  attachments?: MessageAttachment[];
-  toolName?: string;
-  toolCalls?: { id: string; name: string; arguments: string }[];
-};
-export type QueuedInput = {
-  id: number;
-  content: string;
-  whenBusy: "steer" | "followUp";
-  attachments: { name: string }[];
-};
-export type ChatSnapshot = {
-  id: number;
-  messages: ChatMessage[];
-  busy: boolean;
-  partial: string;
-  activeTools?: { name: string; status: string }[];
-  queued: number;
-  queue?: QueuedInput[];
-  hasEarlier: boolean;
-  thinkingLevel?: string;
-  model?: { provider: string; modelId: string };
-};
+import {
+  ConversationFeed,
+  type ConversationFeedState,
+} from "./conversation-feed";
+
+export type {
+  ChatMessage,
+  ChatSnapshot,
+  QueuedInput,
+} from "./conversation-state";
+
 export function useConversation(
   client: BackendClient | undefined,
   path: string,
 ) {
   const key = `${client?.origin}:${path}`;
-  const [snapshot, setSnapshot] = useState<{
-    key: string;
-    client: BackendClient;
-    data?: ChatSnapshot;
-    status: string;
-  }>();
+  const [snapshot, setSnapshot] = useState<
+    ConversationFeedState & {
+      key: string;
+      client: BackendClient;
+      loadHistory: (before: number) => Promise<void>;
+    }
+  >();
   useEffect(() => {
     if (!client) return;
-    setSnapshot({ key, client, status: "Connecting…" });
     let loaded = false;
-    const close = client.subscribe(`${path}/events`, "snapshot", {
-      message: (message) => {
-        try {
-          const data: ChatSnapshot = JSON.parse(message);
-          if (!Array.isArray(data.messages) || typeof data.busy !== "boolean")
-            throw new Error();
-          const reveal = () =>
-            setSnapshot({ key, client, data, status: "Live" });
-          if (loaded) reveal();
-          else startTransition(reveal);
-          loaded = true;
-        } catch {
-          close();
-          setSnapshot({ key, client, status: "Invalid conversation update." });
-        }
-      },
-      reconnecting: () =>
-        setSnapshot((previous) => ({
+    const feed = new ConversationFeed(client, path, (next) => {
+      const reveal = () =>
+        setSnapshot({
+          ...next,
           key,
           client,
-          data:
-            previous?.key === key && previous.client === client
-              ? previous.data
-              : undefined,
-          status: "Reconnecting…",
-        })),
+          loadHistory: (before) => feed.loadHistory(before),
+        });
+      if (!loaded && next.data) startTransition(reveal);
+      else reveal();
+      if (next.data) loaded = true;
     });
-    return close;
+    feed.start();
+    return () => feed.close();
   }, [client, path, key]);
   return snapshot?.key === key && snapshot.client === client
     ? snapshot

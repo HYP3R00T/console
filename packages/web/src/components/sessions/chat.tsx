@@ -12,9 +12,16 @@ import { ChatComposer } from "./chat-composer";
 import { ConversationInspector } from "./conversation-inspector";
 import { ConversationTurn } from "./conversation-turn";
 import { conversationTurns } from "./conversation-turns";
+import { failureLabel } from "./execution-labels";
+import { ExecutionStatus } from "./execution-status";
 import { QueuedMessages } from "./queued-messages";
+import {
+  captureScrollAnchor,
+  restoreScrollAnchor,
+  type ScrollAnchor,
+} from "./scroll-anchor";
 import { type ModelRef, useChatModels } from "./use-chat-models";
-import { type ChatMessage, useConversation } from "./use-conversation";
+import { useConversation } from "./use-conversation";
 
 type Pending = {
   attachments?: ChatAttachment[];
@@ -58,6 +65,7 @@ export function Chat({
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false);
   const working = !!stream?.data?.busy || !!stream?.data?.queued;
+  const execution = stream?.data?.execution;
   useLayoutEffect(() => {
     const inspector = {
       route,
@@ -68,13 +76,14 @@ export function Chat({
           path={path}
           request={state.request}
           working={working}
+          execution={execution}
         />
       ),
     };
     setInspector(inspector);
     return () =>
       setInspector((current) => (current === inspector ? undefined : current));
-  }, [route, deviceId, path, state.request, working, setInspector]);
+  }, [route, deviceId, path, state.request, working, execution, setInspector]);
   const modelSelection = useChatModels(
     state.request,
     pending?.model ?? stream?.data?.model,
@@ -106,10 +115,8 @@ export function Chat({
       });
     return () => controller.abort();
   }, [stream?.data, path, state.request]);
-  const [earlier, setEarlier] = useState<ChatMessage[]>([]);
-  const [historyCursor, setHistoryCursor] = useState<string>();
-  const [historyStarted, setHistoryStarted] = useState(false);
-  const [historyDone, setHistoryDone] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const anchor = useRef<ScrollAnchor | undefined>(undefined);
   const follow = useRef(true);
   const scrollArea = useRef<HTMLDivElement>(null);
   const pendingKey = `console.pending:${state.origin}:${sessionId}:${conversationId}`;
@@ -129,9 +136,12 @@ export function Chat({
     }
   }, [pendingKey]);
   useLayoutEffect(() => {
-    if (stream?.data && follow.current && scrollArea.current)
-      scrollArea.current.scrollTop = scrollArea.current.scrollHeight;
-  }, [stream?.data]);
+    if (!stream?.data || !stream.sections) return;
+    const area = scrollArea.current;
+    if (!area) return;
+    if (follow.current) area.scrollTop = area.scrollHeight;
+    else if (anchor.current) restoreScrollAnchor(area, anchor.current);
+  }, [stream?.data, stream?.sections]);
   const hasSnapshot = !!stream?.data;
   useEffect(() => {
     if (!hasSnapshot) return;
@@ -220,43 +230,32 @@ export function Chat({
       setBusy(false);
     }
   }
-  async function loadEarlier() {
-    setBusy(true);
+  async function loadEarlier(before: number) {
+    if (!stream || loadingHistory) return;
+    setLoadingHistory(true);
     setError(undefined);
-    const area = scrollArea.current;
-    const previousHeight = area?.scrollHeight ?? 0;
+    follow.current = false;
+    captureAnchor();
     try {
-      const page = await state.request<{
-        messages: ChatMessage[];
-        next?: string;
-      }>(
-        `${path}/history${historyCursor ? `?cursor=${encodeURIComponent(historyCursor)}` : ""}`,
-      );
-      setEarlier((previous) => [...page.messages, ...previous]);
-      setHistoryCursor(page.next);
-      setHistoryStarted(true);
-      setHistoryDone(!page.next);
-      follow.current = false;
-      requestAnimationFrame(() => {
-        if (area) area.scrollTop += area.scrollHeight - previousHeight;
-      });
+      await stream.loadHistory(before);
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not load history.",
       );
     } finally {
-      setBusy(false);
+      setLoadingHistory(false);
     }
   }
-  const messages = [
-    ...new Map(
-      [...earlier, ...(stream?.data?.messages ?? [])].map((message) => [
-        message.id,
-        message,
-      ]),
-    ).values(),
-  ].sort((a, b) => a.entryId - b.entryId);
-  const turns = conversationTurns(messages);
+  function captureAnchor() {
+    const area = scrollArea.current;
+    if (!area) return;
+    anchor.current = captureScrollAnchor(area);
+  }
+  const sections = (stream?.sections ?? []).map((section) => ({
+    ...section,
+    turns: conversationTurns(section.messages),
+  }));
+  const lastTurn = sections.flatMap((section) => section.turns).at(-1)?.id;
   if (!stream?.data)
     return (
       <p role="status" className="text-sm text-muted-foreground">
@@ -274,43 +273,57 @@ export function Chat({
       <div className="relative min-h-0 flex-1">
         <ScrollArea
           viewportRef={scrollArea}
+          viewportClassName="[overflow-anchor:none]"
           className="h-full min-h-0"
           onViewportScroll={(event) => {
             const area = event.currentTarget;
             const distance =
               area.scrollHeight - area.scrollTop - area.clientHeight;
             follow.current = distance <= 2;
+            if (!follow.current) captureAnchor();
             setShowLatest(distance > 2);
           }}
         >
           <div className="mx-auto min-w-0 max-w-3xl pr-3">
-            {!historyDone && (stream?.data?.hasEarlier || historyStarted) && (
-              <Button
-                variant="ghost"
-                disabled={busy}
-                onClick={() => void loadEarlier()}
-              >
-                Load earlier
-              </Button>
-            )}
-            {turns.map((turn, index) => (
-              <ConversationTurn
-                key={turn.id}
-                turn={turn}
-                working={index === turns.length - 1 && !!stream?.data?.busy}
-                partial={
-                  index === turns.length - 1 ? stream?.data?.partial : undefined
-                }
-                activeTools={
-                  index === turns.length - 1
-                    ? (stream?.data?.activeTools ?? [])
-                    : []
-                }
-                path={path}
-                request={state.request}
-              />
-            ))}
-            {!turns.length && !stream?.data?.busy && (
+            {sections.flatMap((section, sectionIndex) => [
+              section.gap && (
+                <div key={`gap:${section.gap.before}`} className="py-2">
+                  <Button
+                    variant="ghost"
+                    disabled={loadingHistory}
+                    onClick={() => {
+                      if (section.gap) void loadEarlier(section.gap.before);
+                    }}
+                  >
+                    {loadingHistory
+                      ? "Loading history…"
+                      : section.gap.earlier
+                        ? "Load earlier"
+                        : "Load missing messages"}
+                  </Button>
+                </div>
+              ),
+              ...section.turns.map((turn) => (
+                <ConversationTurn
+                  key={turn.id}
+                  turn={turn}
+                  working={
+                    sectionIndex === sections.length - 1 &&
+                    turn.id === lastTurn &&
+                    !!stream.data?.busy
+                  }
+                  partial={
+                    turn.id === lastTurn ? stream.data?.partial : undefined
+                  }
+                  activeTools={
+                    turn.id === lastTurn ? (stream.data?.activeTools ?? []) : []
+                  }
+                  path={path}
+                  request={state.request}
+                />
+              )),
+            ])}
+            {!lastTurn && !stream?.data?.busy && (
               <p className="px-3 py-12 text-sm text-muted-foreground">
                 Send the first message.
               </p>
@@ -345,9 +358,10 @@ export function Chat({
           {error}
         </p>
       )}
-      {completion?.status === "unanswered" && (
+      <ExecutionStatus execution={execution} />
+      {!execution?.failure && completion?.status === "unanswered" && (
         <p role="status" className="text-sm text-destructive">
-          Last input was not answered ({completion.reason ?? "failed"}).
+          {failureLabel(completion.reason ?? "failed")}
         </p>
       )}
       {completionError && (

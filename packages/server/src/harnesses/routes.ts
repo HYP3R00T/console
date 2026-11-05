@@ -10,7 +10,12 @@ import { ProjectError } from "../projects/service.ts";
 import { AttachmentError, type AttachmentInput } from "./attachments.ts";
 import { ConversationInfo } from "./documents.ts";
 import { HarnessError, type HarnessService } from "./service.ts";
-import { conversationView, messages, submissionView } from "./view.ts";
+import {
+  conversationView,
+  historyWindow,
+  messages,
+  submissionView,
+} from "./view.ts";
 
 const uuid = { type: "string", format: "uuid" };
 const recordId = { type: "string", pattern: "^(0|[1-9][0-9]{0,14})$" };
@@ -499,7 +504,10 @@ export function registerHarnessRoutes(
       },
       (req) => service.operation(() => service.stop(req.params.sessionId)),
     );
-    routes.get<{ Params: Scope; Querystring: { cursor?: string } }>(
+    routes.get<{
+      Params: Scope;
+      Querystring: { cursor?: string; before?: string };
+    }>(
       `${base}/history`,
       {
         schema: {
@@ -507,12 +515,20 @@ export function registerHarnessRoutes(
           querystring: {
             type: "object",
             additionalProperties: false,
-            properties: { cursor: { type: "string", maxLength: 4096 } },
+            properties: {
+              cursor: { type: "string", maxLength: 4096 },
+              before: { type: "string", pattern: "^[1-9][0-9]{0,14}$" },
+            },
           },
         },
       },
       (req) =>
         service.operation(async () => {
+          if (req.query.cursor && req.query.before)
+            throw new HarnessError(
+              400,
+              "Choose a cursor or an entry boundary.",
+            );
           let cursor: Cursor | undefined;
           if (req.query.cursor) {
             try {
@@ -530,9 +546,24 @@ export function registerHarnessRoutes(
             req.params.sessionId,
             req.params.conversationId,
             cursor,
+            req.query.before === undefined
+              ? undefined
+              : Number(req.query.before),
           );
+          const entries = [...page.items].reverse();
+          // Ask for the actual predecessor: IDs can be shared with sibling conversations.
+          const preceding = entries.length
+            ? await service.history(
+                req.params.sessionId,
+                req.params.conversationId,
+                undefined,
+                entries[0].id,
+                1,
+              )
+            : undefined;
           return {
-            messages: messages(page.items).reverse(),
+            messages: messages(entries),
+            history: historyWindow(entries, preceding?.items[0]?.id),
             ...(page.next
               ? {
                   next: Buffer.from(JSON.stringify(page.next)).toString(
