@@ -1,6 +1,5 @@
 "use client";
 
-import { PanelLeft, PanelRight } from "lucide-react";
 import { useParams, usePathname } from "next/navigation";
 import {
   type ReactNode,
@@ -13,23 +12,14 @@ import type { GroupImperativeHandle } from "react-resizable-panels";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { DeviceRail } from "@/components/layout/device-rail";
-import { Button } from "@/components/ui/button";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import {
   useWorkspaceChrome,
   WorkspaceChromeProvider,
 } from "./workspace-chrome";
+
+import { WorkspaceSidebar, WorkspaceSidebarToggle } from "./workspace-sidebar";
 
 function panelGroupWidth(element: HTMLDivElement) {
   const separators = Array.from(element.children).filter(
@@ -131,12 +121,6 @@ function ShellLayout({
       window.removeEventListener("pointercancel", stop);
     };
   }, []);
-  const navigationLabel = (isMobile ? openMobile : open)
-    ? "Hide workspace navigation"
-    : "Show workspace navigation";
-  const inspectorLabel = inspectorOpen
-    ? "Hide details sidebar"
-    : "Show details sidebar";
   const identityLabel = active
     ? `${active.subtitle} / ${active.title}`
     : "Console";
@@ -148,29 +132,6 @@ function ShellLayout({
   return (
     <div className="flex h-svh w-full min-w-0 flex-col bg-client-surface">
       <div className="flex min-h-0 flex-1">
-        {isMobile && (
-          <Sheet open={openMobile} onOpenChange={setOpenMobile}>
-            <SheetContent
-              side="left"
-              className="left-14! w-[min(calc(100vw-56px),344px)]! max-w-none! gap-0 border-0 bg-context-surface p-0"
-            >
-              <SheetHeader className="h-11 shrink-0 justify-center py-0 pr-12">
-                <SheetTitle>Navigation</SheetTitle>
-              </SheetHeader>
-              <div id="workspace-navigation" className="flex min-h-0 flex-1">
-                <div className="min-w-0 flex-1">
-                  {hasContext ? (
-                    <AppSidebar />
-                  ) : (
-                    <div className="p-4 text-sm">
-                      Choose a machine or client preferences.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
-        )}
         <DeviceRail />
         <ResizablePanelGroup
           groupRef={group}
@@ -188,99 +149,58 @@ function ShellLayout({
               inspectorWidth.current = (layout.inspector / 100) * width;
           }}
         >
-          <ResizablePanel
-            id="navigation"
-            defaultSize={visible ? 256 : 0}
-            minSize={208}
-            maxSize={384}
-            collapsedSize={0}
-            collapsible={!visible}
-            groupResizeBehavior="preserve-pixel-size"
-            className="overflow-hidden"
-            style={{ overflow: "hidden" }}
+          <WorkspaceSidebar
+            side="left"
+            panelId="navigation"
+            contentId="workspace-navigation"
+            title="Navigation"
+            resizeLabel="Resize navigation"
+            available={hasContext}
+            open={isMobile ? openMobile : open}
+            onOpenChange={isMobile ? setOpenMobile : setOpen}
+            overlay={isMobile}
+            initialWidth={256}
+            minWidth={208}
+            maxWidth={384}
+            transitioning={panelTransition && !resizing}
+            onResizeStart={() => setResizing(true)}
           >
-            <div
-              id={isMobile ? undefined : "workspace-navigation"}
-              className="h-full"
-              inert={!visible}
-              aria-hidden={!visible}
-            >
-              {hasContext && !isMobile && <AppSidebar />}
-            </div>
-          </ResizablePanel>
-          <ResizableHandle
-            aria-label="Resize navigation"
-            disabled={!visible}
-            className={!visible ? "hidden" : undefined}
-            style={{ backgroundColor: "transparent" }}
-            onPointerDown={() => setResizing(true)}
-          />
+            {hasContext && <AppSidebar />}
+          </WorkspaceSidebar>
           <ResizablePanel id="workspace" minSize={240} className="py-2 pr-2">
             <div className="h-full min-h-0 overflow-hidden rounded-xl border border-solid border-border/50">
               <Content>{children}</Content>
             </div>
           </ResizablePanel>
-          <ResizableHandle
-            aria-label="Resize details sidebar"
-            disabled={!inspectorVisible}
-            className={!inspectorVisible ? "hidden" : undefined}
-            style={{ backgroundColor: "transparent" }}
-            onPointerDown={() => setResizing(true)}
-          />
-          <ResizablePanel
-            id="inspector"
-            defaultSize={0}
-            minSize={240}
-            maxSize="40%"
-            collapsedSize={0}
-            collapsible={!inspectorVisible}
-            groupResizeBehavior="preserve-pixel-size"
-            style={{ overflow: "hidden" }}
+          <WorkspaceSidebar
+            side="right"
+            panelId="inspector"
+            contentId="workspace-inspector"
+            title={details?.title ?? "Workspace details"}
+            resizeLabel="Resize details sidebar"
+            available={!!details}
+            open={inspectorOpen}
+            onOpenChange={setInspectorOpen}
+            overlay={inspectorOverlay}
+            initialWidth={300}
+            minWidth={240}
+            maxWidth="40%"
+            transitioning={panelTransition && !resizing}
+            onResizeStart={() => setResizing(true)}
           >
-            {!inspectorOverlay && (
-              <aside
-                id="workspace-inspector"
-                aria-label="Workspace details"
-                aria-hidden={!inspectorVisible}
-                inert={!inspectorVisible}
-                className="h-full min-h-0 overflow-hidden bg-context-surface"
-              >
-                {inspector}
-              </aside>
-            )}
-          </ResizablePanel>
+            {inspector}
+          </WorkspaceSidebar>
         </ResizablePanelGroup>
-        {inspectorOverlay && details && (
-          <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen}>
-            <SheetContent
-              id="workspace-inspector"
-              side="right"
-              className="w-[min(100vw,360px)]! max-w-none! gap-0 border-0 bg-context-surface p-0"
-            >
-              <SheetHeader className="sr-only">
-                <SheetTitle>{details.title}</SheetTitle>
-              </SheetHeader>
-              {inspector}
-            </SheetContent>
-          </Sheet>
-        )}
       </div>
       <footer className="flex h-9 shrink-0 items-center gap-3 bg-client-surface px-3">
-        <ControlTooltip label={navigationLabel}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={navigationLabel}
-            aria-expanded={isMobile ? openMobile : open}
-            disabled={!hasContext}
-            aria-controls="workspace-navigation"
-            onClick={() =>
-              isMobile ? setOpenMobile(!openMobile) : setOpen(!open)
-            }
-          >
-            <PanelLeft />
-          </Button>
-        </ControlTooltip>
+        <WorkspaceSidebarToggle
+          side="left"
+          label="workspace navigation"
+          controls="workspace-navigation"
+          open={isMobile ? openMobile : open}
+          onOpenChange={isMobile ? setOpenMobile : setOpen}
+          disabled={!hasContext}
+        />
         <ControlTooltip label={identityLabel}>
           <div className="min-w-0 flex-1 truncate text-xs">
             {active ? (
@@ -296,18 +216,13 @@ function ShellLayout({
           </div>
         </ControlTooltip>
         {details && (
-          <ControlTooltip label={inspectorLabel}>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={inspectorLabel}
-              aria-expanded={inspectorOpen}
-              aria-controls="workspace-inspector"
-              onClick={() => setInspectorOpen(!inspectorOpen)}
-            >
-              <PanelRight />
-            </Button>
-          </ControlTooltip>
+          <WorkspaceSidebarToggle
+            side="right"
+            label="details sidebar"
+            controls="workspace-inspector"
+            open={inspectorOpen}
+            onOpenChange={setInspectorOpen}
+          />
         )}
       </footer>
     </div>
