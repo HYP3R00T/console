@@ -27,19 +27,23 @@ settings. Selecting Preferences instead places the Appearance category in the se
 Projects are directory registrations with Durable sessions. Uptime and
 connected-client metrics are unavailable and are not simulated.
 
-The context column is absent on Home, animating its occupied width to zero without translating
-content. Entering a device or Preferences starts it collapsed to a 56px icon rail. Within that
-context its state is preserved, including when the primary column is toggled. Desktop expansion
-is pointer/keyboard-resizable between 208 and 384px and restores the last expanded width.
-The compact resize separator is disabled and has no resize hit area; expand with the toggle first.
-Expanded dragging cannot collapse the panel or stretch a compact rail into a blank wide column.
+The context column is absent on Home. With navigation shown, device/Preferences contexts open
+expanded and retain a 208–384px resizable width. The 36px bottom status bar has one fixed left control
+to hide/show only the secondary navigation; hidden navigation is inert and cannot be resized.
+The device column still expands independently between 56 and 256px. No compact workspace shortcut
+rail remains. Width transitions last 200ms and respect reduced motion. Resizable flex transitions run only for
+secondary-navigation visibility changes, not while Activity changes the available width.
+Mobile keeps the device rail visible and opens the secondary navigation in an adjacent sheet.
 
-Both chevron toggles retain their top-left position. Width transitions last 200ms, skip reduced
-motion and are disabled during pointer resizing. Mobile uses context sheets and hides its compact
-context rail on Home. Preference categories remain accessible from the compact contextual rail.
-There is no navigation toolbar in the content pane.
-Columns use different surface tones rather than divider borders; in dark mode the client column
-is lightest and content darkest. Dashed tree elbows terminate at the last sibling and connect
+The bar identifies the active conversation and exposes Activity on the right. Activity is an
+independently hideable 300px sidebar on viewports at least 1200px wide; narrower screens use an
+explicitly opened sheet. It renders the existing snapshot's tool activity and loaded history,
+including arguments, results/failures and busy/queued state. It does not open another subscription.
+The transcript remains unchanged; Clean/Compact/Detailed modes and workspace splits are deferred.
+The old visible conversation heading is replaced by its bar identity; an accessible h1 remains.
+
+Navigation, Activity and the status bar share one shell surface without divider borders; in dark mode
+the shell is darker than the inset workspace. Dashed tree elbows terminate at the last sibling and connect
 conversations, subagents and forks. Expanding a tree node does not shade it; hover and selected
 conversation backgrounds are separate. Remaining borders default to dashed strokes; selection uses backgrounds and focus rings stay visible.
 The right pane is route content today; split conversations and file/code/Markdown views remain future work.
@@ -71,7 +75,7 @@ Next.js provides native output. Do not start, stop or restart the owner's develo
 
 Client tests cover connection policy and bookmark validation. Types/build check integration.
 Manual browser checks cover saved-device navigation/search/connect, reload persistence, pointer/keyboard resizing,
-independent column collapse, route-dependent context visibility, initially collapsed context entry, navigation-only device rows, Manage devices, Home overview, width restoration, project registration/navigation, client/device scope switching, category navigation, theme controls and mobile navigation. There is no automated browser suite or cross-tab merge protocol.
+global navigation hiding, route-dependent context visibility, expanded context entry, navigation-only device rows, Manage devices, Home overview, width restoration, project registration/navigation, client/device scope switching, category navigation, theme controls and mobile navigation. There is no automated browser suite or cross-tab merge protocol.
 See [README](../../README.md#checks) for shared checks.
 
 ## AI provider settings
@@ -113,8 +117,7 @@ creates a standalone Durable session and opens its chat. Pinned projects and ind
 into Pinned without duplicates; unpinned projects retain backend order and Recents stays newest first.
 
 Standalone creation belongs to the Recents header action; there is no top-level New conversation button.
-Collapsed workspace navigation exposes direct project and conversation shortcuts; only the top
-chevron expands the panel. The footer uses the label Machine settings.
+Hidden workspace navigation exposes no shortcuts; the top-bar toggle reopens it. The footer uses the label Machine settings.
 
 ## Register a project
 
@@ -221,7 +224,7 @@ Refreshes retain loaded session metadata and keep the chat mounted, preserving u
 Conversation controls are 28px high with 2px between adjacent row surfaces; project headings are
 32px high, with 4px disclosure clearance.
 Only hover/selection shade the row; keyboard focus retains a ring without latching its background.
-Inline actions use 24px controls/14px icons; compact rail controls use 32px surfaces within the
+Inline actions use 24px controls/14px icons; compact device controls use 32px surfaces within the
 existing 36px vertical slot. Scroll Area thumbs and native WebKit thumbs have rounded ends.
 
 Sidebar actions use block flex layout so auto margins center compact links and avoid inline baseline
@@ -230,7 +233,7 @@ actions visible; :focus-visible reveals actions for keyboard users.
 
 Project rows toggle by clicking the icon/name without a chevron, and hover rather than remain
 highlighted for an active child. Only the selected conversation retains a background. Expanded
-conversation rows use text without a leading icon; compact shortcuts still use icons. Child text
+conversation rows use text without a leading icon. Child text
 aligns with its parent label, reclaiming horizontal space for conversation names.
 
 Project conversation lists use the existing Base UI Collapsible with a scoped 180ms height reveal
@@ -243,8 +246,8 @@ Pinned, Projects and Recents are independent animated sections, initially open. 
 Recents compose actions reveal on header hover/keyboard focus and stay available on touch.
 Pinned projects and individual chats move out of their regular list; Unpin restores source order.
 Pinned projects precede pinned standalone chats, with newest pins first within each kind. Project
-conversation pins remain inside their sessions. Section disclosure state is not saved across reload.
-There is no top-level New conversation button; expand the compact rail for Recents creation.
+conversation pins appear in Pinned without changing their owning session. Section disclosure state is not saved across reload.
+There is no top-level New conversation button; use the Recents header action to create outside projects.
 Machine status dots sit bottom-right on compact badges and at the trailing edge of expanded rows,
 with connection state in accessible names/tooltips. Status does not change connection behavior.
 
@@ -257,3 +260,7 @@ Desktop drag pins projects/chats, unpins projects into Projects, standalone chat
 project chats onto their owning project row. Unsupported ownership moves show feedback and retain
 history/context. Touch and keyboard use menus; arbitrary ordering is deferred. Pinned project chats
 resolve metadata without expanding their project and do not duplicate in the source session list.
+
+Navigation hover/menu targets use `--sidebar-hover`; selected rows use `--sidebar-selected`.
+Selection stays stronger during hover and menu opening. Shared inline actions do not add a
+second full-row surface.

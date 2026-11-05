@@ -34,7 +34,7 @@ function StandaloneChat({
   deviceId: string;
   sessionId: string;
 }) {
-  const { request } = useMachineProjects(deviceId);
+  const { request, device } = useMachineProjects(deviceId);
   const [data, setData] = useState<{
     session: SessionRecord;
     conversationId: number;
@@ -86,7 +86,7 @@ function StandaloneChat({
       sessionId={sessionId}
       conversationId={String(data.conversationId)}
       title={data.session.name}
-      subtitle="Outside projects"
+      subtitle={`${device?.name ?? "Machine"} / Outside projects`}
     />
   );
 }

@@ -14,7 +14,7 @@ export function SidebarAction({
       variant="ghost"
       size={compact ? "icon" : "default"}
       className={cn(
-        "flex h-9 gap-3 [&_svg]:size-4",
+        "sidebar-action flex h-9 gap-3 [&_svg]:size-4",
         compact
           ? "mx-auto my-0.5 h-8 w-8 justify-center px-0"
           : "w-full justify-start px-3",

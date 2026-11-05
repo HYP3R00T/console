@@ -16,10 +16,11 @@ export function NavigationRow({
   const menuOpen = useNavigationMenuOpen();
   return (
     <div
+      data-selected={selected || undefined}
       data-menu-open={menuOpen || undefined}
       className={cn(
         "navigation-row-group my-px flex min-w-0 items-center rounded-md transition-colors hover:bg-sidebar-accent",
-        selected && "bg-sidebar-accent",
+        selected && "sidebar-selected",
       )}
     >
       <div className="min-w-0 flex-1">{children}</div>

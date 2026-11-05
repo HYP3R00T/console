@@ -4,8 +4,10 @@
 
 @custom-variant dark (&:is(.dark *));
 :root {
-  --client-surface: oklch(0.95 0.003 286);
-  --context-surface: oklch(0.98 0.002 286);
+  --client-surface: #f5f5f5;
+  --sidebar-hover: #ebebeb;
+  --sidebar-selected: #dedede;
+  --context-surface: var(--client-surface);
   --muted: oklch(0.967 0.001 286.375);
   --border: oklch(0.92 0.004 286.32);
   --accent: oklch(0.967 0.001 286.375);
@@ -87,9 +89,11 @@
 }
 
 .dark {
-  --client-surface: oklch(0.235 0.006 286);
-  --context-surface: oklch(0.185 0.005 286);
-  --background: oklch(0.141 0.005 285.823);
+  --client-surface: #090909;
+  --sidebar-hover: #191919;
+  --sidebar-selected: #292929;
+  --context-surface: var(--client-surface);
+  --background: #111111;
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.21 0.006 285.885);
   --card-foreground: oklch(0.985 0 0);
@@ -141,7 +145,8 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .context-layout:not([data-resizing="true"]) > [data-panel] {
+  .context-layout[data-navigation-transition="true"]:not([data-resizing="true"])
+    > [data-panel] {
     transition: flex-grow 200ms ease-out;
   }
 }
@@ -152,7 +157,7 @@
 }
 
 .navigation-row[aria-expanded]:hover {
-  background-color: var(--sidebar-accent);
+  background-color: var(--sidebar-hover);
 }
 
 .tree-children {
@@ -257,9 +262,23 @@
 /* A menu target is temporary context, not a change in route selection. */
 .navigation-row-group[data-menu-open],
 .navigation-menu-target[data-menu-open] > [data-slot="button"] {
-  background: var(--sidebar-accent);
+  background: var(--sidebar-hover);
 }
 .navigation-row-group[data-menu-open] > .navigation-actions {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* Hover and menu context are temporary; selection remains visibly stronger. */
+.sidebar-action:hover,
+.navigation-row-group:hover {
+  background-color: var(--sidebar-hover);
+}
+.navigation-row-group .sidebar-action:hover {
+  background-color: transparent;
+}
+.sidebar-selected,
+.sidebar-selected:hover,
+.sidebar-selected[data-menu-open] {
+  background-color: var(--sidebar-selected);
 }

@@ -1,9 +1,13 @@
 "use client";
 import { ArrowDown } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useWorkspaceChrome } from "@/components/layout/workspace-chrome";
 import { useMachineProjects } from "@/components/projects/projects-provider";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ActivityInspector } from "./activity-inspector";
 import { ChatComposer } from "./chat-composer";
 import { ToolActivity } from "./tool-activity";
 import { type ModelRef, useChatModels } from "./use-chat-models";
@@ -28,6 +32,15 @@ export function Chat({
   title: string;
   subtitle: string;
 }) {
+  const route = usePathname();
+  const { setConversation, inspectorHost } = useWorkspaceChrome();
+  useEffect(() => {
+    setConversation({ route, title, subtitle });
+    return () =>
+      setConversation((current) =>
+        current?.route === route ? undefined : current,
+      );
+  }, [route, title, subtitle, setConversation]);
   const state = useMachineProjects(deviceId);
   const path = `/v1/sessions/${sessionId}/conversations/${conversationId}`;
   const stream = useConversation(
@@ -187,10 +200,21 @@ export function Chat({
   ].sort((a, b) => a.entryId - b.entryId);
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <header>
-        <h1 className="text-xl font-semibold">{title}</h1>
-        <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
-      </header>
+      <h1 className="sr-only">{title}</h1>
+      {inspectorHost &&
+        createPortal(
+          <ActivityInspector
+            title={title}
+            subtitle={subtitle}
+            messages={messages}
+            data={stream?.data}
+            status={stream?.status}
+            hasEarlier={
+              !historyDone && !!(stream?.data?.hasEarlier || historyStarted)
+            }
+          />,
+          inspectorHost,
+        )}
       {stream?.status && stream.status !== "Live" && (
         <p role="status" className="text-xs text-muted-foreground">
           {stream.status}
