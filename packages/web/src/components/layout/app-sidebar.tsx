@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { useDevices } from "@/components/devices/device-provider";
 import { SidebarAction } from "@/components/layout/sidebar-action";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sidebar,
   SidebarContent,
@@ -32,66 +33,71 @@ export function AppSidebar() {
           <h2 className="truncate px-3 text-sm font-semibold">Preferences</h2>
         )}
       </SidebarHeader>
-      <SidebarContent>
-        {preferences ? (
-          <nav aria-label="Preference categories" className="space-y-1 px-2">
-            {[
-              {
-                label: "Appearance",
-                href: "/settings/appearance",
-                icon: Palette,
-              },
-            ].map(({ label, href, icon: Icon }) => (
-              <SidebarAction
-                key={href}
-                nativeButton={false}
-                render={<Link href={href} onClick={closeMobile} />}
-                aria-current={pathname.startsWith(href) ? "page" : undefined}
-                className={
-                  pathname.startsWith(href) ? "sidebar-selected" : undefined
-                }
-              >
-                <Icon />
-                <span>{label}</span>
-              </SidebarAction>
-            ))}
-          </nav>
-        ) : deviceSettings && device ? (
-          <nav
-            aria-label="Machine setting categories"
-            className="space-y-1 px-2"
-          >
-            {[
-              { id: "providers", label: "Providers", icon: KeyRound },
-              { id: "projects", label: "Projects", icon: Folder },
-            ].map(({ id, label, icon: Icon }) => {
-              const href = `/devices/${encodeURIComponent(device.id)}/settings/${id}`;
-              const active = pathname === href;
-              return (
+      <SidebarContent className="overflow-hidden">
+        <ScrollArea
+          className="min-h-0 flex-1"
+          viewportClassName="data-[has-overflow-y]:pr-3"
+        >
+          {preferences ? (
+            <nav aria-label="Preference categories" className="space-y-1 px-2">
+              {[
+                {
+                  label: "Appearance",
+                  href: "/settings/appearance",
+                  icon: Palette,
+                },
+              ].map(({ label, href, icon: Icon }) => (
                 <SidebarAction
-                  key={id}
+                  key={href}
                   nativeButton={false}
                   render={<Link href={href} onClick={closeMobile} />}
-                  aria-current={active ? "page" : undefined}
-                  className={active ? "sidebar-selected" : undefined}
+                  aria-current={pathname.startsWith(href) ? "page" : undefined}
+                  className={
+                    pathname.startsWith(href) ? "sidebar-selected" : undefined
+                  }
                 >
                   <Icon />
                   <span>{label}</span>
                 </SidebarAction>
-              );
-            })}
-          </nav>
-        ) : device ? (
-          <ProjectTree
-            key={device.id}
-            deviceId={device.id}
-            closeMobile={closeMobile}
-          />
-        ) : (
-          <p className="px-5 text-xs text-muted-foreground">
-            Select a device from the rail.
-          </p>
-        )}
+              ))}
+            </nav>
+          ) : deviceSettings && device ? (
+            <nav
+              aria-label="Machine setting categories"
+              className="space-y-1 px-2"
+            >
+              {[
+                { id: "providers", label: "Providers", icon: KeyRound },
+                { id: "projects", label: "Projects", icon: Folder },
+              ].map(({ id, label, icon: Icon }) => {
+                const href = `/devices/${encodeURIComponent(device.id)}/settings/${id}`;
+                const active = pathname === href;
+                return (
+                  <SidebarAction
+                    key={id}
+                    nativeButton={false}
+                    render={<Link href={href} onClick={closeMobile} />}
+                    aria-current={active ? "page" : undefined}
+                    className={active ? "sidebar-selected" : undefined}
+                  >
+                    <Icon />
+                    <span>{label}</span>
+                  </SidebarAction>
+                );
+              })}
+            </nav>
+          ) : device ? (
+            <ProjectTree
+              key={device.id}
+              deviceId={device.id}
+              closeMobile={closeMobile}
+            />
+          ) : (
+            <p className="px-5 text-xs text-muted-foreground">
+              Select a device from the rail.
+            </p>
+          )}
+        </ScrollArea>
       </SidebarContent>
       {device && (
         <SidebarFooter className="p-2">

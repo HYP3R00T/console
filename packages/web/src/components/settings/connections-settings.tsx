@@ -7,6 +7,7 @@ import { DeviceIcon } from "@/components/devices/device-icon";
 import { useDevices } from "@/components/devices/device-provider";
 import { EditDeviceDialog } from "@/components/devices/edit-device-dialog";
 import { ConnectionStatus } from "@/components/layout/connection-status";
+import { useNavigationMemory } from "@/components/layout/navigation-memory";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,6 +22,7 @@ import type { Device } from "@/lib/devices";
 
 export function ConnectionsSettings() {
   const registry = useDevices();
+  const { memory } = useNavigationMemory();
   const { states } = useConnections();
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string>();
@@ -73,7 +75,10 @@ export function ConnectionsSettings() {
                     <TableCell className="min-w-0 p-0 md:p-2">
                       <Link
                         className="flex min-w-0 items-center gap-2 font-medium hover:underline"
-                        href={`/devices/${encodeURIComponent(device.id)}`}
+                        href={
+                          memory.routes[device.id] ??
+                          `/devices/${encodeURIComponent(device.id)}`
+                        }
                       >
                         <DeviceIcon device={device} />
                         <span className="truncate">{device.name}</span>

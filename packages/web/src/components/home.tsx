@@ -4,12 +4,14 @@ import { Monitor, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useDevices } from "@/components/devices/device-provider";
 import { useDeviceStatus } from "@/components/devices/use-device-status";
+import { useNavigationMemory } from "@/components/layout/navigation-memory";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 
 export function Home() {
   const registry = useDevices();
+  const { memory } = useNavigationMemory();
   const deviceStatus = useDeviceStatus();
   return (
     <div className="space-y-8">
@@ -77,7 +79,10 @@ export function Home() {
           {registry.devices.map((device) => (
             <Link
               key={device.id}
-              href={`/devices/${encodeURIComponent(device.id)}`}
+              href={
+                memory.routes[device.id] ??
+                `/devices/${encodeURIComponent(device.id)}`
+              }
               className="min-w-0 space-y-4 border p-5 transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring"
             >
               <div className="flex flex-wrap items-center gap-3">

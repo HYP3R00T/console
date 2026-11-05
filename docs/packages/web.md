@@ -26,6 +26,7 @@ Paths above are relative to `packages/web`. Backend data remains backend-owned. 
 ## Layout and navigation
 
 - Primary rail: Home, all saved machines, Manage devices and Client preferences. It stays visible as a fixed 56px rail, without its own expand/collapse toggle.
+- Selecting a machine restores its last conversation and tree disclosures from browser-local navigation memory. Home does not clear that state; connection choices remain independent. This restores navigation, not unsent drafts or transcript scroll position.
 - Secondary panel: context for the selected machine or preference category. It is absent on Home/Manage devices, hideable with the bottom-left toggle and resizable while visible. Hidden navigation has no shortcut rail.
 - Workspace: one inset content region. The bottom bar shows current conversation identity; the bottom-right control toggles Activity when a conversation is open.
 - Activity: tool arguments/results/failures and busy/queued state from the existing conversation stream. It has its own scroll area and uses a drawer below 1200px. The transcript still includes tool disclosures; display modes and split panes are not implemented.
@@ -47,7 +48,7 @@ Machine workspace navigation contains collapsible Pinned, Projects and Recents s
 
 Use shared tokens and components rather than per-page themes. Both sidebars and the bottom bar share the dark outer surface; the inset workspace is slightly lighter. Hover and selected states are distinct in both themes; dark navigation uses the supplied Linear application reference (hover `#18181a`, selected `#232325`), rather than the cooler marketing-site export. Inter and Lucide are used throughout; control and workspace corners derive from the shared radius scale.
 
-Keep row actions aligned with their parent, reserve space so labels do not jump, and preserve visible keyboard focus. Lists use continuous rows; metadata aligns with the item's text. Reduced motion skips disclosure/panel animation. Drag resizing is immediate, and only one animation should own a width transition.
+Keep row actions aligned with their parent, reserve space so labels do not jump, and preserve visible keyboard focus. Lists use continuous rows; metadata aligns with the item's text. The transcript and secondary navigation use Scroll Area; navigation reserves scrollbar clearance only when it overflows. The Latest pill overlays the transcript so appearing or disappearing cannot resize its viewport. Manual scrolling resumes automatic following only at the bottom. Reduced motion skips disclosure/panel animation. Drag resizing is immediate, and only one animation should own a width transition.
 
 Provider/model catalogs fill the available space and scroll independently, with starred models first and metadata behind disclosures. Model and thinking-level choices belong in the composer; unsupported thinking levels must not be offered. Project settings holds display metadata and on-demand Git inspection, not conversation navigation.
 

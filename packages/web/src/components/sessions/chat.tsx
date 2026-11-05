@@ -3,6 +3,7 @@ import { ArrowDown } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { useWorkspaceChrome } from "@/components/layout/workspace-chrome";
 import { useMachineProjects } from "@/components/projects/projects-provider";
 import { Button } from "@/components/ui/button";
@@ -85,7 +86,6 @@ export function Chat({
   const [historyCursor, setHistoryCursor] = useState<string>();
   const [historyStarted, setHistoryStarted] = useState(false);
   const [historyDone, setHistoryDone] = useState(false);
-  const bottom = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const scrollArea = useRef<HTMLDivElement>(null);
   const pendingKey = `console.pending:${state.origin}:${sessionId}:${conversationId}`;
@@ -105,18 +105,18 @@ export function Chat({
     }
   }, [pendingKey]);
   useEffect(() => {
-    if (stream?.data && follow.current)
-      bottom.current?.scrollIntoView({ block: "end" });
+    if (stream?.data && follow.current && scrollArea.current)
+      scrollArea.current.scrollTop = scrollArea.current.scrollHeight;
   }, [stream?.data]);
   const hasSnapshot = !!stream?.data;
   useEffect(() => {
     if (!hasSnapshot) return;
     const area = scrollArea.current;
     if (!area) return;
-    const update = () =>
-      setShowLatest(
-        area.scrollHeight - area.scrollTop - area.clientHeight > 64,
-      );
+    const update = () => {
+      if (follow.current) area.scrollTop = area.scrollHeight;
+      setShowLatest(area.scrollHeight - area.scrollTop - area.clientHeight > 2);
+    };
     const observer = new ResizeObserver(update);
     observer.observe(area);
     if (area.firstElementChild) observer.observe(area.firstElementChild);
@@ -220,106 +220,112 @@ export function Chat({
           {stream.status}
         </p>
       )}
-      <ScrollArea
-        viewportRef={scrollArea}
-        className="min-h-0 flex-1"
-        onViewportScroll={(event) => {
-          const area = event.currentTarget;
-          const distance =
-            area.scrollHeight - area.scrollTop - area.clientHeight;
-          follow.current = distance < 64;
-          setShowLatest(distance > 64);
-        }}
-      >
-        <div className="min-w-0 pr-3">
-          {!historyDone && (stream?.data?.hasEarlier || historyStarted) && (
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => void loadEarlier()}
-            >
-              Load earlier
-            </Button>
-          )}
-          {messages.map((message) => (
-            <article key={message.id} className="space-y-2 px-3 py-5">
-              <p className="text-xs font-medium text-muted-foreground">
-                {message.role === "user"
-                  ? "You"
-                  : message.role === "tool"
-                    ? `${message.toolName} · ${message.failed ? "Failed" : "Completed"}`
-                    : "Assistant"}
+      <div className="relative min-h-0 flex-1">
+        <ScrollArea
+          viewportRef={scrollArea}
+          className="h-full min-h-0"
+          onViewportScroll={(event) => {
+            const area = event.currentTarget;
+            const distance =
+              area.scrollHeight - area.scrollTop - area.clientHeight;
+            follow.current = distance <= 2;
+            setShowLatest(distance > 2);
+          }}
+        >
+          <div className="min-w-0 pr-3">
+            {!historyDone && (stream?.data?.hasEarlier || historyStarted) && (
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => void loadEarlier()}
+              >
+                Load earlier
+              </Button>
+            )}
+            {messages.map((message) => (
+              <article key={message.id} className="space-y-2 px-3 py-5">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {message.role === "user"
+                    ? "You"
+                    : message.role === "tool"
+                      ? `${message.toolName} · ${message.failed ? "Failed" : "Completed"}`
+                      : "Assistant"}
+                </p>
+                {message.role === "tool" ? (
+                  <ToolActivity
+                    label={message.failed ? "View error" : "View result"}
+                    content={message.text}
+                    failed={message.failed}
+                  />
+                ) : (
+                  <p className="whitespace-pre-wrap break-words text-sm leading-7">
+                    {message.text ||
+                      (message.failed ? "Response interrupted or failed." : "")}
+                  </p>
+                )}
+                {message.toolCalls?.map((call) => (
+                  <ToolActivity
+                    key={call.id}
+                    label={call.name}
+                    content={call.arguments}
+                  />
+                ))}
+                {message.role !== "tool" && message.failed && message.text && (
+                  <p className="text-xs text-destructive">
+                    Response interrupted or failed.
+                  </p>
+                )}
+              </article>
+            ))}
+            {!!stream?.data?.activeTools?.length && (
+              <p
+                role="status"
+                className="px-3 py-2 text-xs text-muted-foreground"
+              >
+                Inspecting project ·{" "}
+                {stream.data.activeTools.map((tool) => tool.name).join(", ")}
               </p>
-              {message.role === "tool" ? (
-                <ToolActivity
-                  label={message.failed ? "View error" : "View result"}
-                  content={message.text}
-                  failed={message.failed}
-                />
-              ) : (
+            )}
+            {stream?.data?.partial && (
+              <article className="space-y-2 px-3 py-5">
+                <p className="text-xs text-muted-foreground">
+                  Assistant · Working
+                </p>
                 <p className="whitespace-pre-wrap break-words text-sm leading-7">
-                  {message.text ||
-                    (message.failed ? "Response interrupted or failed." : "")}
+                  {stream.data.partial}
                 </p>
-              )}
-              {message.toolCalls?.map((call) => (
-                <ToolActivity
-                  key={call.id}
-                  label={call.name}
-                  content={call.arguments}
-                />
-              ))}
-              {message.role !== "tool" && message.failed && message.text && (
-                <p className="text-xs text-destructive">
-                  Response interrupted or failed.
-                </p>
-              )}
-            </article>
-          ))}
-          {!!stream?.data?.activeTools?.length && (
-            <p
-              role="status"
-              className="px-3 py-2 text-xs text-muted-foreground"
-            >
-              Inspecting project ·{" "}
-              {stream.data.activeTools.map((tool) => tool.name).join(", ")}
-            </p>
-          )}
-          {stream?.data?.partial && (
-            <article className="space-y-2 px-3 py-5">
-              <p className="text-xs text-muted-foreground">
-                Assistant · Working
+              </article>
+            )}
+            {!messages.length && !stream?.data?.busy && (
+              <p className="px-3 py-12 text-sm text-muted-foreground">
+                Send the first message.
               </p>
-              <p className="whitespace-pre-wrap break-words text-sm leading-7">
-                {stream.data.partial}
-              </p>
-            </article>
-          )}
-          {!messages.length && !stream?.data?.busy && (
-            <p className="px-3 py-12 text-sm text-muted-foreground">
-              Send the first message.
-            </p>
-          )}
-          <div ref={bottom} />
-        </div>
-      </ScrollArea>
-      {showLatest && (
-        <div className="flex justify-end">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Jump to latest"
-            title="Jump to latest"
-            onClick={() => {
-              follow.current = true;
-              bottom.current?.scrollIntoView({ block: "end" });
-              setShowLatest(false);
-            }}
-          >
-            <ArrowDown className="size-4" />
-          </Button>
-        </div>
-      )}
+            )}
+          </div>
+        </ScrollArea>
+        {showLatest && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+            <ControlTooltip label="Jump to latest">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="pointer-events-auto rounded-full px-3 shadow-sm"
+                aria-label="Jump to latest"
+                onClick={() => {
+                  follow.current = true;
+                  if (scrollArea.current)
+                    scrollArea.current.scrollTop =
+                      scrollArea.current.scrollHeight;
+                  setShowLatest(false);
+                }}
+              >
+                <ArrowDown className="size-3.5" />
+                Latest
+              </Button>
+            </ControlTooltip>
+          </div>
+        )}
+      </div>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}

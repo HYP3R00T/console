@@ -8,10 +8,12 @@ function ScrollArea({
   className,
   children,
   viewportRef,
+  viewportClassName,
   onViewportScroll,
   ...props
 }: ScrollAreaPrimitive.Root.Props & {
   viewportRef?: Ref<HTMLDivElement>;
+  viewportClassName?: string;
   onViewportScroll?: UIEventHandler<HTMLDivElement>;
 }) {
   return (
@@ -24,7 +26,10 @@ function ScrollArea({
         data-slot="scroll-area-viewport"
         ref={viewportRef}
         onScroll={onViewportScroll}
-        className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1"
+        className={cn(
+          "size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1",
+          viewportClassName,
+        )}
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
@@ -45,7 +50,7 @@ function ScrollBar({
       data-orientation={orientation}
       orientation={orientation}
       className={cn(
-        "pointer-events-none flex touch-none select-none p-px opacity-0 transition-opacity group-hover/scroll-area:pointer-events-auto group-hover/scroll-area:opacity-100 group-focus-within/scroll-area:pointer-events-auto group-focus-within/scroll-area:opacity-100 motion-reduce:transition-none data-horizontal:h-2.5 data-horizontal:flex-col data-horizontal:border-t data-horizontal:border-t-transparent data-vertical:h-full data-vertical:w-2.5 data-vertical:border-l data-vertical:border-l-transparent",
+        "pointer-events-none flex touch-none select-none p-px opacity-0 transition-opacity data-scrolling:pointer-events-auto data-scrolling:opacity-100 group-hover/scroll-area:pointer-events-auto group-hover/scroll-area:opacity-100 group-focus-within/scroll-area:pointer-events-auto group-focus-within/scroll-area:opacity-100 motion-reduce:transition-none data-horizontal:h-2.5 data-horizontal:flex-col data-horizontal:border-t data-horizontal:border-t-transparent data-vertical:h-full data-vertical:w-2.5 data-vertical:border-l data-vertical:border-l-transparent",
         className,
       )}
       {...props}

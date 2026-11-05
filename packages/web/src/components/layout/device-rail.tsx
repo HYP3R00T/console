@@ -8,6 +8,7 @@ import { DeviceIcon } from "@/components/devices/device-icon";
 import { useDevices } from "@/components/devices/device-provider";
 import { EditDeviceDialog } from "@/components/devices/edit-device-dialog";
 import { useDeviceStatus } from "@/components/devices/use-device-status";
+import { useNavigationMemory } from "@/components/layout/navigation-memory";
 import { SidebarAction } from "@/components/layout/sidebar-action";
 import {
   ContextMenu,
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 export function DeviceRail() {
   const registry = useDevices();
+  const { memory } = useNavigationMemory();
   const [editing, setEditing] = useState<Device>();
   const [menuDevice, setMenuDevice] = useState<string>();
   const deviceStatus = useDeviceStatus();
@@ -68,7 +70,10 @@ export function DeviceRail() {
                   nativeButton={false}
                   render={
                     <Link
-                      href={`/devices/${encodeURIComponent(device.id)}`}
+                      href={
+                        memory.routes[device.id] ??
+                        `/devices/${encodeURIComponent(device.id)}`
+                      }
                       onClick={navigate}
                     />
                   }
