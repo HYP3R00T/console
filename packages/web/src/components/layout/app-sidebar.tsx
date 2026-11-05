@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  ArrowLeft,
-  ChevronLeft,
-  Folder,
-  KeyRound,
-  Palette,
-  Settings2,
-} from "lucide-react";
+import { ArrowLeft, Folder, KeyRound, Palette, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { useDevices } from "@/components/devices/device-provider";
@@ -25,7 +18,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const params = useParams<{ deviceId?: string }>();
   const registry = useDevices();
-  const { setOpenMobile, isMobile, setOpen } = useSidebar();
+  const { setOpenMobile } = useSidebar();
   const device = registry.devices.find((item) => item.id === params.deviceId);
   const preferences = pathname.startsWith("/settings");
   const deviceSettings =
@@ -33,18 +26,8 @@ export function AppSidebar() {
     pathname.startsWith(`/devices/${encodeURIComponent(device.id)}/settings`);
   const closeMobile = () => setOpenMobile(false);
   return (
-    <Sidebar collapsible={isMobile ? "offcanvas" : "none"} className="w-full!">
-      <SidebarHeader className="px-0 pb-3 pt-2">
-        <div className="flex w-14 shrink-0 justify-center">
-          <SidebarAction
-            compact
-            aria-label="Collapse workspace"
-            title="Collapse workspace"
-            onClick={() => (isMobile ? setOpenMobile(false) : setOpen(false))}
-          >
-            <ChevronLeft />
-          </SidebarAction>
-        </div>
+    <Sidebar collapsible="none" className="w-full!">
+      <SidebarHeader className="px-0 pb-1 pt-2">
         {preferences && (
           <h2 className="truncate px-3 text-sm font-semibold">Preferences</h2>
         )}
@@ -65,7 +48,7 @@ export function AppSidebar() {
                 render={<Link href={href} onClick={closeMobile} />}
                 aria-current={pathname.startsWith(href) ? "page" : undefined}
                 className={
-                  pathname.startsWith(href) ? "bg-sidebar-accent" : undefined
+                  pathname.startsWith(href) ? "sidebar-selected" : undefined
                 }
               >
                 <Icon />
@@ -90,7 +73,7 @@ export function AppSidebar() {
                   nativeButton={false}
                   render={<Link href={href} onClick={closeMobile} />}
                   aria-current={active ? "page" : undefined}
-                  className={active ? "bg-sidebar-accent" : undefined}
+                  className={active ? "sidebar-selected" : undefined}
                 >
                   <Icon />
                   <span>{label}</span>

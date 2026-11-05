@@ -4,7 +4,7 @@ The current increment connects a local website to multiple explicitly connected 
 its AI providers, sets up projects, and runs conversations with read-only project inspection through project-owned Durable sessions.
 
 - Fastify listens on `127.0.0.1:3000`; Next.js listens on `127.0.0.1:3001`.
-- On first use the website starts disconnected, with a full-width layout and two navigation columns.
+- On first use the website starts disconnected, with a full-width layout, a compact bottom status bar and two scoped navigation columns.
 - The client column animates between 256px expanded and a 56px rail over 200ms; reduced motion skips the transition. It lists devices, Home, Manage devices and Client preferences.
 - Selecting a device changes the viewed workspace without connecting it automatically.
 - The contextual second column is absent on Home; devices show registered projects, standalone conversations and Machine settings, while Preferences shows its categories.
@@ -15,20 +15,20 @@ its AI providers, sets up projects, and runs conversations with read-only projec
 - The shadcn Base UI Lyra/Zinc preset uses Geist, Lucide icons and a shared 10px base corner radius (8px controls/rows, 6px menu items, 10px popups and 14px composer).
 - Primary-rail icons share its 28px center. Conversation controls are 28px high with 2px gaps; project headings are 32px high. Row actions hide after pointer exit despite retained mouse focus, while keyboard focus/menu-open states remain accessible.
 - Project disclosures reveal/collapse with a short height/opacity transition; reduced-motion preferences skip it.
-- Only the active conversation has a persistent highlight in the workspace tree. Project rows retain their icon and toggle on click without a separate disclosure arrow. Expanded conversation rows use text labels; compact rail shortcuts retain icons.
+- Only the active conversation has a persistent highlight in the workspace tree. Project rows retain their icon and toggle on click without a separate disclosure arrow. Expanded conversation rows use text labels; no compact workspace shortcut column is shown.
 - Sidebar row surfaces stay separated; inline icon actions use 24px targets/14px icons. Scrollbar thumbs have rounded ends.
-- Column separation uses surface tones rather than divider borders: the dark theme runs from lightest client navigation to intermediate context to darkest content, with matching light-theme surfaces.
+- The machine rail, secondary navigation, Activity sidebar and status bar share one shell surface. In dark mode the shell is #090909 and the inset workspace is lighter (#111111); light mode uses a neutral #f5f5f5 shell and white workspace.
 - Device selection shades its navigation row without an outline; device rows do not expand. Tree branches and remaining borders default to dashed strokes, with tree connectors ending at the final row.
 - Appearance supports system, light and dark; mobile context navigation uses a sheet.
 - Context visibility animates its occupied width to/from zero over 200ms without translating content; reduced-motion preferences disable the animation.
-- The desktop context panel resizes between 208–384px, collapses to a 56px icon rail and restores its last expanded width. Each newly entered device/Preferences context starts collapsed.
-- Chevron toggles stay anchored at the same top-left position. Toggling the first column preserves the second column's open/collapsed state.
+- The desktop context panel resizes between 208–384px and restores its last expanded width. Navigation is visible initially. The workspace-bar toggle hides only the secondary navigation and reopens them without changing the current route or draft.
+- The secondary-navigation toggle stays at the bottom-left. The device-column width control remains independent of navigation visibility.
 - Device rows navigate only, with name/initials and a connection-status dot. Manage devices (`/devices`) lists URLs, status, last check, errors and per-device Connect/Disconnect/Cancel, Edit and Forget controls.
-- The compact context rail has no active resize hit area or keyboard resize control. Resize is available only after explicit expansion, constrained to 208–384px; collapsing uses the toggle.
+- Hidden navigation is inert and has no active resize hit area or keyboard resize control. Resize is constrained to 208–384px while visible.
 - Home is a dashboard with saved/connected/error counts and workspace links. Manage devices is a separate primary navigation destination; neither shows the backend context sidebar.
 - Uptime, connected-client counts, file viewers and split conversations are not implemented.
 - Each preferences page owns its content pane. No device-selector popup is used.
-- The content pane has no navigation toolbar; it is reserved for route content and future workspace views.
+- A 36px bottom status bar contains a navigation toggle, the active conversation identity and a conversation-only Activity inspector toggle. The workspace remains one route-content pane.
 - Connect checks the backend's connection response before showing Connected.
 - Connected browsers recheck every five seconds. A failed check clears the connection and shows an error.
 - Disconnect and Cancel abort pending checks without stopping or modifying the backend.
@@ -88,8 +88,7 @@ into Pinned; unpinned projects keep backend order and Recents keeps newest-first
 rows expand in place and their context menu opens settings.
 
 Standalone creation belongs to the Recents header action; there is no top-level New conversation button.
-Collapsed workspace navigation exposes direct project and conversation shortcuts; only the top
-chevron expands the panel. The footer uses the label Machine settings.
+Hidden workspace navigation exposes no project or conversation shortcuts; the top-bar toggle reopens it. The footer uses the label Machine settings.
 
 ## Project registration
 
@@ -170,7 +169,16 @@ Jump to latest is conditional on being scrolled away from the bottom; short conv
   See [navigation action contract](navigation-actions.md) for capabilities, shortcuts and drop rules.
 - Projects Add and Recents compose actions appear on header hover, keyboard focus or touch.
   Creating through Recents opens that section and creates outside every project.
-- The old top-level conversation action is removed, including from the compact rail. Compact
-  navigation retains project/conversation shortcuts and Add project; expand to create a Recents chat.
+- The old top-level conversation action and compact workspace rail are removed.
+  Show navigation to create a Recents chat or add a project.
 - Machine status uses a circular dot: bottom-right on compact badges, trailing on expanded rows.
   Accessible labels retain Connected/Connecting/Connection failed/Disconnected; color is not the only cue.
+
+## Bottom status bar and Activity inspector
+
+- One content pane remains; split panes and transcript display modes are deferred.
+- The conversation heading moves into the bottom status bar with machine/project/session context. There is no duplicate visible chat heading.
+- Activity is a separate right sidebar, following the current conversation. At 1200px and wider it is initially open, 300px wide, and independently hideable. Smaller viewports use an explicitly opened sheet so the chat remains usable.
+- Activity projects the existing conversation subscription and loaded history: running tool names, call arguments, results/failures, busy/idle and queue count. Empty/loading states and earlier-history limits are explicit. No separate stream or private reasoning display is added.
+- Transcript tool disclosures remain unchanged in this increment. Hiding either sidebar retains the composer, loaded transcript and current route. Activity is unavailable outside a mounted conversation.
+- Mobile keeps the compact device rail visible and places contextual navigation in an adjacent sheet; Home and settings remain reachable. Both sheets support dismissal.

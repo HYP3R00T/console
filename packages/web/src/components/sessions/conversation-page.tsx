@@ -39,7 +39,8 @@ function ProjectChat({
   sessionId: string;
   conversationId: string;
 }) {
-  const { origin, device } = useMachineProjects(deviceId);
+  const { origin, device, projects } = useMachineProjects(deviceId);
+  const project = projects?.find((item) => item.id === projectId);
   const sessions = useProjectSessions(deviceId, projectId);
   const session = sessions.sessions?.find(
     (item) => item.session.sessionId === sessionId,
@@ -68,11 +69,7 @@ function ProjectChat({
       sessionId={sessionId}
       conversationId={conversationId}
       title={matched.name}
-      subtitle={
-        sessions.sessions.length > 1
-          ? `Session ${session.session.number}`
-          : (device?.name ?? "Project conversation")
-      }
+      subtitle={`${device?.name ?? "Machine"} / ${project?.name ?? "Project"}${sessions.sessions.length > 1 ? ` / Session ${session.session.number}` : ""}`}
     />
   );
 }

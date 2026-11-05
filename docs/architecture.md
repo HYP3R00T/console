@@ -17,7 +17,7 @@ Browser → selected loopback backend → GET /v1/connection
 | `packages/web/src/lib/connection.ts` | URL validation, bounded-duration fetch and response validation. |
 | `packages/web/src/components/connection-provider.tsx` | Connection state, monitoring and cancellation. |
 | `packages/web/src/components/settings/` | Browser bookmark management, add-device form and Appearance views. |
-| `packages/web/src/components/layout/` | Expandable client/device column, resizable backend context panel, compact rails and shared actions. |
+| `packages/web/src/components/layout/` | Bottom status bar, hideable navigation, resizable backend context panel and Activity inspector host. |
 | `packages/web/src/components/devices/` | Browser-local device bookmark state. |
 | `packages/web/src/lib/devices.ts` | Bookmark validation, URL normalization and duplicate rejection. |
 | `packages/web/src/components/workspace/` | Device workspace, connection settings and conversation previews. |
@@ -51,29 +51,28 @@ the backend on source edits; Next.js owns web hot reload. No custom launcher is 
 
 ## Frontend shell and saved devices
 
-`AppShell` separates primary client navigation from a route-dependent context column and content.
-`DeviceRail` owns the primary column: 256px expanded, 56px compact, with navigation-only device rows. Its width animates over 200ms with overflow clipped and reduced motion respected;
-the toggle stays anchored. Home has no context column. Each device and Preferences is a distinct context; entering
-one starts with the 56px compact context rail. Navigation within the same context preserves its state.
+`AppShell` places a 36px bottom status bar below navigation and route content. SidebarProvider controls
+the desktop secondary-navigation visibility state; DeviceRail retains its own 56/256px width choice.
+The bottom-left toggle retracts the secondary column to zero with hidden content inert; the primary device rail remains visible. There is no compact
+workspace shortcut rail. The contextual panel exists only for machine/Preferences routes, starts
+expanded when navigation is visible, and retains its 208–384px user-resized width across toggles.
+The resize separator is disabled/hidden while navigation is hidden. Reduced motion skips transitions.
 
-The desktop context uses shadcn Resizable (208–384px expanded, 256px initially) and preserves its
-pixel width when the primary column resizes. Only explicit toggle actions update open state; separator interaction adjusts expanded width,
-and ordinary container resizes cannot change open state. This avoids a resize
-callback feeding layout changes back into navigation state. Dragging saves the expanded width. The compact separator is disabled for pointer/keyboard input
-and loses its extended hit area. Expanded dragging cannot snap into the compact state: it remains
-within 208–384px, and the toggle owns collapse. Imperative resize commands run on the next animation
-frame after the library commits updated collapsible constraints.
+Mobile keeps the compact device rail visible and opens contextual navigation in an adjacent sheet;
+AppSidebar itself no longer owns a separate sheet. Navigation does not remount route content.
+The remaining content region fills the viewport above the bar and owns its normal scrolling.
 
-The context's outer flex item animates its occupied width over 200ms, retracting its right edge
-rather than translating the content. Home sets the collapsed size to zero; hidden navigation is
-inert and excluded from accessibility. CSS targets the library's outer panel because its className
-prop styles an inner element. The navigation panel explicitly sets inline overflow to hidden,
-overriding the library's default overflow:auto so the width transition cannot flash a scrollbar.
-The sidebar content owns normal vertical scrolling. Dragging disables transitions, and reduced motion skips animation.
+WorkspaceChromeProvider owns only presentation metadata and a DOM portal host. Mounted Chat publishes
+its route/title/subtitle and renders ActivityInspector into that host from its existing useConversation
+snapshot and loaded history. No additional backend client, stream, request loop or durable state is
+created. The shell checks the registered route before showing conversation chrome, and Chat clears
+its registration on unmount. Its visible heading is in the bar; an sr-only h1 remains in the transcript.
 
-Both chevron toggles retain their top-left anchor. The content pane has no shell toolbar. Mobile
-keeps compact rails only when relevant and uses shadcn sheets for expanded navigation; switching
-contexts closes the mobile context sheet. `SidebarAction` composes ghost Buttons with 16px icons.
+The right Activity inspector is 300px wide and initially open on viewports at least 1200px wide.
+Below that it uses a separately controlled, initially closed sheet. Visibility does not unmount Chat
+or reset its draft/history. The inspector shows available tool calls/results/failures and current
+busy/queued state; transcript tool disclosures remain unchanged. Split panes, display modes, context
+accounting and editable runtime/security settings are future work.
 
 Device rows show initials/name and status only. Clicking navigates without disclosure or connection
 changes. Manage devices (`/devices`) owns Connect/Disconnect/Cancel, Edit, Forget, URL, checked time

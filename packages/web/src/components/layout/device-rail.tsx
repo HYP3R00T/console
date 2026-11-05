@@ -22,7 +22,13 @@ import {
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
-export function DeviceRail() {
+export function DeviceRail({
+  hidden = false,
+  compactOnly = false,
+}: {
+  hidden?: boolean;
+  compactOnly?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const registry = useDevices();
   const deviceStatus = useDeviceStatus();
@@ -36,23 +42,25 @@ export function DeviceRail() {
   function contents(full: boolean) {
     return (
       <>
-        <div className="flex w-full items-center">
-          <div className="flex w-14 shrink-0 justify-center">
-            <SidebarAction
-              compact
-              aria-label={full ? "Collapse devices" : "Expand devices"}
-              title={full ? "Collapse devices" : "Expand devices"}
-              onClick={() => setExpanded(!expanded)}
-            >
-              {full ? <ChevronLeft /> : <ChevronRight />}
-            </SidebarAction>
+        {!compactOnly && (
+          <div className="flex w-full items-center">
+            <div className="flex w-14 shrink-0 justify-center">
+              <SidebarAction
+                compact
+                aria-label={full ? "Collapse devices" : "Expand devices"}
+                title={full ? "Collapse devices" : "Expand devices"}
+                onClick={() => setExpanded(!expanded)}
+              >
+                {full ? <ChevronLeft /> : <ChevronRight />}
+              </SidebarAction>
+            </div>
+            {full && (
+              <span className="min-w-0 truncate text-sm font-semibold">
+                Console
+              </span>
+            )}
           </div>
-          {full && (
-            <span className="min-w-0 truncate text-sm font-semibold">
-              Console
-            </span>
-          )}
-        </div>
+        )}
         <div className="w-full px-2">
           <SidebarAction
             compact={!full}
@@ -60,7 +68,7 @@ export function DeviceRail() {
             render={<Link href="/" onClick={navigate} />}
             aria-label="Home"
             title="Home"
-            className={pathname === "/" ? "bg-sidebar-accent" : undefined}
+            className={pathname === "/" ? "sidebar-selected" : undefined}
           >
             <Home />
             {full && <span>Home</span>}
@@ -108,7 +116,7 @@ export function DeviceRail() {
             );
             const deviceClass = cn(
               "relative min-w-0",
-              selected && "bg-sidebar-accent",
+              selected && "sidebar-selected",
             );
             const deviceLink = (
               <SidebarAction
@@ -140,7 +148,7 @@ export function DeviceRail() {
             title="Manage devices"
             className={
               pathname === "/devices" || pathname === "/devices/new"
-                ? "bg-sidebar-accent"
+                ? "sidebar-selected"
                 : undefined
             }
           >
@@ -154,7 +162,7 @@ export function DeviceRail() {
             aria-label="Client preferences"
             title="Client preferences"
             className={
-              pathname.startsWith("/settings") ? "bg-sidebar-accent" : undefined
+              pathname.startsWith("/settings") ? "sidebar-selected" : undefined
             }
           >
             <Settings2 />
@@ -168,14 +176,20 @@ export function DeviceRail() {
     <>
       <aside
         aria-label="Devices and client preferences"
+        inert={hidden}
+        aria-hidden={hidden}
         className={cn(
-          "flex h-svh shrink-0 flex-col items-center gap-3 overflow-hidden bg-client-surface py-2 motion-safe:transition-[width] motion-safe:duration-200 motion-safe:ease-out",
-          expanded && !isMobile ? "w-64" : "w-14",
+          "flex h-full shrink-0 flex-col items-center gap-3 overflow-hidden bg-client-surface py-2 motion-safe:transition-[width] motion-safe:duration-200 motion-safe:ease-out",
+          hidden
+            ? "w-0"
+            : expanded && !isMobile && !compactOnly
+              ? "w-64"
+              : "w-14",
         )}
       >
-        {contents(expanded && !isMobile)}
+        {contents(expanded && !isMobile && !compactOnly)}
       </aside>
-      {isMobile && (
+      {isMobile && !compactOnly && (
         <Sheet open={expanded} onOpenChange={setExpanded}>
           <SheetContent
             side="left"
