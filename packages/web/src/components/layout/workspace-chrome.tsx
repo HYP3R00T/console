@@ -12,22 +12,23 @@ export type WorkspaceConversation = {
   title: string;
   subtitle: string;
 };
+export type WorkspaceInspector = {
+  route: string;
+  title: string;
+  content: ReactNode;
+};
 const Context = createContext<{
   conversation?: WorkspaceConversation;
   setConversation: Dispatch<SetStateAction<WorkspaceConversation | undefined>>;
-  inspectorHost: HTMLDivElement | null;
-  setInspectorHost: Dispatch<SetStateAction<HTMLDivElement | null>>;
+  inspector?: WorkspaceInspector;
+  setInspector: Dispatch<SetStateAction<WorkspaceInspector | undefined>>;
 } | null>(null);
-/** Route content publishes identity and portals its existing stream projection into the shell. */
+/** Route-scoped identity and optional details content; layout preferences remain client-owned. */
 export function WorkspaceChromeProvider({ children }: { children: ReactNode }) {
   const [conversation, setConversation] = useState<WorkspaceConversation>();
-  const [inspectorHost, setInspectorHost] = useState<HTMLDivElement | null>(
-    null,
-  );
+  const [inspector, setInspector] = useState<WorkspaceInspector>();
   return (
-    <Context
-      value={{ conversation, setConversation, inspectorHost, setInspectorHost }}
-    >
+    <Context value={{ conversation, setConversation, inspector, setInspector }}>
       {children}
     </Context>
   );

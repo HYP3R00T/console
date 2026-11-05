@@ -46,6 +46,8 @@ function ShellLayout({
   const chrome = useWorkspaceChrome();
   const active =
     chrome.conversation?.route === pathname ? chrome.conversation : undefined;
+  const details =
+    chrome.inspector?.route === pathname ? chrome.inspector : undefined;
   const [inspectorOverlay, setInspectorOverlay] = useState(false);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 1199px)");
@@ -64,6 +66,14 @@ function ShellLayout({
     : setDesktopInspectorOpen;
   const panel = useRef<PanelImperativeHandle | null>(null);
   const expandedWidth = useRef(256);
+  const inspectorPanel = useRef<PanelImperativeHandle | null>(null);
+  const inspectorWidth = useRef(300);
+  const inspectorVisible = !!details && inspectorOpen && !inspectorOverlay;
+  useEffect(() => {
+    if (inspectorVisible)
+      inspectorPanel.current?.resize(inspectorWidth.current);
+    else inspectorPanel.current?.collapse();
+  }, [inspectorVisible]);
   const [resizing, setResizing] = useState(false);
   const [navigationTransition, setNavigationTransition] = useState(false);
   const hasContext = contextKey !== "home";
@@ -96,14 +106,12 @@ function ShellLayout({
     ? "Hide workspace navigation"
     : "Show workspace navigation";
   const inspectorLabel = inspectorOpen
-    ? "Hide activity inspector"
-    : "Show activity inspector";
+    ? "Hide details sidebar"
+    : "Show details sidebar";
   const identityLabel = active
     ? `${active.subtitle} / ${active.title}`
     : "Console";
-  const inspector = (
-    <div ref={chrome.setInspectorHost} className="h-full min-h-0" />
-  );
+  const inspector = details?.content;
   return (
     <div className="flex h-svh w-full min-w-0 flex-col bg-client-surface">
       <div className="flex min-h-0 flex-1">
@@ -139,6 +147,13 @@ function ShellLayout({
           onLayoutChanged={(_, meta) => {
             if (visible && meta.isUserInteraction && panel.current)
               expandedWidth.current = panel.current.getSize().inPixels;
+            if (
+              inspectorVisible &&
+              meta.isUserInteraction &&
+              inspectorPanel.current
+            )
+              inspectorWidth.current =
+                inspectorPanel.current.getSize().inPixels;
           }}
         >
           <ResizablePanel
@@ -174,28 +189,46 @@ function ShellLayout({
               <Content>{children}</Content>
             </div>
           </ResizablePanel>
-        </ResizablePanelGroup>
-        {!inspectorOverlay && (
-          <aside
-            id="activity-inspector"
-            aria-label="Conversation activity inspector"
-            aria-hidden={!active || !inspectorOpen}
-            inert={!active || !inspectorOpen}
-            className="shrink-0 overflow-hidden bg-context-surface motion-safe:transition-[width] motion-safe:duration-200"
-            style={{ width: active && inspectorOpen ? 300 : 0 }}
+          <ResizableHandle
+            aria-label="Resize details sidebar"
+            disabled={!inspectorVisible}
+            className={!inspectorVisible ? "hidden" : undefined}
+            style={{ backgroundColor: "transparent" }}
+            onPointerDown={() => setResizing(true)}
+          />
+          <ResizablePanel
+            id="inspector"
+            panelRef={inspectorPanel}
+            defaultSize={0}
+            minSize={240}
+            maxSize="40%"
+            collapsedSize={0}
+            collapsible={!inspectorVisible}
+            groupResizeBehavior="preserve-pixel-size"
+            style={{ overflow: "hidden" }}
           >
-            {inspector}
-          </aside>
-        )}
-        {inspectorOverlay && active && (
+            {!inspectorOverlay && (
+              <aside
+                id="workspace-inspector"
+                aria-label="Workspace details"
+                aria-hidden={!inspectorVisible}
+                inert={!inspectorVisible}
+                className="h-full min-h-0 overflow-hidden bg-context-surface"
+              >
+                {inspector}
+              </aside>
+            )}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+        {inspectorOverlay && details && (
           <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen}>
             <SheetContent
-              id="activity-inspector"
+              id="workspace-inspector"
               side="right"
               className="w-[min(100vw,360px)]! max-w-none! gap-0 border-0 bg-context-surface p-0"
             >
               <SheetHeader className="sr-only">
-                <SheetTitle>Conversation activity</SheetTitle>
+                <SheetTitle>{details.title}</SheetTitle>
               </SheetHeader>
               {inspector}
             </SheetContent>
@@ -232,14 +265,14 @@ function ShellLayout({
             )}
           </div>
         </ControlTooltip>
-        {active && (
+        {details && (
           <ControlTooltip label={inspectorLabel}>
             <Button
               variant="ghost"
               size="icon-sm"
               aria-label={inspectorLabel}
               aria-expanded={inspectorOpen}
-              aria-controls="activity-inspector"
+              aria-controls="workspace-inspector"
               onClick={() => setInspectorOpen(!inspectorOpen)}
             >
               <PanelRight />

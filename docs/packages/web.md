@@ -6,7 +6,7 @@ The Next.js client runs at `http://127.0.0.1:3001`. It connects directly to sele
 
 - `src/lib/backend/`: `BackendConnector` establishes a connection, `BackendClient` supplies requests/subscriptions and `ConnectionManager` owns independent client lifetimes. The current adapter is local HTTP.
 - `src/components/connection-provider.tsx` and `devices/`: connection monitoring, remembered choices and browser-local bookmarks.
-- `src/components/layout/`: machine rail, contextual navigation, bottom bar, shared row/menu actions and Activity portal host.
+- `src/components/layout/`: machine rail, contextual navigation, bottom bar, shared row/menu actions and optional route-scoped details content.
 - `src/components/projects/`, `providers/` and `sessions/`: backend-scoped feature state and views. Features use the connected client rather than constructing their own transport.
 - `src/components/settings/`: device management and client appearance. `workspace/` contains machine workspace views.
 - `src/components/ui/`: installed shadcn Base UI primitives. Reuse these before creating custom controls.
@@ -28,9 +28,11 @@ Paths above are relative to `packages/web`. Backend data remains backend-owned. 
 - Primary rail: Home, all saved machines, Manage devices and Client preferences. It stays visible as a fixed 56px rail, without its own expand/collapse toggle.
 - Selecting a machine restores its last conversation and tree disclosures from browser-local navigation memory. Home does not clear that state; connection choices remain independent. This restores navigation, not transcript scroll position. New-conversation drafts are scoped to the backend/project/session and kept in browser session storage until sent.
 - Secondary panel: context for the selected machine or preference category. It is absent on Home/Manage devices, hideable with the bottom-left toggle and resizable while visible. Hidden navigation has no shortcut rail.
-- Workspace: one inset content region. The bottom bar shows current conversation identity; the bottom-right control toggles Activity when a conversation is open.
-- Activity: tool arguments/results/failures and busy/queued state from the existing conversation stream. It has its own scroll area and uses a drawer below 1200px. The transcript still includes tool disclosures; display modes and split panes are not implemented.
-- Mobile: a compact primary rail remains visible; contextual navigation and Activity use dismissible sheets. Layout changes must preserve the mounted conversation and unsent draft.
+- Workspace: one inset content region. The bottom bar shows current conversation identity. User prompts use right-aligned bubbles; assistant replies use unframed Markdown without repeated visible role labels.
+- Each prompt starts a chronological display group. Its tool arguments/results/failures appear in a collapsed Activity sequence before its replies. The latest group shows live work. These are display groups, not independent Durable runs: steering can join an existing run. Partial history without a loaded prompt is labelled as earlier activity. Event counts are real; elapsed durations are not currently recorded or displayed.
+- The right details sidebar remains a resizable desktop slot and a drawer below 1200px, but has no content assigned yet. Empty slots and their toggles stay hidden. Future views register route-scoped content through `WorkspaceChromeProvider`; switching routes cannot show another route's details. Its last resized width is retained within the current app lifetime.
+- Markdown supports lists, tables, links and fenced code blocks; embedded HTML is not executed, and Markdown images appear as links. Display modes and split panes are not implemented.
+- Mobile: a compact primary rail remains visible; contextual navigation and populated details views use dismissible sheets. Layout changes must preserve the mounted conversation and unsent draft.
 
 Machine workspace navigation contains collapsible Pinned, Projects and Recents sections. A single project session is visually flattened; multiple sessions show numbered groups. Recents opens a draft outside projects. Project/session compose opens a draft in that scope; clicking or typing creates no backend entities. First send creates the conversation and submits the prompt, retaining stable creation/message identities for retries. Explicit New session still creates a session. Machine settings replaces the tree with Providers/Projects categories; client Preferences uses its own categories.
 
