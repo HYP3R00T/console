@@ -44,7 +44,7 @@ Machine workspace navigation contains collapsible Pinned, Projects and Recents s
 
 ## Visual conventions
 
-Use shared tokens and components rather than per-page themes. Both sidebars and the bottom bar share the dark outer surface; the inset workspace is slightly lighter. Hover and selected states are distinct in both themes. Inter and Lucide are used throughout; control and workspace corners derive from the shared radius scale.
+Use shared tokens and components rather than per-page themes. Both sidebars and the bottom bar share the dark outer surface; the inset workspace is slightly lighter. Hover and selected states are distinct in both themes; dark navigation uses the supplied Linear application reference (hover `#18181a`, selected `#232325`), rather than the cooler marketing-site export. Inter and Lucide are used throughout; control and workspace corners derive from the shared radius scale.
 
 Keep row actions aligned with their parent, reserve space so labels do not jump, and preserve visible keyboard focus. Lists use continuous rows; metadata aligns with the item's text. Reduced motion skips disclosure/panel animation. Drag resizing is immediate, and only one animation should own a width transition.
 
