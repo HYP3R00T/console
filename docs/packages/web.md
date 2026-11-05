@@ -24,7 +24,7 @@ Paths above are relative to `packages/web`. Backend data remains backend-owned. 
 
 ## Layout and navigation
 
-- Primary rail: Home, all saved machines, Manage devices and Client preferences. It stays visible and independently expands from 56px to 256px.
+- Primary rail: Home, all saved machines, Manage devices and Client preferences. It stays visible as a fixed 56px rail, without its own expand/collapse toggle.
 - Secondary panel: context for the selected machine or preference category. It is absent on Home/Manage devices, hideable with the bottom-left toggle and resizable while visible. Hidden navigation has no shortcut rail.
 - Workspace: one inset content region. The bottom bar shows current conversation identity; the bottom-right control toggles Activity when a conversation is open.
 - Activity: tool arguments/results/failures and busy/queued state from the existing conversation stream. It has its own scroll area and uses a drawer below 1200px. The transcript still includes tool disclosures; display modes and split panes are not implemented.

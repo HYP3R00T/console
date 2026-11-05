@@ -120,7 +120,7 @@ function ShellLayout({
             </SheetContent>
           </Sheet>
         )}
-        <DeviceRail compactOnly={isMobile} />
+        <DeviceRail />
         <ResizablePanelGroup
           orientation="horizontal"
           className="context-layout h-full! min-w-0"
