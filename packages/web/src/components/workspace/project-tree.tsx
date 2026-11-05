@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { NavigationDragProvider } from "@/components/layout/navigation-drag";
+import { useNavigationDisclosure } from "@/components/layout/navigation-memory";
 import { NavigationSection } from "@/components/layout/navigation-section";
 import { SidebarAction } from "@/components/layout/sidebar-action";
 import { ProjectNavigation } from "@/components/projects/project-navigation";
@@ -50,7 +51,10 @@ function ProjectTreeContent({
   );
   const [removing, setRemoving] = useState<Project>();
   const [actionError, setActionError] = useState<string>();
-  const [recentsOpen, setRecentsOpen] = useState(true);
+  const [recentsOpen, setRecentsOpen] = useNavigationDisclosure(
+    `${deviceId}:section:recents`,
+    true,
+  );
   const router = useRouter();
   const base = `/devices/${encodeURIComponent(deviceId)}`;
   const pathname = usePathname();
@@ -199,7 +203,11 @@ function ProjectTreeContent({
           {message}
         </p>
       )}
-      <NavigationSection label="Pinned" dropTarget="pinned">
+      <NavigationSection
+        label="Pinned"
+        memoryKey={`${deviceId}:section:pinned`}
+        dropTarget="pinned"
+      >
         {pinnedRows}
         {!projectGroups.pinned.length && !preferences.pins.length && (
           <p className="px-3 text-xs text-muted-foreground">No pinned items.</p>
@@ -207,6 +215,7 @@ function ProjectTreeContent({
       </NavigationSection>
       <NavigationSection
         label="Projects"
+        memoryKey={`${deviceId}:section:projects`}
         dropTarget="projects"
         actions={[
           {
@@ -242,6 +251,7 @@ function ProjectTreeContent({
       </NavigationSection>
       <NavigationSection
         label="Recents"
+        memoryKey={`${deviceId}:section:recents`}
         open={recentsOpen}
         onOpenChange={setRecentsOpen}
         dropTarget="recents"

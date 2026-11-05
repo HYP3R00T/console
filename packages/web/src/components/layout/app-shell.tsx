@@ -5,6 +5,7 @@ import { useParams, usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { DeviceRail } from "@/components/layout/device-rail";
 import { Button } from "@/components/ui/button";
 import {
@@ -91,6 +92,15 @@ function ShellLayout({
       window.removeEventListener("pointercancel", stop);
     };
   }, []);
+  const navigationLabel = (isMobile ? openMobile : open)
+    ? "Hide workspace navigation"
+    : "Show workspace navigation";
+  const inspectorLabel = inspectorOpen
+    ? "Hide activity inspector"
+    : "Show activity inspector";
+  const identityLabel = active
+    ? `${active.subtitle} / ${active.title}`
+    : "Console";
   const inspector = (
     <div ref={chrome.setInspectorHost} className="h-full min-h-0" />
   );
@@ -193,63 +203,48 @@ function ShellLayout({
         )}
       </div>
       <footer className="flex h-9 shrink-0 items-center gap-3 bg-client-surface px-3">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={
-            (isMobile ? openMobile : open)
-              ? "Hide workspace navigation"
-              : "Show workspace navigation"
-          }
-          title={
-            (isMobile ? openMobile : open)
-              ? "Hide workspace navigation"
-              : "Show workspace navigation"
-          }
-          aria-expanded={isMobile ? openMobile : open}
-          disabled={!hasContext}
-          aria-controls="workspace-navigation"
-          onClick={() =>
-            isMobile ? setOpenMobile(!openMobile) : setOpen(!open)
-          }
-        >
-          <PanelLeft />
-        </Button>
-        <div
-          className="min-w-0 flex-1 truncate text-xs"
-          title={active ? `${active.subtitle} / ${active.title}` : "Console"}
-        >
-          {active ? (
-            <>
-              <span className="text-muted-foreground">
-                {active.subtitle} /{" "}
-              </span>
-              <span className="font-medium">{active.title}</span>
-            </>
-          ) : (
-            <span className="font-medium">Console</span>
-          )}
-        </div>
-        {active && (
+        <ControlTooltip label={navigationLabel}>
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={
-              inspectorOpen
-                ? "Hide activity inspector"
-                : "Show activity inspector"
+            aria-label={navigationLabel}
+            aria-expanded={isMobile ? openMobile : open}
+            disabled={!hasContext}
+            aria-controls="workspace-navigation"
+            onClick={() =>
+              isMobile ? setOpenMobile(!openMobile) : setOpen(!open)
             }
-            title={
-              inspectorOpen
-                ? "Hide activity inspector"
-                : "Show activity inspector"
-            }
-            aria-expanded={inspectorOpen}
-            aria-controls="activity-inspector"
-            onClick={() => setInspectorOpen(!inspectorOpen)}
           >
-            <PanelRight />
+            <PanelLeft />
           </Button>
+        </ControlTooltip>
+        <ControlTooltip label={identityLabel}>
+          <div className="min-w-0 flex-1 truncate text-xs">
+            {active ? (
+              <>
+                <span className="text-muted-foreground">
+                  {active.subtitle} /{" "}
+                </span>
+                <span className="font-medium">{active.title}</span>
+              </>
+            ) : (
+              <span className="font-medium">Console</span>
+            )}
+          </div>
+        </ControlTooltip>
+        {active && (
+          <ControlTooltip label={inspectorLabel}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={inspectorLabel}
+              aria-expanded={inspectorOpen}
+              aria-controls="activity-inspector"
+              onClick={() => setInspectorOpen(!inspectorOpen)}
+            >
+              <PanelRight />
+            </Button>
+          </ControlTooltip>
         )}
       </footer>
     </div>

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { ConnectionProvider } from "@/components/connection-provider";
 import { DeviceProvider } from "@/components/devices/device-provider";
 import { AppShell } from "@/components/layout/app-shell";
+import { NavigationMemoryProvider } from "@/components/layout/navigation-memory";
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import { ProjectsProvider } from "@/components/projects/projects-provider";
 import { ProvidersProvider } from "@/components/providers/providers-provider";
@@ -34,7 +35,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 <ProjectsProvider>
                   <ConversationPreferences>
                     <TooltipProvider>
-                      <AppShell>{children}</AppShell>
+                      <NavigationMemoryProvider>
+                        <AppShell>{children}</AppShell>
+                      </NavigationMemoryProvider>
                     </TooltipProvider>
                   </ConversationPreferences>
                 </ProjectsProvider>

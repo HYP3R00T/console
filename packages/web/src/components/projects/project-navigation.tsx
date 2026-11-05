@@ -2,8 +2,9 @@
 import { Layers, Pencil, Pin, PinOff, SquarePen, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { NavigationDropZone } from "@/components/layout/navigation-drag";
+import { useNavigationDisclosure } from "@/components/layout/navigation-memory";
 import {
   type NavigationAction,
   NavigationMenu,
@@ -40,7 +41,10 @@ export function ProjectNavigation({
   const href = `/devices/${encodeURIComponent(deviceId)}/projects/${encodeURIComponent(project.id)}`;
   const pathname = usePathname();
   const router = useRouter();
-  const [open, setOpen] = useState(pathname.startsWith(`${href}/sessions/`));
+  const [open, setOpen] = useNavigationDisclosure(
+    `${deviceId}:project:${project.id}`,
+    pathname.startsWith(`${href}/sessions/`),
+  );
   const { state, create, busy, error } = useProjectNavigation(
     deviceId,
     project.id,

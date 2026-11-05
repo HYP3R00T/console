@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -9,12 +9,14 @@ import {
 } from "@/components/ui/collapsible";
 import type { NavigationDropTarget } from "@/lib/navigation-drop";
 import { NavigationDropZone } from "./navigation-drag";
+import { useNavigationDisclosure } from "./navigation-memory";
 import { type NavigationAction, NavigationMenu } from "./navigation-menu";
 import { NavigationRow } from "./navigation-row";
 
 /** A section disclosure composed from the same primitive as project rows. */
 export function NavigationSection({
   label,
+  memoryKey,
   children,
   actions = [],
   dropTarget,
@@ -22,13 +24,17 @@ export function NavigationSection({
   onOpenChange,
 }: {
   label: string;
+  memoryKey: string;
   children: ReactNode;
   actions?: NavigationAction[];
   dropTarget: NavigationDropTarget;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
-  const [internalOpen, setInternalOpen] = useState(true);
+  const [internalOpen, setInternalOpen] = useNavigationDisclosure(
+    memoryKey,
+    true,
+  );
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
   return (
