@@ -17,8 +17,8 @@ its AI providers, sets up projects, and runs conversations with read-only projec
 - Project disclosures reveal/collapse with a short height/opacity transition; reduced-motion preferences skip it.
 - Only the active conversation has a persistent highlight in the workspace tree. Project rows retain their icon and toggle on click without a separate disclosure arrow. Expanded conversation rows use text labels; no compact workspace shortcut column is shown.
 - Sidebar row surfaces stay separated; inline icon actions use 24px targets/14px icons. Scrollbar thumbs have rounded ends.
-- The machine rail, secondary navigation, Activity sidebar and status bar share one shell surface. In dark mode the shell is #090909 and the inset workspace is lighter (#111111); light mode uses a neutral #f5f5f5 shell and white workspace.
-- Device selection shades its navigation row without an outline; device rows do not expand. Tree branches and remaining borders default to dashed strokes, with tree connectors ending at the final row.
+- The machine rail, secondary navigation, Activity sidebar and status bar share one shell surface. In dark mode the shell is #08090a and the inset workspace is lighter (#0f1011); light mode uses a neutral #f5f5f5 shell and white workspace.
+- Device selection shades its navigation row without an outline; device rows do not expand. Tree connectors remain dashed and end at the final row; component borders use subtle solid strokes.
 - Appearance supports system, light and dark; mobile context navigation uses a sheet.
 - Context visibility animates its occupied width to/from zero over 200ms without translating content; reduced-motion preferences disable the animation.
 - The desktop context panel resizes between 208–384px and restores its last expanded width. Navigation is visible initially. The workspace-bar toggle hides only the secondary navigation and reopens them without changing the current route or draft.

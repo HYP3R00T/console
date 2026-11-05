@@ -45,7 +45,7 @@ The old visible conversation heading is replaced by its bar identity; an accessi
 Navigation, Activity and the status bar share one shell surface without divider borders; in dark mode
 the shell is darker than the inset workspace. Dashed tree elbows terminate at the last sibling and connect
 conversations, subagents and forks. Expanding a tree node does not shade it; hover and selected
-conversation backgrounds are separate. Remaining borders default to dashed strokes; selection uses backgrounds and focus rings stay visible.
+conversation backgrounds are separate. Component borders use subtle solid strokes; tree connectors remain dashed. Selection uses backgrounds and focus rings stay visible.
 The right pane is route content today; split conversations and file/code/Markdown views remain future work.
 
 Device names and URLs are stored in this browser, not the backend. Reload preserves bookmarks
