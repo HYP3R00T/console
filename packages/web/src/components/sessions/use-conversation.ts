@@ -12,6 +12,12 @@ export type ChatMessage = {
   toolName?: string;
   toolCalls?: { id: string; name: string; arguments: string }[];
 };
+export type QueuedInput = {
+  id: number;
+  content: string;
+  whenBusy: "steer" | "followUp";
+  attachments: { name: string }[];
+};
 export type ChatSnapshot = {
   id: number;
   messages: ChatMessage[];
@@ -19,6 +25,7 @@ export type ChatSnapshot = {
   partial: string;
   activeTools?: { name: string; status: string }[];
   queued: number;
+  queue?: QueuedInput[];
   hasEarlier: boolean;
   thinkingLevel?: string;
   model?: { provider: string; modelId: string };

@@ -12,6 +12,7 @@ import { ActivityInspector } from "./activity-inspector";
 import { MessageAttachments } from "./attachment-list";
 import { type ChatAttachment, wireAttachments } from "./attachments";
 import { ChatComposer } from "./chat-composer";
+import { QueuedMessages } from "./queued-messages";
 import { ToolActivity } from "./tool-activity";
 import { type ModelRef, useChatModels } from "./use-chat-models";
 import { type ChatMessage, useConversation } from "./use-conversation";
@@ -22,6 +23,7 @@ type Pending = {
   requestId: string;
   model?: ModelRef;
   thinkingLevel?: string;
+  whenBusy?: "steer" | "followUp";
 };
 export function Chat({
   deviceId,
@@ -55,6 +57,8 @@ export function Chat({
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [pending, setPending] = useState<Pending>();
   const [busy, setBusy] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const working = !!stream?.data?.busy || !!stream?.data?.queued;
   const modelSelection = useChatModels(
     state.request,
     pending?.model ?? stream?.data?.model,
@@ -127,7 +131,20 @@ export function Chat({
     update();
     return () => observer.disconnect();
   }, [hasSnapshot]);
-  async function send() {
+  async function stop() {
+    setStopping(true);
+    setError(undefined);
+    try {
+      await state.request(`${path}/stop`, { method: "POST", body: "{}" });
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not stop conversation.",
+      );
+    } finally {
+      setStopping(false);
+    }
+  }
+  async function send(whenBusy: "steer" | "followUp" = "followUp") {
     const message = pending ?? {
       content: content.trim(),
       attachments,
@@ -139,9 +156,17 @@ export function Chat({
           }
         : undefined,
       thinkingLevel: modelSelection.level,
+      whenBusy,
+      ...(working && stream?.data?.model
+        ? {
+            model: stream.data.model,
+            thinkingLevel: stream.data.thinkingLevel,
+          }
+        : {}),
     };
     if (
       busy ||
+      stopping ||
       (!message.content && !message.attachments?.length) ||
       (!pending && !modelSelection.model)
     )
@@ -371,15 +396,33 @@ export function Chat({
           Delivery pending. Retry sends the same message once.
         </p>
       )}
+      <QueuedMessages
+        items={stream?.data?.queue ?? []}
+        path={path}
+        request={state.request}
+      />
       <ChatComposer
         attachments={pending?.attachments ?? attachments}
         onAttachmentsChange={setAttachments}
         content={pending?.content ?? content}
         onChange={setContent}
-        onSend={() => void send()}
-        sending={busy}
+        onSend={(mode) => void send(mode)}
+        onStop={() => void stop()}
+        stopping={stopping}
+        sending={busy || stopping}
         pending={!!pending}
-        working={!!stream?.data?.busy || !!stream?.data?.queued}
+        working={working}
+        imageSupported={
+          working
+            ? modelSelection.models
+                .find(
+                  (model) =>
+                    model.provider === stream?.data?.model?.provider &&
+                    model.id === stream.data.model.modelId,
+                )
+                ?.input?.includes("image")
+            : undefined
+        }
         models={modelSelection}
       />
     </div>

@@ -28,7 +28,7 @@ export function configureHttpConnection(
   });
   app.register(cors, {
     origin: policy.origins,
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: policy.allowedHeaders,
     credentials: policy.credentials,
   });
