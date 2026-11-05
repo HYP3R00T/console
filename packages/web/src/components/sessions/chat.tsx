@@ -9,12 +9,15 @@ import { useMachineProjects } from "@/components/projects/projects-provider";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ActivityInspector } from "./activity-inspector";
+import { MessageAttachments } from "./attachment-list";
+import { type ChatAttachment, wireAttachments } from "./attachments";
 import { ChatComposer } from "./chat-composer";
 import { ToolActivity } from "./tool-activity";
 import { type ModelRef, useChatModels } from "./use-chat-models";
 import { type ChatMessage, useConversation } from "./use-conversation";
 
 type Pending = {
+  attachments?: ChatAttachment[];
   content: string;
   requestId: string;
   model?: ModelRef;
@@ -49,6 +52,7 @@ export function Chat({
     path,
   );
   const [content, setContent] = useState("");
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [pending, setPending] = useState<Pending>();
   const [busy, setBusy] = useState(false);
   const modelSelection = useChatModels(
@@ -126,6 +130,7 @@ export function Chat({
   async function send() {
     const message = pending ?? {
       content: content.trim(),
+      attachments,
       requestId: crypto.randomUUID(),
       model: modelSelection.model
         ? {
@@ -135,7 +140,12 @@ export function Chat({
         : undefined,
       thinkingLevel: modelSelection.level,
     };
-    if (busy || !message.content || (!pending && !modelSelection.model)) return;
+    if (
+      busy ||
+      (!message.content && !message.attachments?.length) ||
+      (!pending && !modelSelection.model)
+    )
+      return;
     setBusy(true);
     setError(undefined);
     // Keep the request identity when HTTP admission succeeded but its acknowledgement was lost.
@@ -144,12 +154,19 @@ export function Chat({
       sessionStorage.setItem(pendingKey, JSON.stringify(message));
       const submitted = await state.request<{ id: number }>(
         `${path}/messages`,
-        { method: "POST", body: JSON.stringify(message) },
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...message,
+            attachments: wireAttachments(message.attachments ?? []),
+          }),
+        },
       );
       if (!Number.isSafeInteger(submitted.id))
         throw new Error("Invalid submission response.");
       setPending(undefined);
       setContent("");
+      setAttachments([]);
       follow.current = true;
       sessionStorage.removeItem(pendingKey);
     } catch (cause) {
@@ -251,6 +268,14 @@ export function Chat({
                       ? `${message.toolName} · ${message.failed ? "Failed" : "Completed"}`
                       : "Assistant"}
                 </p>
+                {!!message.attachments?.length && (
+                  <MessageAttachments
+                    files={message.attachments}
+                    path={path}
+                    entryId={message.entryId}
+                    request={state.request}
+                  />
+                )}
                 {message.role === "tool" ? (
                   <ToolActivity
                     label={message.failed ? "View error" : "View result"}
@@ -347,6 +372,8 @@ export function Chat({
         </p>
       )}
       <ChatComposer
+        attachments={pending?.attachments ?? attachments}
+        onAttachmentsChange={setAttachments}
         content={pending?.content ?? content}
         onChange={setContent}
         onSend={() => void send()}

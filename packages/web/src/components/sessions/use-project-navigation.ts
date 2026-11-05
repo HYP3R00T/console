@@ -41,29 +41,11 @@ export function useProjectNavigation(
         if (active.current) onCreated?.();
         return;
       }
-      let sessionId = target;
-      if (!sessionId) {
-        const sessions =
-          state.sessions?.map((item) => item.session) ??
-          (
-            await state.request<{ sessions: SessionRecord[] }>(
-              `/v1/projects/${projectId}/sessions`,
-            )
-          ).sessions;
-        sessionId = sessions.find((session) => session.number === 1)?.sessionId;
-      }
-      if (!sessionId) throw new Error("Default session is unavailable.");
-      const conversationId = (
-        await state.request<{ id: number }>(
-          `/v1/sessions/${sessionId}/conversations`,
-          { method: "POST", body: "{}" },
-        )
-      ).id;
-      sessionsChanged();
-      if (!active.current) return;
       onCreated?.();
       router.push(
-        `${href}/sessions/${sessionId}/conversations/${conversationId}`,
+        target
+          ? `${href}/sessions/${target}/conversations/new`
+          : `${href}/conversations/new`,
       );
     } catch (cause) {
       setError(

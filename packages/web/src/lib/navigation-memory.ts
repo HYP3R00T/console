@@ -11,7 +11,7 @@ export const emptyNavigationMemory = (): NavigationMemory => ({
 /** Only workspace routes can be restored; never arbitrary URLs or settings pages. */
 export function workspaceDevice(path: string): string | undefined {
   const match =
-    /^\/devices\/([^/?#]+)\/(?:conversations\/[^/?#]+|projects\/[^/?#]+\/sessions\/[^/?#]+\/conversations\/[^/?#]+)$/.exec(
+    /^\/devices\/([^/?#]+)\/(?:conversations\/[^/?#]+|projects\/[^/?#]+\/conversations\/new|projects\/[^/?#]+\/sessions\/[^/?#]+\/conversations\/[^/?#]+)$/.exec(
       path,
     );
   if (!match) return;

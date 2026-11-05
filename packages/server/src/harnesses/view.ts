@@ -1,5 +1,7 @@
 import type { ConversationView, EntryRecord } from "@earendil-works/pi-durable";
 
+import { attachedInput } from "./attachments.ts";
+
 const inspectionTools = new Set(["list_directory", "read_file", "search_text"]);
 type ChatMessage = {
   id: string;
@@ -7,6 +9,13 @@ type ChatMessage = {
   role: "user" | "assistant" | "tool";
   text: string;
   failed: boolean;
+  attachments?: {
+    name: string;
+    mimeType: string;
+    size: number;
+    index: number;
+    thumbnail?: string;
+  }[];
   toolName?: string;
   toolCalls?: { id: string; name: string; arguments: string }[];
 };
@@ -70,7 +79,23 @@ export function messages(entries: readonly EntryRecord[]) {
           id: `${entry.id}:${index}`,
           entryId: entry.id,
           role: message.role,
-          text: text(message.content),
+          text:
+            message.role === "user"
+              ? (attachedInput(entry)?.text ?? text(message.content))
+              : text(message.content),
+          ...(message.role === "user" && attachedInput(entry)
+            ? {
+                attachments: attachedInput(entry)?.attachments.map(
+                  ({ name, mimeType, size, thumbnail }, index) => ({
+                    name,
+                    mimeType,
+                    size,
+                    index,
+                    ...(thumbnail ? { thumbnail } : {}),
+                  }),
+                ),
+              }
+            : {}),
           ...(calls.length ? { toolCalls: calls } : {}),
           failed:
             message.role === "assistant" &&

@@ -18,7 +18,10 @@ export const ConversationInfo = defineDoc<{
   checkpointWhen: () => true,
 });
 
-export const SessionInfo = defineDoc<{ nextConversation: number }>({
+export const SessionInfo = defineDoc<{
+  nextConversation: number;
+  creations?: Record<string, number>;
+}>({
   kind: "console.session",
   version: 1,
   scope: "session",

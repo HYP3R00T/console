@@ -1,10 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMachineProjects } from "@/components/projects/projects-provider";
 import type { SessionRecord } from "@/components/sessions/use-project-sessions";
-import { sessionsChanged } from "@/components/sessions/use-project-sessions";
 
 type StandaloneRecord = SessionRecord & { conversationId: number };
 
@@ -19,9 +18,6 @@ export function useStandaloneNavigation(
     sessions?: StandaloneRecord[];
     error?: string;
   }>();
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string>();
-  const pending = useRef(false);
   const router = useRouter();
   const base = `/devices/${encodeURIComponent(deviceId)}/conversations`;
   const key = origin ?? "";
@@ -70,29 +66,10 @@ export function useStandaloneNavigation(
       clearTimeout(timer);
     };
   }, [connected, key, client, request]);
-  async function create() {
-    if (!connected || pending.current) return;
-    pending.current = true;
-    setCreating(true);
-    setError(undefined);
-    try {
-      const session = await request<SessionRecord>("/v1/standalone", {
-        method: "POST",
-        body: "{}",
-      });
-      sessionsChanged();
-      closeMobile();
-      router.push(`${base}/${session.sessionId}`);
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not create conversation.",
-      );
-    } finally {
-      pending.current = false;
-      setCreating(false);
-    }
+  function create() {
+    if (!connected) return;
+    closeMobile();
+    router.push(`${base}/new`);
   }
   const current =
     connected && snapshot?.key === key && snapshot.client === client
@@ -100,8 +77,8 @@ export function useStandaloneNavigation(
       : undefined;
   return {
     sessions: current?.sessions,
-    error: error ?? current?.error,
-    creating,
+    error: current?.error,
+    creating: false,
     create,
     connected,
     base,

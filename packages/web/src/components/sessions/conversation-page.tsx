@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useMachineProjects } from "@/components/projects/projects-provider";
 import { Chat } from "./chat";
+import { DraftConversationPage } from "./draft-conversation-page";
 import { useProjectSessions } from "./use-project-sessions";
 
 export function ConversationPage() {
@@ -26,6 +27,7 @@ export function ConversationPage() {
         {state.projects ? "Project not found." : "Loading project…"}
       </p>
     );
+  if (params.conversationId === "new") return <DraftConversationPage />;
   return <ProjectChat {...params} />;
 }
 function ProjectChat({
