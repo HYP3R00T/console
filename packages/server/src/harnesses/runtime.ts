@@ -8,6 +8,7 @@ import type { ProjectExecutor, ProjectScope } from "../execution/types.ts";
 import type { ProviderService } from "../providers/service.ts";
 import { openDatabase } from "../storage/database.ts";
 import { projectInspection } from "./project-inspection.ts";
+import { purgeConversation } from "./purge-conversation.ts";
 
 /** One manager owns every open session in this process. Opening is single-flight. */
 export class HarnessRuntime {
@@ -128,6 +129,28 @@ export class HarnessRuntime {
       await storage.close(context);
       throw error;
     }
+  }
+  async purge(
+    sessionId: string,
+    conversationId: number,
+    beforeErase: () => void,
+  ) {
+    const current = this.opened.get(sessionId);
+    if (current) {
+      const harness = await current;
+      const inspection = await harness.inspect(context);
+      if (inspection.tasks.length || inspection.submissions.length)
+        throw new Error(
+          "Stop all work in this session before permanently deleting history.",
+        );
+      await harness.close(context);
+    }
+    this.opened.delete(sessionId);
+    purgeConversation(
+      join(this.directory, `${sessionId}.sqlite`),
+      conversationId,
+      beforeErase,
+    );
   }
   async close() {
     this.closing = true;

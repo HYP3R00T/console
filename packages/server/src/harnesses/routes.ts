@@ -139,6 +139,52 @@ export function registerHarnessRoutes(
             ),
           ),
     );
+    routes.get("/v1/archives/conversations", () =>
+      service.operation(() => service.archivedConversations()),
+    );
+    routes.post<{ Params: Scope; Body: { stop?: boolean } }>(
+      `${base}/archive`,
+      {
+        schema: {
+          params: conversationParams,
+          body: {
+            type: "object",
+            additionalProperties: false,
+            properties: { stop: { type: "boolean" } },
+          },
+        },
+      },
+      (req) =>
+        service.operation(() =>
+          service.archiveConversation(
+            req.params.sessionId,
+            req.params.conversationId,
+            !!req.body.stop,
+          ),
+        ),
+    );
+    routes.post<{ Params: Scope }>(
+      `${base}/restore`,
+      { schema: { params: conversationParams, body: creation } },
+      (req) =>
+        service.operation(() =>
+          service.restoreConversation(
+            req.params.sessionId,
+            req.params.conversationId,
+          ),
+        ),
+    );
+    routes.delete<{ Params: Scope }>(
+      `${base}/archive`,
+      { schema: { params: conversationParams } },
+      (req) =>
+        service.operation(() =>
+          service.deleteArchivedConversation(
+            req.params.sessionId,
+            req.params.conversationId,
+          ),
+        ),
+    );
     routes.put<{ Params: Scope; Body: { name: string } }>(
       base,
       {
@@ -454,6 +500,7 @@ export function registerHarnessRoutes(
               name: string;
               createdAt: string;
               lastSubmissionId?: number;
+              archived?: boolean;
             }>
           | undefined;
         try {
@@ -521,6 +568,15 @@ export function registerHarnessRoutes(
               await send(value);
             });
             metadata?.start(async () => {
+              if (
+                service.archives.get(
+                  req.params.sessionId,
+                  Number(req.params.conversationId),
+                )
+              ) {
+                stop();
+                return;
+              }
               if (watch) await send(watch.value);
             });
             await watch.closed;

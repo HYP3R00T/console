@@ -34,17 +34,19 @@ Paths above are relative to `packages/web`. Backend data remains backend-owned. 
 - Markdown supports lists, tables, links and fenced code blocks; embedded HTML is not executed, and Markdown images appear as links. Display modes and split panes are not implemented.
 - Mobile: a compact primary rail remains visible; contextual navigation and populated details views use dismissible sheets. Layout changes must preserve the mounted conversation and unsent draft.
 
-Machine workspace navigation contains collapsible Pinned, Projects and Recents sections. A single project session is visually flattened; multiple sessions show numbered groups. Recents opens a draft outside projects. Project/session compose opens a draft in that scope; clicking or typing creates no backend entities. First send creates the conversation and submits the prompt, retaining stable creation/message identities for retries. Explicit New session still creates a session. Machine settings replaces the tree with Providers/Projects categories; client Preferences uses its own categories.
+Machine workspace navigation starts with New conversation, opening an unsaved draft with machine/project selectors, followed by collapsible Pinned, Projects and Recents sections. A single project session is visually flattened; multiple sessions show numbered groups. Recents opens a draft outside projects. Project/session compose opens a draft in that scope; clicking or typing creates no backend entities. First send creates the conversation and submits the prompt, retaining stable creation/message identities for retries. Explicit New session still creates a session. Machine settings replaces the tree with Providers/Projects/Archives categories; client Preferences uses its own categories.
 
 ## Row actions
 
 - Project: click its icon/name to expand; menu actions create a conversation/session, edit, pin/unpin or remove. Project compose targets Session 1; a session's compose action targets that session.
-- Conversation: click to open; menu actions rename or pin/unpin. Conversation removal is unavailable until a backend lifecycle operation exists.
+- Conversation: click to open; menu actions rename or pin/unpin. Archive runs immediately and reports progress/result in the shared toast area; busy work still requires Stop and archive. Machine settings → Archives provides restore and confirmed permanent history deletion.
 - Sections: Projects offers Add project; Recents offers New conversation; all sections expand/collapse.
 - Dots menus, right-click menus and inline shortcuts use the same definitions in `src/lib/navigation-actions.ts` and layout wrappers. Do not duplicate handlers or expose unsupported actions.
 - Hover actions also appear on keyboard focus and remain discoverable on touch. Opening a menu shades its target without navigating; the current conversation retains a stronger selection shade. Project disclosure alone does not select it.
 - Pinned items leave their original list without duplication. Unpin restores them to their owner list; ordering is not arbitrary manual sorting.
 - Desktop drag supports pin/unpin only. Moving a conversation between projects or into Recents is rejected: its Durable session and execution scope cannot be changed by moving a row. Keyboard/touch use the menus.
+
+Notifications use the shadcn Base UI Toast manager mounted once at the app root, top-center. Archive, restore and permanent conversation deletion report progress, success and failure there. Completed notices dismiss automatically (4.5 seconds; errors 7 seconds), with manual dismissal and library-managed pause on interaction. Loading notices stay until settled. Notifications do not replace destructive-action warnings or persistent field errors. Other features can use the same manager, including its promise API.
 
 ## Visual conventions
 
@@ -59,3 +61,5 @@ Provider/model catalogs fill the available space and scroll independently, with 
 Tests in `test/` cover connection isolation/cancellation, remembered bookmarks, pin scope and navigation actions. Check affected views in the owner's development server after UI changes: dark/light, narrow/desktop, long names, menus, hidden panels, keyboard focus and draft retention. The existing browser checks are not a full accessibility or production-scale certification.
 
 For a production build, run `pnpm build`, then `pnpm --filter @console/web start`. Development uses the owner's separately running `mise run dev:web`; do not restart it without permission.
+
+Machine Archives lists individually archived conversations and archived projects, hiding empty sections. Delete all conversations confirms a snapshot of the listed conversations, retries dependent parents after deleting archived descendants, and reports partial failures; blocked items remain archived. Restore returns a conversation to its original scope. Permanent conversation deletion warns that messages, attachments and saved work state are erased; dependent forks and busy sessions block deletion. Archived projects must be restored before conversation restoration. Project archives retain their existing restore workflow; permanent project deletion is not implemented. Pending interrupted deletion cannot be restored and can be retried. Permanent deletion is not performed by the row Archive action.

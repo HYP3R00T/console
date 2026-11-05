@@ -21,6 +21,7 @@ import {
   prepareAttachments,
   readAttachment,
 } from "./attachments.ts";
+import { ConversationArchives } from "./conversation-archives.ts";
 import { ConversationInfo, SessionInfo } from "./documents.ts";
 import { queueView } from "./queue.ts";
 import { HarnessRuntime } from "./runtime.ts";
@@ -39,6 +40,8 @@ export class HarnessError extends Error {
 }
 export class HarnessService {
   readonly runtime;
+  readonly archives: ConversationArchives;
+  private maintaining = new Set<string>();
   readonly store: HarnessStore;
   private projects: ProjectService;
   private providers: ProviderService;
@@ -52,6 +55,7 @@ export class HarnessService {
     providers: ProviderService,
   ) {
     this.store = store;
+    this.archives = new ConversationArchives(store);
     this.projects = projects;
     this.providers = providers;
     this.runtime = new HarnessRuntime(
@@ -148,11 +152,14 @@ export class HarnessService {
       this.store.listStandalone().map(async (record) => {
         const { session, conversationId } = await this.standalone(
           record.sessionId,
+          true,
         );
-        return { ...session, conversationId };
+        return this.archives.get(record.sessionId, conversationId)
+          ? undefined
+          : { ...session, conversationId };
       }),
     );
-    return { sessions: records };
+    return { sessions: records.filter((record) => record !== undefined) };
   }
   createStandalone(creationId?: string) {
     return this.serial(`standalone:${creationId ?? randomUUID()}`, async () => {
@@ -164,16 +171,28 @@ export class HarnessService {
         );
       const record =
         existing ?? this.store.insert(standaloneOwner, "", "", creationId);
-      await this.ready(record);
+      if (this.maintaining.has(record.sessionId))
+        throw new HarnessError(503, "Session maintenance is in progress.");
+      const harness = await this.ready(record);
+      const root = await harness.root(context);
+      if (this.archives.get(record.sessionId, root.id))
+        throw new HarnessError(
+          410,
+          "The created conversation was archived or deleted.",
+        );
       return record;
     });
   }
-  async standalone(sessionId: string) {
+  async standalone(sessionId: string, includeArchived = false) {
+    if (this.maintaining.has(sessionId))
+      throw new HarnessError(503, "Session maintenance is in progress.");
     const record = this.store.session(sessionId);
     if (record?.projectId !== standaloneOwner)
       throw new HarnessError(404, "Standalone conversation not found.");
     const harness = await this.ready(record);
     const root = await harness.root(context);
+    if (!includeArchived && this.archives.get(sessionId, root.id))
+      throw new HarnessError(404, "Conversation is archived or deleted.");
     const info = await harness.snapshot(ConversationInfo, root.id, context);
     return {
       session: { ...record, name: info?.name ?? record.name },
@@ -257,6 +276,11 @@ export class HarnessService {
     return this.runtime.open(record.sessionId);
   }
   async session(sessionId: string) {
+    if (this.maintaining.has(sessionId))
+      throw new HarnessError(
+        503,
+        "Session maintenance is in progress. Retry shortly.",
+      );
     const record = this.store.session(sessionId);
     if (!record) throw new HarnessError(404, "Session not found.");
     if (record.projectId !== standaloneOwner)
@@ -278,7 +302,13 @@ export class HarnessService {
         return { id: row.id, ...info, name: info?.name ?? "Conversation" };
       }),
     );
-    return { session: record, conversations, more: !!records.next };
+    return {
+      session: record,
+      conversations: conversations.filter(
+        (item) => !this.archives.get(sessionId, item.id),
+      ),
+      more: !!records.next,
+    };
   }
   addConversation(sessionId: string, creationId?: string) {
     return this.serial(sessionId, async () => {
@@ -292,6 +322,11 @@ export class HarnessService {
         const counter = await harness.snapshot(SessionInfo, context);
         const existing = counter?.creations?.[creationId];
         if (existing !== undefined) {
+          if (this.archives.get(sessionId, existing))
+            throw new HarnessError(
+              410,
+              "The created conversation was archived or deleted.",
+            );
           const info = await harness.snapshot(
             ConversationInfo,
             existing as ConversationId,
@@ -330,6 +365,8 @@ export class HarnessService {
     });
   }
   async conversation(sessionId: string, id: string) {
+    if (this.archives.get(sessionId, Number(id)))
+      throw new HarnessError(404, "Conversation is archived or deleted.");
     const { record, harness } = await this.session(sessionId);
     const conversation = await harness.conversation(
       Number(id) as ConversationId,
@@ -338,6 +375,108 @@ export class HarnessService {
     if (!conversation)
       throw new HarnessError(404, "Conversation not found in this session.");
     return { record, harness, conversation };
+  }
+  async archivedConversations() {
+    return {
+      conversations: this.archives.list().map((item) => {
+        const session = this.store.session(item.sessionId);
+        const project = session?.projectId
+          ? [
+              ...this.projects.store.list(),
+              ...this.projects.store.list(true),
+            ].find((project) => project.id === session.projectId)
+          : undefined;
+        return {
+          ...item,
+          projectId: session?.projectId || null,
+          projectName: project?.name ?? null,
+          projectArchived: !!project?.archivedAt,
+        };
+      }),
+    };
+  }
+  archiveConversation(sessionId: string, id: string, stop: boolean) {
+    return this.serial(sessionId, async () => {
+      const existing = this.archives.get(sessionId, Number(id));
+      if (existing && !existing.deletedAt) return { archived: true };
+      const { harness, conversation } = await this.conversation(sessionId, id);
+      const live = await harness.snapshot(LiveDoc, conversation.id, context);
+      const inbox = await harness.snapshot(InboxDoc, conversation.id, context);
+      const inspection = await harness.inspect(context);
+      const busy =
+        !!live?.run ||
+        !!inbox?.items.length ||
+        inspection.tasks.some(
+          (task) => task.record.conversationId === conversation.id,
+        );
+      if (busy && !stop)
+        throw new HarnessError(
+          409,
+          "Conversation has running or queued work. Stop and archive to continue.",
+        );
+      await conversation.abort(
+        withAbortSignal(AbortSignal.timeout(15000), context),
+        { background: true },
+      );
+      const info = await harness.snapshot(
+        ConversationInfo,
+        conversation.id,
+        context,
+      );
+      this.archives.archive(
+        sessionId,
+        conversation.id,
+        info?.name ?? "Conversation",
+      );
+      await harness.commit(async (tx) => {
+        const info = await tx.doc(ConversationInfo, conversation.id);
+        info.archived = true;
+      }, context);
+      return { archived: true };
+    });
+  }
+  restoreConversation(sessionId: string, id: string) {
+    return this.serial(sessionId, async () => {
+      const item = this.archives.get(sessionId, Number(id));
+      if (!item || item.deletedAt)
+        throw new HarnessError(404, "Archived conversation not found.");
+      const { harness } = await this.session(sessionId); // Restore the project first.
+      await harness.commit(async (tx) => {
+        const info = await tx.doc(
+          ConversationInfo,
+          Number(id) as ConversationId,
+        );
+        info.archived = false;
+      }, context);
+      this.archives.restore(sessionId, Number(id));
+      return { restored: true };
+    });
+  }
+  deleteArchivedConversation(sessionId: string, id: string) {
+    return this.serial(sessionId, async () => {
+      const item = this.archives.get(sessionId, Number(id));
+      if (!item || (item.deletedAt && item.deletedAt !== "pending"))
+        throw new HarnessError(404, "Archived conversation not found.");
+      const record = this.store.session(sessionId);
+      if (!record) throw new HarnessError(404, "Session not found.");
+      this.maintaining.add(sessionId);
+      try {
+        await this.runtime.purge(sessionId, Number(id), () =>
+          this.archives.deleting(sessionId, Number(id)),
+        );
+        this.archives.deleted(sessionId, Number(id));
+      } catch (error) {
+        throw new HarnessError(
+          409,
+          error instanceof Error
+            ? error.message
+            : "History could not be deleted.",
+        );
+      } finally {
+        this.maintaining.delete(sessionId);
+      }
+      return { deleted: true };
+    });
   }
   renameConversation(sessionId: string, id: string, name: string) {
     return this.serial(sessionId, async () => {

@@ -7,7 +7,7 @@ export const navigationActions = {
     "edit",
     "remove",
   ],
-  conversation: ["rename", "toggle-pin"],
+  conversation: ["rename", "toggle-pin", "archive"],
   session: ["create-conversation"],
   section: ["toggle-section", "add-project", "create-conversation"],
 } as const;

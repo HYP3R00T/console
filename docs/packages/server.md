@@ -45,6 +45,7 @@ HTTP commands mutate state; SSE observes conversation updates. Route files conta
   - Conversation observation uses the same base path with `/events` for SSE, `/history` for older entries and `/submissions` for completion state.
   - `/queue` lists waiting input without original attachment bytes. `PATCH /queue/:submissionId` edits text or changes `whenBusy` between `followUp` and `steer`; `expectedContent` and `expectedWhenBusy` reject stale edits. Attachments are retained. `DELETE` withdraws an unplaced input; inputs already placed cannot be edited or withdrawn.
   - `POST` to the conversation's `/stop` interrupts its work and withdraws its queued inputs without stopping sibling conversations. Steering joins at Durable's next safe boundary, rather than interrupting an in-flight provider request.
+  - `POST /archive` hides an individual conversation; busy work requires `{stop:true}`. `POST /restore` restores an archived conversation. `GET /v1/archives/conversations` lists machine-wide conversation archives. `DELETE /archive` permanently erases an already archived conversation, subject to dependency and idle checks.
   - Rename preserves IDs/history. `POST /v1/sessions/:sessionId/stop` stops the whole session, including sibling conversations and queued input.
 
 The current connection policy permits the local website origins and rejects other browser origins. API access is unauthenticated; CORS is not authentication. Feature services must stay independent of future reachability/authentication adapters.
@@ -64,7 +65,7 @@ The current connection policy permits the local website origins and rejects othe
 - Conversation lists return at most 200 entries; SSE snapshots include recent bounded history, with older records available through pagination. Streaming has connection/frame/slow-client bounds; it is not an unbounded log feed.
 - Tests in `test/` cover provider lifecycle, project setup/archive, session isolation, message deduplication, HTTP policy, reconnect and abrupt-crash recovery using fake providers. Read the relevant tests when changing a contract.
 - Live-provider entitlement, remote deployment, production scale, full backup/restore and OS confinement are not established by these tests.
-- Forks, subagents, scheduled triggers, individual conversation removal and permanent project deletion are not implemented.
+- Forks, subagents, scheduled triggers and permanent project deletion are not implemented.
 
 For a production build, run `pnpm build`, then `pnpm --filter @console/server start`. Development uses the owner's separately running `mise run dev:server`; do not restart it without permission.
 
@@ -77,3 +78,11 @@ Durable owns the complete admitted input: model content, original image bytes an
 ## Conversation creation
 
 Standalone and project-session conversation creation accept an optional UUID `creationId`. Retrying that identity in the same scope returns the existing entity, including after restart; message submission separately deduplicates `requestId`. Clients use these identities on first send so opening an unsaved draft does not create empty conversations. Creation and first-message admission are separate operations: a failed send can leave a retryable empty conversation.
+
+## Conversation archives
+
+Individual archival is backend-owned lifecycle state in `harnesses.sqlite`. Archived conversations disappear from project lists and Recents, reject new input/history/download access and retain their Durable history. Explicit Stop and archive aborts background work as well as ordinary work and withdraws waiting input before hiding the conversation. Restore keeps identity/history without restarting that work; an archived project must be restored first.
+
+Permanent deletion is a separate confirmed action, available only after archival. Durable 1.4.0 has no conversation-erasure operation: the version-guarded offline SQLite adapter closes the entire idle session, removes that conversation's entries, submissions, tasks and document revisions, then checkpoints and vacuums storage. It rejects dependent forks/owned conversations; delete dependent descendants first. Other session streams reconnect after maintenance. It retains only allocated IDs, an empty structural conversation record and application lifecycle tombstones to prevent ID reuse or root recreation. It does not delete project source files, upstream provider records, backups or independently copied content. It is not a forensic-erasure guarantee.
+
+Deletion records a non-restorable pending marker before erasing history. Interrupted cleanup remains in Archives for retry; it cannot be restored into an empty conversation. The adapter must be reviewed before upgrading Durable storage. Fork creation and tool-selection controls are separate capabilities, not provided by archival.

@@ -198,6 +198,14 @@ function ProjectTreeContent({
   return (
     <div className="min-w-0 space-y-6 px-2">
       {removal}
+      <SidebarAction
+        nativeButton={false}
+        className="h-7 gap-2 px-2 [&_svg]:size-3"
+        render={<Link href={`${standalone.base}/new`} onClick={closeMobile} />}
+      >
+        <SquarePen />
+        <span>New conversation</span>
+      </SidebarAction>
       {message && (
         <p role="alert" className="px-3 text-xs text-destructive">
           {message}
@@ -277,9 +285,7 @@ function ProjectTreeContent({
               ? "Connect this machine to see Recents."
               : !standalone.sessions
                 ? "Loading conversations…"
-                : standalone.sessions.length
-                  ? "All conversations are pinned."
-                  : "No conversations yet."}
+                : "No recent conversations found."}
           </p>
         )}
       </NavigationSection>

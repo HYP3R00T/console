@@ -5,6 +5,7 @@ export const ConversationInfo = defineDoc<{
   name: string;
   createdAt: string;
   lastSubmissionId?: number;
+  archived?: boolean;
 }>({
   kind: "console.conversation",
   version: 1,
