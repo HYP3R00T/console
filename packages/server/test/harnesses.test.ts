@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { fauxAssistantMessage } from "@earendil-works/pi-ai";
-
+import { conversationView } from "../src/harnesses/view.ts";
 import { fixture } from "./support/harness-fixture.ts";
 
 const model = { provider: "test", modelId: "test-model" };
@@ -706,4 +706,46 @@ test("standalone chats stay separate from projects and retain workspaces and tra
     "persistent workspace",
   );
   assert.equal(f.faux.state.callCount, 0);
+});
+
+test("submitted thinking levels survive view recreation and restart independently per conversation", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "console-saved-thinking-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  let f = await fixture(directory);
+  t.after(() => f.app.close());
+  const project = await f.projects.register("Project", directory);
+  const sessionId = f.service.store.list(project.id)[0].sessionId;
+  const { harness } = await f.service.session(sessionId);
+  const root = await harness.root(context);
+  const sibling = await f.service.addConversation(sessionId);
+  const reasoning = { provider: "test", modelId: "reasoning-model" };
+  const submit = async (id: number, thinkingLevel?: string) => {
+    f.faux.setResponses([fauxAssistantMessage("Done")]);
+    await f.service.submit(sessionId, String(id), "Hello", randomUUID(), {
+      model: reasoning,
+      ...(thinkingLevel ? { thinkingLevel } : {}),
+    });
+    await harness.waitForIdle(context);
+  };
+  const read = async (id: number) => {
+    const scope = await f.service.conversation(sessionId, String(id));
+    const watch = await scope.conversation.watch(context);
+    try {
+      return conversationView(watch.value).thinkingLevel;
+    } finally {
+      await watch.stop();
+    }
+  };
+  await submit(root.id, "high");
+  await submit(sibling.id, "low");
+  assert.equal(await read(root.id), "high");
+  assert.equal(await read(sibling.id), "low");
+  await submit(root.id);
+  assert.equal(await read(root.id), "high");
+  await submit(root.id, "low");
+  assert.equal(await read(root.id), "low");
+  await f.app.close();
+  f = await fixture(directory);
+  assert.equal(await read(root.id), "low");
+  assert.equal(await read(sibling.id), "low");
 });

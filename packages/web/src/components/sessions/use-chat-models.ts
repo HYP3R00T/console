@@ -12,6 +12,33 @@ export type ChatModel = {
 export type ModelRef = { provider: string; modelId: string };
 const keyOf = (model: { provider: string; id: string }) =>
   JSON.stringify([model.provider, model.id]);
+type ModelChoice = { key: string; level?: string };
+
+/** Unsaved choices override the conversation's last submitted model configuration. */
+export function resolveChatModelSelection(
+  models: ChatModel[],
+  current?: ModelRef,
+  thinkingLevel?: string,
+  choice?: ModelChoice,
+) {
+  const selected =
+    choice?.key ??
+    (current
+      ? keyOf({ provider: current.provider, id: current.modelId })
+      : models[0]
+        ? keyOf(models[0])
+        : undefined);
+  const model = models.find((model) => keyOf(model) === selected);
+  const levels = model?.thinkingLevels ?? [];
+  const savedKey = current
+    ? keyOf({ provider: current.provider, id: current.modelId })
+    : undefined;
+  const preferred =
+    choice?.level ?? (selected === savedKey ? thinkingLevel : undefined);
+  const level = preferred && levels.includes(preferred) ? preferred : levels[0];
+  return { selected, model, level };
+}
+
 export function useChatModels(
   request: ReturnType<typeof useBackendRequest>["request"],
   current?: ModelRef,
@@ -20,7 +47,7 @@ export function useChatModels(
   const [models, setModels] = useState<ChatModel[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string>();
-  const [choice, setChoice] = useState<{ key: string; level?: string }>();
+  const [choice, setChoice] = useState<ModelChoice>();
   useEffect(() => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
@@ -51,17 +78,12 @@ export function useChatModels(
       clearTimeout(timer);
     };
   }, [request]);
-  const selected =
-    choice?.key ??
-    (current
-      ? keyOf({ provider: current.provider, id: current.modelId })
-      : models[0]
-        ? keyOf(models[0])
-        : undefined);
-  const model = models.find((model) => keyOf(model) === selected);
-  const levels = model?.thinkingLevels ?? [];
-  const preferred = choice?.level ?? (choice ? undefined : thinkingLevel);
-  const level = preferred && levels.includes(preferred) ? preferred : levels[0];
+  const { selected, model, level } = resolveChatModelSelection(
+    models,
+    current,
+    thinkingLevel,
+    choice,
+  );
   return {
     models,
     loaded,
@@ -71,7 +93,7 @@ export function useChatModels(
     error,
     keyOf,
     chooseModel: (key: string | null) => {
-      if (key) setChoice({ key });
+      if (key && key !== selected) setChoice({ key });
     },
     chooseLevel: (level: string | null) => {
       if (selected && level) setChoice({ key: selected, level });
