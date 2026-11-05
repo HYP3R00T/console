@@ -2,18 +2,16 @@
 import { ArrowDown } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { useWorkspaceChrome } from "@/components/layout/workspace-chrome";
 import { useMachineProjects } from "@/components/projects/projects-provider";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ActivityInspector } from "./activity-inspector";
-import { MessageAttachments } from "./attachment-list";
 import { type ChatAttachment, wireAttachments } from "./attachments";
 import { ChatComposer } from "./chat-composer";
+import { ConversationTurn } from "./conversation-turn";
+import { conversationTurns } from "./conversation-turns";
 import { QueuedMessages } from "./queued-messages";
-import { ToolActivity } from "./tool-activity";
 import { type ModelRef, useChatModels } from "./use-chat-models";
 import { type ChatMessage, useConversation } from "./use-conversation";
 
@@ -39,7 +37,7 @@ export function Chat({
   subtitle: string;
 }) {
   const route = usePathname();
-  const { setConversation, inspectorHost } = useWorkspaceChrome();
+  const { setConversation } = useWorkspaceChrome();
   useEffect(() => {
     setConversation({ route, title, subtitle });
     return () =>
@@ -240,23 +238,10 @@ export function Chat({
       ]),
     ).values(),
   ].sort((a, b) => a.entryId - b.entryId);
+  const turns = conversationTurns(messages);
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <h1 className="sr-only">{title}</h1>
-      {inspectorHost &&
-        createPortal(
-          <ActivityInspector
-            title={title}
-            subtitle={subtitle}
-            messages={messages}
-            data={stream?.data}
-            status={stream?.status}
-            hasEarlier={
-              !historyDone && !!(stream?.data?.hasEarlier || historyStarted)
-            }
-          />,
-          inspectorHost,
-        )}
       {stream?.status && stream.status !== "Live" && (
         <p role="status" className="text-xs text-muted-foreground">
           {stream.status}
@@ -274,7 +259,7 @@ export function Chat({
             setShowLatest(distance > 2);
           }}
         >
-          <div className="min-w-0 pr-3">
+          <div className="mx-auto min-w-0 max-w-3xl pr-3">
             {!historyDone && (stream?.data?.hasEarlier || historyStarted) && (
               <Button
                 variant="ghost"
@@ -284,69 +269,24 @@ export function Chat({
                 Load earlier
               </Button>
             )}
-            {messages.map((message) => (
-              <article key={message.id} className="space-y-2 px-3 py-5">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {message.role === "user"
-                    ? "You"
-                    : message.role === "tool"
-                      ? `${message.toolName} · ${message.failed ? "Failed" : "Completed"}`
-                      : "Assistant"}
-                </p>
-                {!!message.attachments?.length && (
-                  <MessageAttachments
-                    files={message.attachments}
-                    path={path}
-                    entryId={message.entryId}
-                    request={state.request}
-                  />
-                )}
-                {message.role === "tool" ? (
-                  <ToolActivity
-                    label={message.failed ? "View error" : "View result"}
-                    content={message.text}
-                    failed={message.failed}
-                  />
-                ) : (
-                  <p className="whitespace-pre-wrap break-words text-sm leading-7">
-                    {message.text ||
-                      (message.failed ? "Response interrupted or failed." : "")}
-                  </p>
-                )}
-                {message.toolCalls?.map((call) => (
-                  <ToolActivity
-                    key={call.id}
-                    label={call.name}
-                    content={call.arguments}
-                  />
-                ))}
-                {message.role !== "tool" && message.failed && message.text && (
-                  <p className="text-xs text-destructive">
-                    Response interrupted or failed.
-                  </p>
-                )}
-              </article>
+            {turns.map((turn, index) => (
+              <ConversationTurn
+                key={turn.id}
+                turn={turn}
+                working={index === turns.length - 1 && !!stream?.data?.busy}
+                partial={
+                  index === turns.length - 1 ? stream?.data?.partial : undefined
+                }
+                activeTools={
+                  index === turns.length - 1
+                    ? (stream?.data?.activeTools ?? [])
+                    : []
+                }
+                path={path}
+                request={state.request}
+              />
             ))}
-            {!!stream?.data?.activeTools?.length && (
-              <p
-                role="status"
-                className="px-3 py-2 text-xs text-muted-foreground"
-              >
-                Inspecting project ·{" "}
-                {stream.data.activeTools.map((tool) => tool.name).join(", ")}
-              </p>
-            )}
-            {stream?.data?.partial && (
-              <article className="space-y-2 px-3 py-5">
-                <p className="text-xs text-muted-foreground">
-                  Assistant · Working
-                </p>
-                <p className="whitespace-pre-wrap break-words text-sm leading-7">
-                  {stream.data.partial}
-                </p>
-              </article>
-            )}
-            {!messages.length && !stream?.data?.busy && (
+            {!turns.length && !stream?.data?.busy && (
               <p className="px-3 py-12 text-sm text-muted-foreground">
                 Send the first message.
               </p>
