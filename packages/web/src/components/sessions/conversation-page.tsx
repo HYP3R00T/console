@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useMachineProjects } from "@/components/projects/projects-provider";
 import { Chat } from "./chat";
 import { DraftConversationPage } from "./draft-conversation-page";
+import { usePendingConversationInspector } from "./use-pending-conversation-inspector";
 import { useProjectSessions } from "./use-project-sessions";
 
 export function ConversationPage() {
@@ -15,6 +16,9 @@ export function ConversationPage() {
   }>();
   const state = useMachineProjects(params.deviceId);
   const project = state.projects?.find((p) => p.id === params.projectId);
+  usePendingConversationInspector(
+    state.connected && !state.projects && params.conversationId !== "new",
+  );
   if (!state.connected)
     return (
       <p className="text-sm text-muted-foreground">
@@ -50,6 +54,7 @@ function ProjectChat({
   const matched = session?.conversations.find(
     (item) => item.id === Number(conversationId),
   );
+  usePendingConversationInspector(!sessions.sessions && !sessions.error);
   if (sessions.error && !sessions.sessions)
     return (
       <p role="alert" className="text-sm text-destructive">

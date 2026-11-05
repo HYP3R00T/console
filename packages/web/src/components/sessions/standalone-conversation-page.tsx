@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useMachineProjects } from "@/components/projects/projects-provider";
 import { Chat } from "./chat";
+import { usePendingConversationInspector } from "./use-pending-conversation-inspector";
 import type { SessionRecord } from "./use-project-sessions";
 
 export function StandaloneConversationPage() {
@@ -70,6 +71,7 @@ function StandaloneChat({
       window.removeEventListener("console:sessions-changed", load);
     };
   }, [request, sessionId]);
+  usePendingConversationInspector(!data && !error);
   if (error)
     return (
       <p role="alert" className="text-sm text-destructive">

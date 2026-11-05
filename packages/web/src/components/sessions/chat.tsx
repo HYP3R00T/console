@@ -1,7 +1,7 @@
 "use client";
 import { ArrowDown } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { useWorkspaceChrome } from "@/components/layout/workspace-chrome";
 import { useMachineProjects } from "@/components/projects/projects-provider";
@@ -58,8 +58,8 @@ export function Chat({
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false);
   const working = !!stream?.data?.busy || !!stream?.data?.queued;
-  useEffect(() => {
-    setInspector({
+  useLayoutEffect(() => {
+    const inspector = {
       route,
       title: "Conversation details",
       content: (
@@ -70,11 +70,10 @@ export function Chat({
           working={working}
         />
       ),
-    });
+    };
+    setInspector(inspector);
     return () =>
-      setInspector((current) =>
-        current?.route === route ? undefined : current,
-      );
+      setInspector((current) => (current === inspector ? undefined : current));
   }, [route, deviceId, path, state.request, working, setInspector]);
   const modelSelection = useChatModels(
     state.request,
@@ -129,7 +128,7 @@ export function Chat({
       setError("Pending message could not be restored.");
     }
   }, [pendingKey]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (stream?.data && follow.current && scrollArea.current)
       scrollArea.current.scrollTop = scrollArea.current.scrollHeight;
   }, [stream?.data]);
@@ -258,6 +257,12 @@ export function Chat({
     ).values(),
   ].sort((a, b) => a.entryId - b.entryId);
   const turns = conversationTurns(messages);
+  if (!stream?.data)
+    return (
+      <p role="status" className="text-sm text-muted-foreground">
+        {stream?.status ?? "Loading conversation…"}
+      </p>
+    );
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <h1 className="sr-only">{title}</h1>

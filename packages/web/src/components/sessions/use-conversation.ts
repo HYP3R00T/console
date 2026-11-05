@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import type { BackendClient } from "@/lib/backend/client";
 import type { MessageAttachment } from "./attachment-list";
 export type ChatMessage = {
@@ -44,13 +44,18 @@ export function useConversation(
   useEffect(() => {
     if (!client) return;
     setSnapshot({ key, client, status: "Connecting…" });
+    let loaded = false;
     const close = client.subscribe(`${path}/events`, "snapshot", {
       message: (message) => {
         try {
           const data: ChatSnapshot = JSON.parse(message);
           if (!Array.isArray(data.messages) || typeof data.busy !== "boolean")
             throw new Error();
-          setSnapshot({ key, client, data, status: "Live" });
+          const reveal = () =>
+            setSnapshot({ key, client, data, status: "Live" });
+          if (loaded) reveal();
+          else startTransition(reveal);
+          loaded = true;
         } catch {
           close();
           setSnapshot({ key, client, status: "Invalid conversation update." });
