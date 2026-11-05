@@ -7,7 +7,7 @@ The master implementation checklist. Verification describes specific checks, not
 | ID | Feature | Evidence / limits |
 | --- | --- | --- |
 | BASE-01 | Fastify health endpoint | `packages/server/test/app.test.ts`; HTTP liveness and missing-route checks. |
-| BASE-02 | Full-width frontend shell | Bottom status bar with complete navigation hiding and a separate Activity inspector; see the current increment below. Legacy compact workspace rail removed. shadcn Base UI Lyra/Zinc, Geist/Lucide, token-based rounded corners, animated expandable client column (200ms, reduced-motion aware), resizable backend column, context hidden on Home, global navigation visibility, animated context width with its overflow clipped to prevent scrollbar flashes, anchored chevron toggles, resize enabled only when expanded (208–384px), a unified shell surface and lighter inset workspace without navigation divider borders, and mobile sheets. Types/build and manual desktop/mobile checks. |
+| BASE-02 | Full-width frontend shell | Bottom status bar with complete navigation hiding and a separate Activity inspector; see the current increment below. Legacy compact workspace rail removed. shadcn Base UI Lyra/Zinc, Inter/Lucide, token-based rounded corners, animated expandable client column (200ms, reduced-motion aware), resizable backend column, context hidden on Home, global navigation visibility, animated context width with its overflow clipped to prevent scrollbar flashes, anchored chevron toggles, resize enabled only when expanded (208–384px), a unified shell surface and lighter inset workspace without navigation divider borders, and mobile sheets. Types/build and manual desktop/mobile checks. |
 | BASE-03 | Independent server/web commands | Root scripts and Mise tasks; native framework output; full interactive startup unverified. |
 | OPS-06 | Versions and quality tooling | Changesets configured; types, test, builds and repository checks. |
 | PRJ-10 | Read-only project Git metadata | Blue current-item markers, local branch names/count and registered worktree paths/branches/count with Main as the original checkout label, shaded active worktree/branch rows and aligned heading counts; main/linked, bare, detached/unborn, locked/prunable flags. Accessible inline directory square replaces the availability card. On-demand/explicit refresh; bounded Git commands, sanitized errors, no history/network/mutation. API tests cover real isolated repositories/worktrees, bare/non-Git/unavailable cases and origin policy. Browser verified live branch/worktree rendering, inline directory status and explicit refresh. |
@@ -159,9 +159,15 @@ has a subtle rounded frame. Panel flex transitions run only for secondary-naviga
 changes, so Activity width changes do not trigger a second interpolated layout animation.
 
 Surface refinement: both navigation columns, Activity and the bottom bar now share a neutral
-`#090909` dark shell; the inset workspace uses `#111111`. Light mode shares a `#f5f5f5` shell around
+`#08090a` dark shell; the inset workspace uses `#0f1011`. Light mode shares a `#f5f5f5` shell around
 a white workspace. Mobile drawers use the same shell surface.
 
 Navigation state refinement: selected rows retain a stronger surface than hover/menu-target rows
 in both themes, including while the selected row is hovered or its menu is open. Shared row
 actions keep their parent hover surface rather than painting a second highlight.
+
+Linear-inspired token refinement: adapted neutral surfaces, Inter variable typography, 6px button
+and 12px workspace radii, and subtle solid component borders from the
+[Refero style reference](https://styles.refero.design/style/90ce5883-bb24-4466-93f7-801cd617b0d1).
+This is an application-focused adaptation, not an official Linear theme or component import.
+Existing light mode, status semantics and separate hover/selection states remain supported.

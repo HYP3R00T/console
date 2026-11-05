@@ -24,7 +24,7 @@ Browser → selected loopback backend → GET /v1/connection
 | `packages/web/src/components/ui/` | CLI-installed shadcn Base UI components; no custom primitive library. |
 | `packages/web/src/components/home.tsx` | Cross-device overview of saved bookmarks and current connection status. |
 | `packages/web/src/app/layout.tsx` | Shared navigation and connection provider. |
-| `packages/web/src/app/globals.css` | Preset tokens and Tailwind integration; shared radius scale and Geist typography. |
+| `packages/web/src/app/globals.css` | Preset tokens and Tailwind integration; shared radius scale and Inter typography. |
 
 ConnectionProvider owns a ConnectionManager with independent lifetimes keyed by saved device ID.
 DeviceProvider remembers successful connections by bookmark ID and rechecks all of them on reload.

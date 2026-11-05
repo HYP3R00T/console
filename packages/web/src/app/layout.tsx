@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 import { ConnectionProvider } from "@/components/connection-provider";
 import { DeviceProvider } from "@/components/devices/device-provider";
@@ -11,7 +11,7 @@ import { ConversationPreferences } from "@/components/sessions/conversation-pref
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter-sans" });
 
 export const metadata: Metadata = {
   title: "Console",
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={geist.variable} suppressHydrationWarning>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body>
         <ThemeProvider
           attribute="class"
