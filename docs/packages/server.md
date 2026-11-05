@@ -9,8 +9,8 @@ The backend owns provider credentials, registered projects and durable conversat
 - `src/http/connection.ts`: liveness, protocol handshake, browser-origin restrictions and the authorization integration point.
 - `src/providers/`: Pi AI catalog, API-key/OAuth login, enabled state, credentials and model favorites.
 - `src/projects/`: directory registrations, project defaults, Git setup/inspection and project archive/restore.
-- `src/harnesses/`: project/session index, Durable runtime, conversation admission, history, event projections and read-only tool registration.
-- `src/execution/`: the injectable `ProjectExecutor` boundary and current local read-only adapter.
+- `src/harnesses/`: project/session index, Durable runtime, conversation admission, history, event projections and conversation configuration.
+- `src/execution/`: host-owned execution adapters: project inspection and the injectable Durable coding environment factory.
 - `src/storage/`: shared SQLite setup and process ownership.
 
 Paths above are relative to `packages/server`. Feature routes live with their owning service; do not add a second application-wide endpoint registry to documentation.
@@ -46,6 +46,7 @@ HTTP commands mutate state; SSE observes conversation updates. Route files conta
   - `/queue` lists waiting input without original attachment bytes. `PATCH /queue/:submissionId` edits text or changes `whenBusy` between `followUp` and `steer`; `expectedContent` and `expectedWhenBusy` reject stale edits. Attachments are retained. `DELETE` withdraws an unplaced input; inputs already placed cannot be edited or withdrawn.
   - `POST` to the conversation's `/stop` interrupts its work and withdraws its queued inputs without stopping sibling conversations. Steering joins at Durable's next safe boundary, rather than interrupting an in-flight provider request.
   - `POST /archive` hides an individual conversation; busy work requires `{stop:true}`. `POST /restore` restores an archived conversation. `GET /v1/archives/conversations` lists machine-wide conversation archives. `DELETE /archive` permanently erases an already archived conversation, subject to dependency and idle checks.
+  - `GET /configuration` returns the tool catalog, enabled tools, inherited prompt sections and conversation instructions. `PATCH /configuration` uses a revision to reject stale changes; it accepts explicit tool names or `null` to inherit defaults, and conversation instructions or `null` to clear them. Changes require an idle conversation and persist in Durable; siblings are unaffected.
   - Rename preserves IDs/history. `POST /v1/sessions/:sessionId/stop` stops the whole session, including sibling conversations and queued input.
 
 The current connection policy permits the local website origins and rejects other browser origins. API access is unauthenticated; CORS is not authentication. Feature services must stay independent of future reachability/authentication adapters.
@@ -58,7 +59,7 @@ The current connection policy permits the local website origins and rejects othe
 - Project Remove archives the registration and its histories without deleting source files. Busy projects require explicit Stop all and archive; work must settle before archival. Restore retains identities/history without restarting interrupted work.
 - Existing-directory registration resolves canonical paths and rejects duplicates. Paths are immutable; names/icons/colors are editable.
 - New/clone setup uses the configured projects root, rejects occupied destinations and creates missing parents only when requested. Public HTTPS clones use isolated Git configuration; private Git authentication is not implemented. Git setup is bounded and cancels on HTTP disconnect, unlike admitted conversation work.
-- Project tools are `list_directory`, `read_file` and `search_text`. Application path checks and bounded output are implemented; OS sandboxing, writes and subprocess tools are not. Durable storage stays outside the execution adapter.
+- All conversations receive Durable’s bundled `read`, `write`, `edit` and `bash` tools. Their host-owned environment starts in the project directory or standalone workspace. These tools have the backend OS user’s access, including paths outside that directory; tool selection is not OS confinement. Project conversations also retain the bounded, path-checked `list_directory`, `read_file` and `search_text` inspection tools. Durable storage stays outside the execution environment.
 
 ## Limits and verification
 
@@ -85,4 +86,4 @@ Individual archival is backend-owned lifecycle state in `harnesses.sqlite`. Arch
 
 Permanent deletion is a separate confirmed action, available only after archival. Durable 1.4.0 has no conversation-erasure operation: the version-guarded offline SQLite adapter closes the entire idle session, removes that conversation's entries, submissions, tasks and document revisions, then checkpoints and vacuums storage. It rejects dependent forks/owned conversations; delete dependent descendants first. Other session streams reconnect after maintenance. It retains only allocated IDs, an empty structural conversation record and application lifecycle tombstones to prevent ID reuse or root recreation. It does not delete project source files, upstream provider records, backups or independently copied content. It is not a forensic-erasure guarantee.
 
-Deletion records a non-restorable pending marker before erasing history. Interrupted cleanup remains in Archives for retry; it cannot be restored into an empty conversation. The adapter must be reviewed before upgrading Durable storage. Fork creation and tool-selection controls are separate capabilities, not provided by archival.
+Deletion records a non-restorable pending marker before erasing history. Interrupted cleanup remains in Archives for retry; it cannot be restored into an empty conversation. The adapter must be reviewed before upgrading Durable storage. Fork creation is a separate capability, not provided by archival.

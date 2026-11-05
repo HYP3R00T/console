@@ -5,7 +5,7 @@ export type Inspection =
   | { kind: "read"; path: string; offset: number; limit: number }
   | { kind: "search"; path: string; query: string };
 
-/** Application boundary for a future worker/sandbox adapter. No shell or writes yet. */
+/** Project inspection boundary; bundled coding tools use ExecutionEnvironmentFactory. */
 export interface ProjectExecutor {
   readonly isolation: "none" | "os";
   inspect(

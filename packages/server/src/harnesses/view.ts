@@ -6,7 +6,15 @@ import type {
 import { attachedInput } from "./attachments.ts";
 import { queueView } from "./queue.ts";
 
-const inspectionTools = new Set(["list_directory", "read_file", "search_text"]);
+const visibleTools = new Set([
+  "list_directory",
+  "read_file",
+  "search_text",
+  "read",
+  "write",
+  "edit",
+  "bash",
+]);
 type ChatMessage = {
   id: string;
   entryId: number;
@@ -40,10 +48,7 @@ function preview(value: string, limit: number) {
 export function messages(entries: readonly EntryRecord[]) {
   return entries.flatMap((entry) =>
     (entry.model ?? []).flatMap<ChatMessage>((message, index) => {
-      if (
-        message.role === "toolResult" &&
-        inspectionTools.has(message.toolName)
-      )
+      if (message.role === "toolResult" && visibleTools.has(message.toolName))
         return [
           {
             id: `${entry.id}:${index}`,
@@ -60,7 +65,7 @@ export function messages(entries: readonly EntryRecord[]) {
           ? message.content
               .filter(
                 (block) =>
-                  block.type === "toolCall" && inspectionTools.has(block.name),
+                  block.type === "toolCall" && visibleTools.has(block.name),
               )
               .map((block) => ({
                 id: block.type === "toolCall" ? block.id : "",
@@ -123,9 +128,7 @@ export function conversationView(view: ConversationView) {
     busy: !!live?.run,
     partial: text(generation?.message?.content),
     activeTools: ((live?.tools ?? []) as { name: string; status: string }[])
-      .filter(
-        (tool) => inspectionTools.has(tool.name) && tool.status !== "done",
-      )
+      .filter((tool) => visibleTools.has(tool.name) && tool.status !== "done")
       .map(({ name, status }) => ({ name, status })),
     queued: inbox?.items?.length ?? 0,
     queue: queueView(inbox?.items ?? []),

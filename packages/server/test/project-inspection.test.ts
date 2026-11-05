@@ -39,7 +39,15 @@ test("project tools supply real evidence, publish safe activity and survive reop
             message.role === "system" ? (message.toolsAdded ?? []) : [],
           )
           .map((tool) => tool.name),
-        ["list_directory", "read_file", "search_text"],
+        [
+          "read",
+          "write",
+          "edit",
+          "bash",
+          "list_directory",
+          "read_file",
+          "search_text",
+        ],
       );
       assert.ok(JSON.stringify(request.messages).includes("Task tracker"));
       assert.ok(JSON.stringify(request.messages).includes(path));
@@ -105,7 +113,7 @@ test("project tools supply real evidence, publish safe activity and survive reop
         request.messages.flatMap((message) =>
           message.role === "system" ? (message.toolsAdded ?? []) : [],
         ).length,
-        0,
+        4,
       );
       assert.ok(!JSON.stringify(request.messages).includes(path));
       return fauxAssistantMessage("Ordinary chat.");

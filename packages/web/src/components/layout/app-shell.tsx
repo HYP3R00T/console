@@ -70,9 +70,13 @@ function ShellLayout({
   const inspectorWidth = useRef(300);
   const inspectorVisible = !!details && inspectorOpen && !inspectorOverlay;
   useEffect(() => {
-    if (inspectorVisible)
-      inspectorPanel.current?.resize(inspectorWidth.current);
-    else inspectorPanel.current?.collapse();
+    // Wait for the panel library to register the updated collapse constraints.
+    const frame = requestAnimationFrame(() => {
+      if (inspectorVisible)
+        inspectorPanel.current?.resize(inspectorWidth.current);
+      else inspectorPanel.current?.collapse();
+    });
+    return () => cancelAnimationFrame(frame);
   }, [inspectorVisible]);
   const [resizing, setResizing] = useState(false);
   const [navigationTransition, setNavigationTransition] = useState(false);
