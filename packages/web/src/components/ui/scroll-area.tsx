@@ -9,11 +9,13 @@ function ScrollArea({
   children,
   viewportRef,
   viewportClassName,
+  scrollbarOrientation = "vertical",
   onViewportScroll,
   ...props
 }: ScrollAreaPrimitive.Root.Props & {
   viewportRef?: Ref<HTMLDivElement>;
   viewportClassName?: string;
+  scrollbarOrientation?: "vertical" | "horizontal";
   onViewportScroll?: UIEventHandler<HTMLDivElement>;
 }) {
   return (
@@ -33,7 +35,7 @@ function ScrollArea({
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
-      <ScrollBar />
+      <ScrollBar orientation={scrollbarOrientation} />
       <ScrollAreaPrimitive.Corner />
     </ScrollAreaPrimitive.Root>
   );

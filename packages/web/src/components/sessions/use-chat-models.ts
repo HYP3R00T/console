@@ -7,6 +7,7 @@ export type ChatModel = {
   name: string;
   reasoning: boolean;
   thinkingLevels: string[];
+  input?: string[];
 };
 export type ModelRef = { provider: string; modelId: string };
 const keyOf = (model: { provider: string; id: string }) =>

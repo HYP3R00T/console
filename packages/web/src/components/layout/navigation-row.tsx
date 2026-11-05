@@ -25,7 +25,7 @@ export function NavigationRow({
     >
       <div className="min-w-0 flex-1">{children}</div>
       {actions && (
-        <div className="navigation-actions flex shrink-0 items-center gap-0.5 pr-1">
+        <div className="navigation-actions flex shrink-0 items-center gap-0.5">
           {actions}
         </div>
       )}

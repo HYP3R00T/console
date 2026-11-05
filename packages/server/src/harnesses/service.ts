@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   BACKGROUND_CONTEXT as context,
   withAbortSignal,
@@ -6,6 +7,7 @@ import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type {
   ConversationId,
   Cursor,
+  EntryId,
   Harness,
   ModelRef,
   SubmissionId,
@@ -13,6 +15,12 @@ import type {
 import { AgentDoc, InboxDoc, LiveDoc } from "@earendil-works/pi-durable";
 import { ProjectError, type ProjectService } from "../projects/service.ts";
 import type { ProviderService } from "../providers/service.ts";
+import {
+  AttachmentError,
+  type AttachmentInput,
+  prepareAttachments,
+  readAttachment,
+} from "./attachments.ts";
 import { ConversationInfo, SessionInfo } from "./documents.ts";
 import { HarnessRuntime } from "./runtime.ts";
 import {
@@ -145,10 +153,19 @@ export class HarnessService {
     );
     return { sessions: records };
   }
-  async createStandalone() {
-    const record = this.store.insert(standaloneOwner);
-    await this.ready(record);
-    return record;
+  createStandalone(creationId?: string) {
+    return this.serial(`standalone:${creationId ?? randomUUID()}`, async () => {
+      const existing = creationId ? this.store.session(creationId) : undefined;
+      if (existing && existing.projectId !== standaloneOwner)
+        throw new HarnessError(
+          409,
+          "Creation identity belongs to a project session.",
+        );
+      const record =
+        existing ?? this.store.insert(standaloneOwner, "", "", creationId);
+      await this.ready(record);
+      return record;
+    });
   }
   async standalone(sessionId: string) {
     const record = this.store.session(sessionId);
@@ -262,7 +279,7 @@ export class HarnessService {
     );
     return { session: record, conversations, more: !!records.next };
   }
-  addConversation(sessionId: string) {
+  addConversation(sessionId: string, creationId?: string) {
     return this.serial(sessionId, async () => {
       const { record, harness } = await this.session(sessionId);
       if (record.projectId === standaloneOwner)
@@ -270,6 +287,18 @@ export class HarnessService {
           409,
           "Standalone sessions contain one conversation.",
         );
+      if (creationId) {
+        const counter = await harness.snapshot(SessionInfo, context);
+        const existing = counter?.creations?.[creationId];
+        if (existing !== undefined) {
+          const info = await harness.snapshot(
+            ConversationInfo,
+            existing as ConversationId,
+            context,
+          );
+          return { id: existing, name: info?.name ?? "Conversation" };
+        }
+      }
       const project = await this.project(record.projectId);
       const root = await harness.root(context);
       const agent = await harness.snapshot(AgentDoc, root.id, context);
@@ -288,6 +317,10 @@ export class HarnessService {
             const info = await tx.doc(ConversationInfo, id);
             name = `Conversation ${counter.nextConversation++}`;
             info.name = name;
+            if (creationId) {
+              counter.creations ??= {};
+              counter.creations[creationId] = id;
+            }
           },
         },
         context,
@@ -331,7 +364,11 @@ export class HarnessService {
     id: string,
     content: string,
     requestId: string,
-    selection?: { model?: ModelRef; thinkingLevel?: string },
+    selection?: {
+      model?: ModelRef;
+      thinkingLevel?: string;
+      attachments?: AttachmentInput[];
+    },
   ) {
     const { record, harness, conversation } = await this.conversation(
       sessionId,
@@ -360,6 +397,16 @@ export class HarnessService {
         400,
         "This thinking level is unavailable for the selected model.",
       );
+    const files = selection?.attachments ?? [];
+    if (!content.trim() && !files.length)
+      throw new AttachmentError("Write a message or attach a file.");
+    const attached = files.length
+      ? await prepareAttachments(
+          content,
+          files,
+          metadata.input.includes("image"),
+        )
+      : undefined;
     const changedModel =
       model.provider !== agent.model?.provider ||
       model.modelId !== agent.model?.modelId;
@@ -384,7 +431,19 @@ export class HarnessService {
       );
     }
     const submission = await conversation.submit(
-      { type: "input", content, requestId },
+      {
+        type: "input",
+        content: attached?.blocks ?? content,
+        requestId,
+        ...(attached
+          ? {
+              entry: {
+                kind: "console.input",
+                data: { text: content, attachments: attached.info },
+              },
+            }
+          : {}),
+      },
       context,
     );
     await this.rememberSubmission(harness, conversation.id, submission.id);
@@ -407,11 +466,32 @@ export class HarnessService {
     id: string,
     content: string,
     requestId: string,
-    selection?: { model?: ModelRef; thinkingLevel?: string },
+    selection?: {
+      model?: ModelRef;
+      thinkingLevel?: string;
+      attachments?: AttachmentInput[];
+    },
   ) {
     return this.serial(sessionId, () =>
       this.admit(sessionId, id, content, requestId, selection),
     );
+  }
+  async attachment(
+    sessionId: string,
+    id: string,
+    entryId: string,
+    index: number,
+  ) {
+    const { harness, conversation } = await this.conversation(sessionId, id);
+    const entry = await harness.commit(
+      (tx) => tx.entry(Number(entryId) as EntryId),
+      context,
+    );
+    if (!entry || entry.conversationId !== conversation.id)
+      throw new HarnessError(404, "Attachment not found in this conversation.");
+    const file = readAttachment(entry, index);
+    if (!file) throw new HarnessError(404, "Attachment not found.");
+    return file;
   }
   stop(sessionId: string) {
     return this.serial(sessionId, async () => {

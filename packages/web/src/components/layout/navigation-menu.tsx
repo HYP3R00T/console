@@ -89,14 +89,13 @@ export function NavigationMenu({
           <Button
             key={action.id}
             variant="ghost"
-            size="icon"
-            className="size-6 [&_svg]:size-3.5"
+            size="icon-xs"
             aria-label={action.shortcutLabel ?? action.label}
             title={action.shortcutLabel ?? action.label}
             disabled={action.disabled}
             onClick={action.onSelect}
           >
-            <action.icon />
+            <action.icon className="size-3" />
           </Button>
         ))}
       <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
@@ -104,14 +103,13 @@ export function NavigationMenu({
           render={
             <Button
               variant="ghost"
-              size="icon"
-              className="size-6 [&_svg]:size-3.5"
+              size="icon-xs"
               aria-label={label}
               title={label}
             />
           }
         >
-          <MoreHorizontal className="size-3.5" />
+          <MoreHorizontal className="size-3" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <ActionItems actions={entityActions} dropdown />

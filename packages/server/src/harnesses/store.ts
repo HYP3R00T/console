@@ -70,7 +70,12 @@ export class HarnessStore {
       .prepare("SELECT * FROM harnesses WHERE sessionId=?")
       .get(id) as HarnessRecord | undefined;
   }
-  insert(projectId: string, provider = "", modelId = "") {
+  insert(
+    projectId: string,
+    provider = "",
+    modelId = "",
+    sessionId: string = randomUUID(),
+  ) {
     this.db.exec("BEGIN IMMEDIATE");
     try {
       const number = Number(
@@ -82,7 +87,7 @@ export class HarnessStore {
       );
       const row = {
         id: randomUUID(),
-        sessionId: randomUUID(),
+        sessionId,
         projectId,
         name: `${projectId === standaloneOwner ? "Conversation" : "Session"} ${number}`,
         number,

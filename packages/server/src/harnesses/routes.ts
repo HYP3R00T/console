@@ -7,6 +7,7 @@ import {
 } from "@earendil-works/pi-durable";
 import type { FastifyInstance } from "fastify";
 import { ProjectError } from "../projects/service.ts";
+import { AttachmentError, type AttachmentInput } from "./attachments.ts";
 import { ConversationInfo } from "./documents.ts";
 import { HarnessError, type HarnessService } from "./service.ts";
 import { conversationView, messages, submissionView } from "./view.ts";
@@ -27,6 +28,7 @@ const creation = {
   additionalProperties: false,
   properties: {},
 };
+const retryableCreation = { ...creation, properties: { creationId: uuid } };
 type Scope = { sessionId: string; conversationId: string };
 const params = (properties: Record<string, object>) => ({
   type: "object",
@@ -51,17 +53,28 @@ export function registerHarnessRoutes(
     });
     routes.setErrorHandler((error, _req, reply) => {
       const known =
-        error instanceof HarnessError || error instanceof ProjectError;
+        error instanceof HarnessError ||
+        error instanceof ProjectError ||
+        error instanceof AttachmentError;
       const invalid =
         error instanceof StorageRequestError ||
         (typeof error === "object" && error !== null && "validation" in error);
-      reply.code(known ? error.statusCode : invalid ? 400 : 500).send({
-        error: known
-          ? error.message
-          : invalid
-            ? "Invalid session request."
-            : "Session operation failed.",
-      });
+      const tooLarge =
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "FST_ERR_CTP_BODY_TOO_LARGE";
+      reply
+        .code(known ? error.statusCode : tooLarge ? 413 : invalid ? 400 : 500)
+        .send({
+          error: known
+            ? error.message
+            : tooLarge
+              ? "Message and attachments exceed the upload limit."
+              : invalid
+                ? "Invalid session request."
+                : "Session operation failed.",
+        });
     });
     routes.get<{ Params: { id: string } }>(
       "/v1/projects/:id/sessions",
@@ -79,13 +92,17 @@ export function registerHarnessRoutes(
     routes.get("/v1/standalone", () =>
       service.operation(() => service.listStandalone()),
     );
-    routes.post<{ Body: Record<string, never> }>(
+    routes.post<{ Body: { creationId?: string } }>(
       "/v1/standalone",
-      { schema: { body: creation } },
-      async (_req, reply) =>
+      { schema: { body: retryableCreation } },
+      async (req, reply) =>
         reply
           .code(201)
-          .send(await service.operation(() => service.createStandalone())),
+          .send(
+            await service.operation(() =>
+              service.createStandalone(req.body.creationId),
+            ),
+          ),
     );
     routes.get<{ Params: { sessionId: string } }>(
       "/v1/standalone/:sessionId",
@@ -99,15 +116,26 @@ export function registerHarnessRoutes(
       (req) =>
         service.operation(() => service.conversations(req.params.sessionId)),
     );
-    routes.post<{ Params: { sessionId: string }; Body: Record<string, never> }>(
+    routes.post<{
+      Params: { sessionId: string };
+      Body: { creationId?: string };
+    }>(
       "/v1/sessions/:sessionId/conversations",
-      { schema: { params: params({ sessionId: uuid }), body: creation } },
+      {
+        schema: {
+          params: params({ sessionId: uuid }),
+          body: retryableCreation,
+        },
+      },
       async (req, reply) =>
         reply
           .code(201)
           .send(
             await service.operation(() =>
-              service.addConversation(req.params.sessionId),
+              service.addConversation(
+                req.params.sessionId,
+                req.body.creationId,
+              ),
             ),
           ),
     );
@@ -147,10 +175,12 @@ export function registerHarnessRoutes(
         requestId: string;
         model?: { provider: string; modelId: string };
         thinkingLevel?: string;
+        attachments?: AttachmentInput[];
       };
     }>(
       `${base}/messages`,
       {
+        bodyLimit: 3 * 1024 * 1024,
         schema: {
           params: conversationParams,
           body: {
@@ -160,13 +190,32 @@ export function registerHarnessRoutes(
             properties: {
               content: {
                 type: "string",
-                minLength: 1,
                 maxLength: 32000,
-                pattern: "\\S",
               },
               requestId: uuid,
               model,
               thinkingLevel: { type: "string", maxLength: 40 },
+              attachments: {
+                type: "array",
+                maxItems: 4,
+                items: {
+                  type: "object",
+                  required: ["name", "mimeType", "data"],
+                  additionalProperties: false,
+                  properties: {
+                    name: { type: "string", minLength: 1, maxLength: 200 },
+                    mimeType: {
+                      enum: [
+                        "text/plain",
+                        "image/png",
+                        "image/jpeg",
+                        "image/webp",
+                      ],
+                    },
+                    data: { type: "string", minLength: 1, maxLength: 2796204 },
+                  },
+                },
+              },
             },
           },
         },
@@ -183,9 +232,32 @@ export function registerHarnessRoutes(
                 {
                   model: req.body.model,
                   thinkingLevel: req.body.thinkingLevel,
+                  attachments: req.body.attachments,
                 },
               ),
             ),
+          ),
+        ),
+    );
+    routes.get<{ Params: Scope & { entryId: string; index: string } }>(
+      `${base}/entries/:entryId/attachments/:index`,
+      {
+        schema: {
+          params: params({
+            sessionId: uuid,
+            conversationId: recordId,
+            entryId: recordId,
+            index: { type: "string", pattern: "^[0-3]$" },
+          }),
+        },
+      },
+      (req) =>
+        service.operation(() =>
+          service.attachment(
+            req.params.sessionId,
+            req.params.conversationId,
+            req.params.entryId,
+            Number(req.params.index),
           ),
         ),
     );

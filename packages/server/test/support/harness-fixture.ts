@@ -10,6 +10,7 @@ import { ProviderStore } from "../../src/providers/store.ts";
 export async function fixture(
   directory: string,
   prepare?: (faux: ReturnType<typeof fauxProvider>) => void,
+  vision = false,
 ) {
   const providerStore = new ProviderStore(join(directory, "providers.sqlite"));
   const models = createModels({
@@ -19,8 +20,13 @@ export async function fixture(
   const faux = fauxProvider({
     provider: "test",
     models: [
-      { id: "test-model" },
-      { id: "reasoning-model", name: "Reasoning model", reasoning: true },
+      { id: "test-model", input: ["text"] },
+      {
+        id: "reasoning-model",
+        name: "Reasoning model",
+        reasoning: true,
+        input: vision ? ["text", "image"] : ["text"],
+      },
     ],
   });
   models.setProvider({

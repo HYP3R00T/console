@@ -1,12 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { BackendClient } from "@/lib/backend/client";
+import type { MessageAttachment } from "./attachment-list";
 export type ChatMessage = {
   id: string;
   entryId: number;
   role: "user" | "assistant" | "tool";
   text: string;
   failed: boolean;
+  attachments?: MessageAttachment[];
   toolName?: string;
   toolCalls?: { id: string; name: string; arguments: string }[];
 };
