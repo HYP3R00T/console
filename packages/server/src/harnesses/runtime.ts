@@ -138,12 +138,12 @@ export class HarnessRuntime {
                 (await this.standaloneWorkspace(sessionId)),
             );
           },
-          onReport: (_error, info) => {
+          onReport: (report) => {
             console.warn(
               JSON.stringify({
                 event: "durable_report",
                 sessionId,
-                kind: info.type,
+                kind: report.kind,
               }),
             );
           },

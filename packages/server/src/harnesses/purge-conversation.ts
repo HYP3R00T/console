@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { openDatabase } from "../storage/database.ts";
 
-/** Offline adapter for pi-durable 1.4 SQLite. Never use against an open Harness.
+/** Offline adapter for pi-durable 1.5 SQLite. Never use against an open Harness.
  * Keep allocated IDs and structural conversation records so IDs cannot be reused or roots recreated.
  * Refuse cross-conversation references; callers must not destroy a fork's inherited history.
  */
@@ -13,7 +13,7 @@ export function purgeConversation(
   const version = createRequire(import.meta.url)(
     "@earendil-works/pi-durable/package.json",
   ).version;
-  if (version !== "1.4.0")
+  if (version !== "1.5.0")
     throw new Error(
       "Permanent deletion requires review for this Durable storage version.",
     );

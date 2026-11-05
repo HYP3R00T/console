@@ -195,8 +195,23 @@ test("SSE detach leaves generation running; reconnect supplies the current snaps
     "Continue without browser",
     randomUUID(),
   );
-  await reader.cancel();
-  release();
+  const deadline = setTimeout(() => void reader.cancel(), 3000);
+  let live = "";
+  try {
+    while (!live.includes("Continue without browser")) {
+      const frame = await reader.read();
+      if (frame.done) break;
+      live += new TextDecoder().decode(frame.value);
+    }
+    assert.ok(
+      live.includes("Continue without browser"),
+      "tagged watch updates reach SSE before generation completes",
+    );
+  } finally {
+    clearTimeout(deadline);
+    await reader.cancel();
+    release();
+  }
   const { harness } = await f.service.session(h.sessionId);
   await harness.waitForIdle(context);
   const reconnected = await fetch(`${endpoint}/events`);

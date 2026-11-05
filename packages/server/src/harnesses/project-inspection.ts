@@ -1,9 +1,9 @@
-import { Type } from "@earendil-works/pi-ai";
 import {
   defineExtension,
   defineTool,
   section,
 } from "@earendil-works/pi-durable";
+import { int, obj, opt, str } from "@earendil-works/pi-schema";
 import {
   ExecutionError,
   type Inspection,
@@ -15,7 +15,7 @@ export function projectInspection(
   executor: ProjectExecutor,
   resolveScope: () => Promise<ProjectScope>,
 ) {
-  const path = Type.Optional(Type.String({ maxLength: 4096 }));
+  const path = opt(str({ maxLength: 4096 }));
   const run = async (operation: Inspection, signal?: AbortSignal) => {
     try {
       const result = await executor.inspect(
@@ -59,7 +59,7 @@ export function projectInspection(
         name: "list_directory",
         description:
           "List up to 200 immediate project directory entries. Defaults to project root; reports truncation.",
-        parameters: Type.Object({ path }),
+        parameters: obj({ path }),
         replay: "safe",
         execute: (args, _api, context) =>
           run({ kind: "list", path: args.path ?? "." }, context.abortSignal),
@@ -68,10 +68,10 @@ export function projectInspection(
         name: "read_file",
         description:
           "Read a regular project text file with 1-based line numbers. At most 256 KiB scanned, 16,000 characters returned. No writes. Large files may require a narrower inspection.",
-        parameters: Type.Object({
-          path: Type.String({ minLength: 1, maxLength: 4096 }),
-          offset: Type.Optional(Type.Integer({ minimum: 1, maximum: 1000000 })),
-          limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
+        parameters: obj({
+          path: str({ minLength: 1, maxLength: 4096 }),
+          offset: opt(int({ minimum: 1, maximum: 1000000 })),
+          limit: opt(int({ minimum: 1, maximum: 200 })),
         }),
         replay: "safe",
         execute: (args, _api, context) =>
@@ -89,9 +89,9 @@ export function projectInspection(
         name: "search_text",
         description:
           "Search a project directory recursively for literal case-sensitive text. Bounded scan; skips symlinks, common generated/dependency directories and binary files. Returns paths, line numbers and truncation/skip information.",
-        parameters: Type.Object({
+        parameters: obj({
           path,
-          query: Type.String({ minLength: 1, maxLength: 200 }),
+          query: str({ minLength: 1, maxLength: 200 }),
         }),
         replay: "safe",
         execute: (args, _api, context) =>

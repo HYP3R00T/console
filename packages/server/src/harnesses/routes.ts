@@ -620,8 +620,8 @@ export function registerHarnessRoutes(
           timer.unref();
           try {
             await send(watch.value);
-            watch.start(async (value) => {
-              await send(value);
+            watch.start(async (call) => {
+              if (call.kind === "value") await send(call.value);
             });
             metadata?.start(async () => {
               if (
