@@ -1,16 +1,28 @@
 "use client";
 
-import { Home, Monitor, Settings2 } from "lucide-react";
+import { Home, MonitorCog, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
+import { useState } from "react";
+import { DeviceIcon } from "@/components/devices/device-icon";
 import { useDevices } from "@/components/devices/device-provider";
+import { EditDeviceDialog } from "@/components/devices/edit-device-dialog";
 import { useDeviceStatus } from "@/components/devices/use-device-status";
 import { SidebarAction } from "@/components/layout/sidebar-action";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { useSidebar } from "@/components/ui/sidebar";
+import type { Device } from "@/lib/devices";
 import { cn } from "@/lib/utils";
 
 export function DeviceRail() {
   const registry = useDevices();
+  const [editing, setEditing] = useState<Device>();
+  const [menuDevice, setMenuDevice] = useState<string>();
   const deviceStatus = useDeviceStatus();
   const params = useParams<{ deviceId?: string }>();
   const pathname = usePathname();
@@ -27,7 +39,7 @@ export function DeviceRail() {
           nativeButton={false}
           render={<Link href="/" onClick={navigate} />}
           aria-label="Home"
-          title="Home"
+          tooltip="Home"
           className={pathname === "/" ? "sidebar-selected" : undefined}
         >
           <Home />
@@ -40,49 +52,67 @@ export function DeviceRail() {
         {registry.devices.map((device) => {
           const selected = params.deviceId === device.id;
           const status = deviceStatus(device);
-          const initials = device.name
-            .split(/\s+/)
-            .map((word) => word[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase();
           return (
-            <div key={device.id}>
-              <SidebarAction
-                compact
-                nativeButton={false}
-                render={
-                  <Link
-                    href={`/devices/${encodeURIComponent(device.id)}`}
-                    onClick={navigate}
-                  />
-                }
-                aria-label={`Open ${device.name}, ${status}`}
-                aria-current={selected ? "page" : undefined}
-                title={`${device.name} · ${status}`}
-                className={cn(
-                  "relative min-w-0",
-                  selected && "sidebar-selected",
-                )}
+            <ContextMenu
+              key={device.id}
+              onOpenChange={(open) =>
+                setMenuDevice(open ? device.id : undefined)
+              }
+            >
+              <ContextMenuTrigger
+                className="block"
+                aria-description="Right-click or press Shift+F10 to edit this machine."
               >
-                <span className="shrink-0 font-mono text-[11px]">
-                  {initials}
-                </span>
-                <span
-                  aria-hidden="true"
+                <SidebarAction
+                  compact
+                  nativeButton={false}
+                  render={
+                    <Link
+                      href={`/devices/${encodeURIComponent(device.id)}`}
+                      onClick={navigate}
+                    />
+                  }
+                  aria-label={`Open ${device.name}, ${status}`}
+                  aria-current={selected ? "page" : undefined}
+                  tooltip={
+                    <span className="flex min-w-0 flex-col gap-1">
+                      <span className="font-medium">{device.name}</span>
+                      <span className="text-muted-foreground">{status}</span>
+                      <span className="break-all font-mono text-[11px] text-muted-foreground">
+                        {device.url}
+                      </span>
+                    </span>
+                  }
+                  tooltipDisabled={menuDevice === device.id || !!editing}
                   className={cn(
-                    "absolute right-1 bottom-1 size-1.5 shrink-0 rounded-full ring-2 ring-client-surface",
-                    status === "Connected"
-                      ? "bg-emerald-500"
-                      : status === "Connecting"
-                        ? "bg-amber-500"
-                        : status === "Connection failed"
-                          ? "bg-red-500"
-                          : "bg-muted-foreground/50",
+                    "relative min-w-0",
+                    menuDevice === device.id && "bg-sidebar-accent",
+                    selected && "sidebar-selected",
                   )}
-                />
-              </SidebarAction>
-            </div>
+                >
+                  <DeviceIcon device={device} />
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "absolute right-1 bottom-1 size-1.5 shrink-0 rounded-full ring-2 ring-client-surface",
+                      status === "Connected"
+                        ? "bg-emerald-500"
+                        : status === "Connecting"
+                          ? "bg-amber-500"
+                          : status === "Connection failed"
+                            ? "bg-red-500"
+                            : "bg-muted-foreground/50",
+                    )}
+                  />
+                </SidebarAction>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onClick={() => setEditing(device)}>
+                  <MonitorCog />
+                  Edit machine
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           );
         })}
       </nav>
@@ -92,21 +122,21 @@ export function DeviceRail() {
           nativeButton={false}
           render={<Link href="/devices" onClick={navigate} />}
           aria-label="Manage devices"
-          title="Manage devices"
+          tooltip="Manage devices"
           className={
             pathname === "/devices" || pathname === "/devices/new"
               ? "sidebar-selected"
               : undefined
           }
         >
-          <Monitor />
+          <MonitorCog />
         </SidebarAction>
         <SidebarAction
           compact
           nativeButton={false}
           render={<Link href="/settings/appearance" onClick={navigate} />}
           aria-label="Client preferences"
-          title="Client preferences"
+          tooltip="Client preferences"
           className={
             pathname.startsWith("/settings") ? "sidebar-selected" : undefined
           }
@@ -114,6 +144,13 @@ export function DeviceRail() {
           <Settings2 />
         </SidebarAction>
       </div>
+      {editing && (
+        <EditDeviceDialog
+          key={editing.id}
+          device={editing}
+          onClose={() => setEditing(undefined)}
+        />
+      )}
     </aside>
   );
 }

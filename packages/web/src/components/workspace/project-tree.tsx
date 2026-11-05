@@ -192,7 +192,7 @@ function ProjectTreeContent({
       </div>
     );
   return (
-    <div className="min-w-0 space-y-4 px-2">
+    <div className="min-w-0 space-y-6 px-2">
       {removal}
       {message && (
         <p role="alert" className="px-3 text-xs text-destructive">
