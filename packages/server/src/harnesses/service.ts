@@ -869,9 +869,20 @@ export class HarnessService {
     }, context);
   }
 
-  async history(sessionId: string, id: string, cursor?: Cursor) {
+  async history(
+    sessionId: string,
+    id: string,
+    cursor?: Cursor,
+    before?: number,
+    limit = 50,
+  ) {
     const { conversation } = await this.conversation(sessionId, id);
-    return conversation.entries({}, 50, cursor, context);
+    return conversation.entries(
+      before === undefined ? {} : { maxEntryId: (before - 1) as EntryId },
+      limit,
+      cursor,
+      context,
+    );
   }
   async close() {
     this.closing = true;

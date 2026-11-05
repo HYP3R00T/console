@@ -45,6 +45,7 @@ export function ConversationTurn({
       {turn.prompt && (
         <article
           aria-label="Your message"
+          data-message-id={turn.prompt.id}
           className="flex min-w-0 flex-col items-end"
         >
           <Bubble
@@ -62,7 +63,10 @@ export function ConversationTurn({
         </article>
       )}
       {(turn.activity.length > 0 || working) && (
-        <Collapsible className="min-w-0 text-xs text-muted-foreground">
+        <Collapsible
+          data-message-id={`activity:${turn.id}`}
+          className="min-w-0 text-xs text-muted-foreground"
+        >
           <CollapsibleTrigger className="group flex items-center gap-2 rounded-md py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <span>
               {working ? "Working" : "Activity"}
@@ -99,6 +103,7 @@ export function ConversationTurn({
       {turn.replies.map((message) => (
         <article
           key={message.id}
+          data-message-id={message.id}
           aria-label="Assistant response"
           className="min-w-0 space-y-2"
         >
