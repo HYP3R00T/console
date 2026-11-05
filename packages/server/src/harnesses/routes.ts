@@ -139,6 +139,62 @@ export function registerHarnessRoutes(
             ),
           ),
     );
+    routes.get<{ Params: Scope }>(
+      `${base}/configuration`,
+      { schema: { params: conversationParams } },
+      (req) =>
+        service.operation(() =>
+          service.configuration(
+            req.params.sessionId,
+            req.params.conversationId,
+          ),
+        ),
+    );
+    routes.patch<{
+      Params: Scope;
+      Body: {
+        revision: string;
+        tools?: string[] | null;
+        instructions?: string | null;
+      };
+    }>(
+      `${base}/configuration`,
+      {
+        schema: {
+          params: conversationParams,
+          body: {
+            type: "object",
+            additionalProperties: false,
+            required: ["revision"],
+            properties: {
+              revision: { type: "string", pattern: "^[a-f0-9]{64}$" },
+              tools: {
+                anyOf: [
+                  { type: "null" },
+                  {
+                    type: "array",
+                    maxItems: 100,
+                    uniqueItems: true,
+                    items: { type: "string", maxLength: 120 },
+                  },
+                ],
+              },
+              instructions: {
+                anyOf: [{ type: "null" }, { type: "string", maxLength: 16000 }],
+              },
+            },
+          },
+        },
+      },
+      (req) =>
+        service.operation(() =>
+          service.configureConversation(
+            req.params.sessionId,
+            req.params.conversationId,
+            req.body,
+          ),
+        ),
+    );
     routes.get("/v1/archives/conversations", () =>
       service.operation(() => service.archivedConversations()),
     );

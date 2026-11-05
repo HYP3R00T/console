@@ -145,7 +145,8 @@
 
 /* The resizable library applies panel classes to an inner element. Animate the
    outer flex item so its right edge retracts without translating its contents. */
-.context-layout > #navigation {
+.context-layout > #navigation,
+.context-layout > #inspector {
   clip-path: inset(0);
 }
 

@@ -21,6 +21,7 @@ import {
   prepareAttachments,
   readAttachment,
 } from "./attachments.ts";
+import { conversationConfiguration } from "./configuration.ts";
 import { ConversationArchives } from "./conversation-archives.ts";
 import { ConversationInfo, SessionInfo } from "./documents.ts";
 import { queueView } from "./queue.ts";
@@ -375,6 +376,75 @@ export class HarnessService {
     if (!conversation)
       throw new HarnessError(404, "Conversation not found in this session.");
     return { record, harness, conversation };
+  }
+  configuration(sessionId: string, id: string) {
+    return this.serial(sessionId, async () => {
+      const { harness, conversation } = await this.conversation(sessionId, id);
+      return conversationConfiguration(harness, conversation);
+    });
+  }
+  configureConversation(
+    sessionId: string,
+    id: string,
+    change: {
+      revision: string;
+      tools?: string[] | null;
+      instructions?: string | null;
+    },
+  ) {
+    return this.serial(sessionId, async () => {
+      const { harness, conversation } = await this.conversation(sessionId, id);
+      const current = await conversationConfiguration(harness, conversation);
+      if (current.revision !== change.revision)
+        throw new HarnessError(
+          409,
+          "Configuration changed. Refresh and retry.",
+        );
+      const inspection = await harness.inspect(context);
+      if (
+        inspection.tasks.some(
+          (task) => task.record.conversationId === conversation.id,
+        ) ||
+        inspection.submissions.some(
+          (submission) => submission.conversationId === conversation.id,
+        )
+      )
+        throw new HarnessError(
+          409,
+          "Stop or finish this conversation before changing configuration.",
+        );
+      const agent = await conversation.agent(context);
+      const catalog = agent.extensions.flatMap(
+        (extension) => extension.tools ?? [],
+      );
+      if (
+        change.tools &&
+        (new Set(change.tools).size !== change.tools.length ||
+          change.tools.some(
+            (name) => !catalog.some((tool) => tool.name === name),
+          ))
+      )
+        throw new HarnessError(400, "Unknown or duplicate tool.");
+      await conversation.configure(
+        {
+          ...(change.tools !== undefined
+            ? {
+                tools:
+                  change.tools === null
+                    ? null
+                    : catalog.filter((tool) =>
+                        change.tools?.includes(tool.name),
+                      ),
+              }
+            : {}),
+          ...(change.instructions !== undefined
+            ? { instructions: change.instructions?.trim() || null }
+            : {}),
+        },
+        context,
+      );
+      return conversationConfiguration(harness, conversation);
+    });
   }
   async archivedConversations() {
     return {

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { type ChatAttachment, wireAttachments } from "./attachments";
 import { ChatComposer } from "./chat-composer";
+import { ConversationInspector } from "./conversation-inspector";
 import { ConversationTurn } from "./conversation-turn";
 import { conversationTurns } from "./conversation-turns";
 import { QueuedMessages } from "./queued-messages";
@@ -37,7 +38,7 @@ export function Chat({
   subtitle: string;
 }) {
   const route = usePathname();
-  const { setConversation } = useWorkspaceChrome();
+  const { setConversation, setInspector } = useWorkspaceChrome();
   useEffect(() => {
     setConversation({ route, title, subtitle });
     return () =>
@@ -57,6 +58,24 @@ export function Chat({
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false);
   const working = !!stream?.data?.busy || !!stream?.data?.queued;
+  useEffect(() => {
+    setInspector({
+      route,
+      title: "Conversation details",
+      content: (
+        <ConversationInspector
+          key={`${deviceId}:${path}`}
+          path={path}
+          request={state.request}
+          working={working}
+        />
+      ),
+    });
+    return () =>
+      setInspector((current) =>
+        current?.route === route ? undefined : current,
+      );
+  }, [route, deviceId, path, state.request, working, setInspector]);
   const modelSelection = useChatModels(
     state.request,
     pending?.model ?? stream?.data?.model,
