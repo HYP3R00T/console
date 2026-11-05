@@ -143,10 +143,9 @@
   }
 }
 
-/* The resizable library applies panel classes to an inner element. Animate the
-   outer flex item so its right edge retracts without translating its contents. */
-.context-layout > #navigation,
-.context-layout > #inspector {
+/* Clip each outer flex item; the shared sidebar keeps its contents at full
+   width and anchors them to the corresponding screen edge during toggles. */
+.context-layout > [data-workspace-sidebar] {
   clip-path: inset(0);
 }
 
