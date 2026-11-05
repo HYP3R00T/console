@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/components/layout/theme-provider";
 import { ProjectsProvider } from "@/components/projects/projects-provider";
 import { ProvidersProvider } from "@/components/providers/providers-provider";
 import { ConversationPreferences } from "@/components/sessions/conversation-preferences";
+import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
@@ -29,21 +30,23 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           enableSystem
           disableTransitionOnChange
         >
-          <ConnectionProvider>
-            <DeviceProvider>
-              <ProvidersProvider>
-                <ProjectsProvider>
-                  <ConversationPreferences>
-                    <TooltipProvider>
-                      <NavigationMemoryProvider>
-                        <AppShell>{children}</AppShell>
-                      </NavigationMemoryProvider>
-                    </TooltipProvider>
-                  </ConversationPreferences>
-                </ProjectsProvider>
-              </ProvidersProvider>
-            </DeviceProvider>
-          </ConnectionProvider>
+          <Toaster>
+            <ConnectionProvider>
+              <DeviceProvider>
+                <ProvidersProvider>
+                  <ProjectsProvider>
+                    <ConversationPreferences>
+                      <TooltipProvider>
+                        <NavigationMemoryProvider>
+                          <AppShell>{children}</AppShell>
+                        </NavigationMemoryProvider>
+                      </TooltipProvider>
+                    </ConversationPreferences>
+                  </ProjectsProvider>
+                </ProvidersProvider>
+              </DeviceProvider>
+            </ConnectionProvider>
+          </Toaster>
         </ThemeProvider>
       </body>
     </html>

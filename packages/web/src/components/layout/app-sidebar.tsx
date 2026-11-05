@@ -1,6 +1,13 @@
 "use client";
 
-import { ArrowLeft, Folder, KeyRound, Palette, Settings2 } from "lucide-react";
+import {
+  Archive,
+  ArrowLeft,
+  Folder,
+  KeyRound,
+  Palette,
+  Settings2,
+} from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { useDevices } from "@/components/devices/device-provider";
@@ -69,6 +76,7 @@ export function AppSidebar() {
               {[
                 { id: "providers", label: "Providers", icon: KeyRound },
                 { id: "projects", label: "Projects", icon: Folder },
+                { id: "archives", label: "Archives", icon: Archive },
               ].map(({ id, label, icon: Icon }) => {
                 const href = `/devices/${encodeURIComponent(device.id)}/settings/${id}`;
                 const active = pathname === href;
@@ -78,7 +86,7 @@ export function AppSidebar() {
                     nativeButton={false}
                     render={<Link href={href} onClick={closeMobile} />}
                     aria-current={active ? "page" : undefined}
-                    className={active ? "sidebar-selected" : undefined}
+                    className={`h-7 gap-2 px-2 [&_svg]:size-3 ${active ? "sidebar-selected" : ""}`}
                   >
                     <Icon />
                     <span>{label}</span>
@@ -102,6 +110,7 @@ export function AppSidebar() {
       {device && (
         <SidebarFooter className="p-2">
           <SidebarAction
+            className="h-7 gap-2 px-2 [&_svg]:size-3"
             nativeButton={false}
             render={
               <Link
