@@ -1,6 +1,12 @@
 "use client";
 import { RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -22,6 +28,14 @@ type Configuration = {
   instructions: string;
   sections: { key: string; text: string }[];
 };
+export function ConversationInspectorLoading() {
+  return (
+    <div role="status" aria-busy="true" className="h-full">
+      <span className="sr-only">Loading conversation details…</span>
+    </div>
+  );
+}
+
 export function ConversationInspector({
   path,
   request,
@@ -38,6 +52,7 @@ export function ConversationInspector({
   const [error, setError] = useState<string>();
   const [loadError, setLoadError] = useState<string>();
   const generation = useRef(0);
+  const loaded = useRef(false);
   const dirty = useRef(false);
   const savingRef = useRef(false);
   const refresh = useCallback(
@@ -53,12 +68,17 @@ export function ConversationInspector({
           version !== generation.current
         )
           return;
-        setLoadError(undefined);
-        setData(next);
-        if (!dirty.current) {
-          setInstructions(next.instructions);
-          setRevision(next.revision);
-        }
+        const reveal = () => {
+          setLoadError(undefined);
+          setData(next);
+          if (!dirty.current) {
+            setInstructions(next.instructions);
+            setRevision(next.revision);
+          }
+        };
+        if (loaded.current) reveal();
+        else startTransition(reveal);
+        loaded.current = true;
       } catch (cause) {
         if (!signal?.aborted)
           setLoadError(
@@ -116,6 +136,7 @@ export function ConversationInspector({
     }
   }
   const disabled = working || saving;
+  if (!data && !error && !loadError) return <ConversationInspectorLoading />;
   return (
     <div className="flex h-full min-h-0 flex-col p-4">
       <Tabs defaultValue="tools" className="min-h-0 flex-1">
@@ -132,9 +153,6 @@ export function ConversationInspector({
           <p role="status" className="text-xs text-muted-foreground">
             Editable when idle
           </p>
-        )}
-        {!data && !error && (
-          <p className="text-xs text-muted-foreground">Loading…</p>
         )}
         <TabsContent value="tools" className="min-h-0">
           <ScrollArea className="h-full">

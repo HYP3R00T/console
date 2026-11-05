@@ -117,7 +117,7 @@ export function AppSidebar() {
                 href={
                   deviceSettings
                     ? `/devices/${encodeURIComponent(device.id)}`
-                    : `/devices/${encodeURIComponent(device.id)}/settings`
+                    : `/devices/${encodeURIComponent(device.id)}/settings/providers`
                 }
                 onClick={closeMobile}
               />

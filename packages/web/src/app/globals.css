@@ -151,9 +151,65 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .context-layout[data-navigation-transition="true"]:not([data-resizing="true"])
+  .context-layout[data-panel-transition="true"]:not([data-resizing="true"])
     > [data-panel] {
     transition: flex-grow 200ms ease-out;
+  }
+}
+
+/* Crossfade changing content; keep the surrounding workspace chrome stationary. */
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-group(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-old(root) {
+  display: none;
+}
+
+::view-transition-group(.workspace-fade) {
+  animation: none;
+}
+
+::view-transition-image-pair(.workspace-fade) {
+  isolation: isolate;
+}
+
+::view-transition-old(.workspace-fade),
+::view-transition-new(.workspace-fade) {
+  mix-blend-mode: plus-lighter;
+}
+
+::view-transition-old(.workspace-fade) {
+  animation: 180ms ease-out both workspace-fade-out;
+}
+
+::view-transition-new(.workspace-fade) {
+  animation: 180ms ease-out both workspace-fade-in;
+}
+
+@keyframes workspace-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes workspace-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(.workspace-fade),
+  ::view-transition-new(.workspace-fade),
+  ::view-transition-group(.workspace-fade) {
+    animation-duration: 0s;
+    animation-delay: 0s;
   }
 }
 

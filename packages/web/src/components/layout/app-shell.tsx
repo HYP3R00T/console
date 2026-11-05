@@ -2,8 +2,14 @@
 
 import { PanelLeft, PanelRight } from "lucide-react";
 import { useParams, usePathname } from "next/navigation";
-import { type ReactNode, useEffect, useRef, useState } from "react";
-import type { PanelImperativeHandle } from "react-resizable-panels";
+import {
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+  ViewTransition,
+} from "react";
+import type { GroupImperativeHandle } from "react-resizable-panels";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { DeviceRail } from "@/components/layout/device-rail";
@@ -25,12 +31,27 @@ import {
   WorkspaceChromeProvider,
 } from "./workspace-chrome";
 
+function panelGroupWidth(element: HTMLDivElement) {
+  const separators = Array.from(element.children).filter(
+    (child) => !child.hasAttribute("data-panel"),
+  );
+  return (
+    element.clientWidth -
+    separators.reduce(
+      (total, child) => total + (child as HTMLElement).offsetWidth,
+      0,
+    )
+  );
+}
+
 function Content({ children }: { children: ReactNode }) {
   return (
     <main className="flex h-full min-w-0 flex-col bg-background">
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto p-5 md:p-6">
-        {children}
-      </div>
+      <ViewTransition default="none" update="workspace-fade">
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto p-5 md:p-6">
+          {children}
+        </div>
+      </ViewTransition>
     </main>
   );
 }
@@ -64,39 +85,43 @@ function ShellLayout({
   const setInspectorOpen = inspectorOverlay
     ? setMobileInspectorOpen
     : setDesktopInspectorOpen;
-  const panel = useRef<PanelImperativeHandle | null>(null);
   const expandedWidth = useRef(256);
-  const inspectorPanel = useRef<PanelImperativeHandle | null>(null);
   const inspectorWidth = useRef(300);
   const inspectorVisible = !!details && inspectorOpen && !inspectorOverlay;
-  useEffect(() => {
-    // Wait for the panel library to register the updated collapse constraints.
-    const frame = requestAnimationFrame(() => {
-      if (inspectorVisible)
-        inspectorPanel.current?.resize(inspectorWidth.current);
-      else inspectorPanel.current?.collapse();
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [inspectorVisible]);
+  const group = useRef<GroupImperativeHandle | null>(null);
+  const groupElement = useRef<HTMLDivElement | null>(null);
   const [resizing, setResizing] = useState(false);
-  const [navigationTransition, setNavigationTransition] = useState(false);
+  const [panelTransition, setPanelTransition] = useState(false);
   const hasContext = contextKey !== "home";
   const visible = hasContext && open && !isMobile;
   useEffect(() => {
     if (contextKey) setOpenMobile(false);
   }, [contextKey, setOpenMobile]);
   useEffect(() => {
-    setNavigationTransition(true);
-    const finish = window.setTimeout(() => setNavigationTransition(false), 240);
+    setPanelTransition(true);
+    const finish = window.setTimeout(() => setPanelTransition(false), 240);
+    // Apply both sidebar widths together after the library updates constraints.
+    // Individual resize calls redistribute space across every sibling panel.
     const frame = requestAnimationFrame(() => {
-      if (visible) panel.current?.resize(expandedWidth.current);
-      else panel.current?.collapse();
+      const element = groupElement.current;
+      if (!element || !group.current) return;
+      const width = panelGroupWidth(element);
+      if (width <= 0) return;
+      const navigation = visible ? (expandedWidth.current / width) * 100 : 0;
+      const inspector = inspectorVisible
+        ? Math.min((inspectorWidth.current / width) * 100, 40)
+        : 0;
+      group.current.setLayout({
+        navigation,
+        workspace: 100 - navigation - inspector,
+        inspector,
+      });
     });
     return () => {
       cancelAnimationFrame(frame);
       window.clearTimeout(finish);
     };
-  }, [visible]);
+  }, [visible, inspectorVisible]);
   useEffect(() => {
     const stop = () => setResizing(false);
     window.addEventListener("pointerup", stop);
@@ -115,7 +140,11 @@ function ShellLayout({
   const identityLabel = active
     ? `${active.subtitle} / ${active.title}`
     : "Console";
-  const inspector = details?.content;
+  const inspector = (
+    <ViewTransition default="none" update="workspace-fade">
+      <div className="h-full min-h-0">{details?.content}</div>
+    </ViewTransition>
+  );
   return (
     <div className="flex h-svh w-full min-w-0 flex-col bg-client-surface">
       <div className="flex min-h-0 flex-1">
@@ -144,25 +173,23 @@ function ShellLayout({
         )}
         <DeviceRail />
         <ResizablePanelGroup
+          groupRef={group}
+          elementRef={groupElement}
           orientation="horizontal"
           className="context-layout h-full! min-w-0"
           data-resizing={resizing}
-          data-navigation-transition={navigationTransition}
-          onLayoutChanged={(_, meta) => {
-            if (visible && meta.isUserInteraction && panel.current)
-              expandedWidth.current = panel.current.getSize().inPixels;
-            if (
-              inspectorVisible &&
-              meta.isUserInteraction &&
-              inspectorPanel.current
-            )
-              inspectorWidth.current =
-                inspectorPanel.current.getSize().inPixels;
+          data-panel-transition={panelTransition}
+          onLayoutChanged={(layout, meta) => {
+            if (!meta.isUserInteraction || !groupElement.current) return;
+            const width = panelGroupWidth(groupElement.current);
+            if (visible)
+              expandedWidth.current = (layout.navigation / 100) * width;
+            if (inspectorVisible)
+              inspectorWidth.current = (layout.inspector / 100) * width;
           }}
         >
           <ResizablePanel
             id="navigation"
-            panelRef={panel}
             defaultSize={visible ? 256 : 0}
             minSize={208}
             maxSize={384}
@@ -202,7 +229,6 @@ function ShellLayout({
           />
           <ResizablePanel
             id="inspector"
-            panelRef={inspectorPanel}
             defaultSize={0}
             minSize={240}
             maxSize="40%"
