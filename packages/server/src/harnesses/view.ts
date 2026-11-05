@@ -124,7 +124,7 @@ export function conversationView(view: ConversationView) {
   return {
     id: view.conversation.id,
     messages: messages(view.entries.slice(-50)),
-    hasEarlier: view.entries.length > 50,
+    hasEarlier: view.before !== undefined || view.entries.length > 50,
     busy: !!live?.run,
     partial: text(generation?.message?.content),
     activeTools: ((live?.tools ?? []) as { name: string; status: string }[])
