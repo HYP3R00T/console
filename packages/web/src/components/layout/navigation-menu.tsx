@@ -111,7 +111,7 @@ export function NavigationMenu({
             />
           }
         >
-          <MoreHorizontal className="size-4" />
+          <MoreHorizontal className="size-3.5" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <ActionItems actions={entityActions} dropdown />

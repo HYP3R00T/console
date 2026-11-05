@@ -54,19 +54,19 @@ export function NavigationSection({
           {(menu) => (
             <NavigationRow actions={menu}>
               <h3>
-                <CollapsibleTrigger className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring">
+                <CollapsibleTrigger className="flex h-6 w-full items-center gap-1.5 rounded-md px-2 text-left text-xs font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring">
+                  <span>{label}</span>
                   <ChevronRight
                     aria-hidden
-                    className={`size-3.5 shrink-0 motion-safe:transition-transform motion-safe:duration-180 ${open ? "rotate-90" : ""}`}
+                    className={`size-3 shrink-0 motion-safe:transition-transform motion-safe:duration-180 ${open ? "rotate-90" : ""}`}
                   />
-                  {label}
                 </CollapsibleTrigger>
               </h3>
             </NavigationRow>
           )}
         </NavigationMenu>
         <CollapsibleContent keepMounted className="navigation-disclosure">
-          <div className="pt-1">{children}</div>
+          <div className="pt-1.5">{children}</div>
         </CollapsibleContent>
       </Collapsible>
     </NavigationDropZone>

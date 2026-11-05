@@ -18,6 +18,7 @@ Paths above are relative to `packages/web`. Backend data remains backend-owned. 
 
 - Manage devices owns Add, Connect, Disconnect/Cancel, Edit and Forget. Selecting a machine only changes the viewed context; it does not connect or disconnect anything.
 - Multiple backends can remain connected. Requests, monitoring and cancellation are scoped to the owning client. Reload rechecks remembered successful connections.
+- Machine icons/colors are browser-local bookmark preferences, shared by the primary rail and Manage devices. Rail tooltips show name, status and URL; right-click offers the same Edit dialog as device management. Icons are labels, not detected hardware or connection methods.
 - Editing a bookmark disconnects it and clears its recorded identity. Explicit reconnect accepts the new identity; duplicate connected aliases and unexpected identity changes are rejected.
 - Disconnect closes that client's requests and streams without stopping backend work. Credentials for AI providers are not stored in the browser.
 - Only loopback URLs are supported today. Remote access, SSH and Console authentication belong at the connection boundary and are not implemented.

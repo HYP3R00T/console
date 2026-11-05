@@ -1,6 +1,27 @@
 import { backendOrigin } from "./connection.ts";
 
-export type Device = {
+export const deviceIcons = [
+  "monitor",
+  "laptop",
+  "server",
+  "terminal",
+  "cpu",
+  "container",
+] as const;
+export const deviceColors = [
+  "neutral",
+  "blue",
+  "violet",
+  "green",
+  "amber",
+  "rose",
+] as const;
+export type DeviceAppearance = {
+  icon?: (typeof deviceIcons)[number];
+  color?: (typeof deviceColors)[number];
+};
+
+export type Device = DeviceAppearance & {
   id: string;
   name: string;
   url: string;
@@ -54,10 +75,27 @@ export function parseDevices(value: string | null): Device[] {
         !/^[0-9a-f-]{36}$/i.test(item.backendId))
     )
       throw new Error("Invalid backend identity");
+    if (
+      ("icon" in item &&
+        !deviceIcons.includes(
+          item.icon as DeviceAppearance["icon"] & string,
+        )) ||
+      ("color" in item &&
+        !deviceColors.includes(
+          item.color as DeviceAppearance["color"] & string,
+        ))
+    )
+      throw new Error("Invalid device appearance");
     devices.push({
       id: item.id,
       name: item.name.trim(),
       url,
+      ...("icon" in item
+        ? { icon: item.icon as DeviceAppearance["icon"] }
+        : {}),
+      ...("color" in item
+        ? { color: item.color as DeviceAppearance["color"] }
+        : {}),
       ...("backendId" in item ? { backendId: item.backendId as string } : {}),
     });
   }

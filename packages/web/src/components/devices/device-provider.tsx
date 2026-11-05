@@ -12,6 +12,7 @@ import { useConnections } from "@/components/connection-provider";
 import {
   connectedDevicesKey,
   type Device,
+  type DeviceAppearance,
   devicesStorageKey,
   legacyConnectedDeviceKey,
   newDevice,
@@ -26,7 +27,12 @@ type DevicesState = {
   connect: (device: Device) => void;
   disconnect: (id: string) => void;
   add: (name: string, url: string) => Device;
-  edit: (id: string, name: string, url: string) => void;
+  edit: (
+    id: string,
+    name: string,
+    url: string,
+    appearance?: DeviceAppearance,
+  ) => void;
   remove: (id: string) => void;
 };
 const Context = createContext<DevicesState | null>(null);
@@ -123,7 +129,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
           save([...devices, device]);
           return device;
         },
-        edit: (id, name, url) => {
+        edit: (id, name, url, appearance) => {
           const previous = devices.find((device) => device.id === id);
           if (!previous) throw new Error("Device not found.");
           const replacement = newDevice(
@@ -133,7 +139,15 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
             id,
           );
           save(
-            devices.map((device) => (device.id === id ? replacement : device)),
+            devices.map((device) =>
+              device.id === id
+                ? {
+                    ...replacement,
+                    icon: appearance?.icon ?? previous.icon,
+                    color: appearance?.color ?? previous.color,
+                  }
+                : device,
+            ),
           );
           disconnect(id);
         },

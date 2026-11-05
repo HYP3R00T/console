@@ -68,3 +68,21 @@ test("corrupt or duplicate saved records are rejected rather than trusted", () =
     assert.throws(() => parseDevices(value));
   }
 });
+
+test("machine icon and color survive reload, with old bookmarks kept intact", () => {
+  const device = newDevice([], "Local", "http://localhost:3000", "local");
+  const customized = { ...device, icon: "laptop", color: "violet" };
+  assert.deepEqual(parseDevices(JSON.stringify([customized])), [customized]);
+  assert.deepEqual(parseDevices(JSON.stringify([device])), [device]);
+  for (const appearance of [
+    { icon: "unknown" },
+    { color: "not-a-color" },
+    { icon: null },
+    { color: 123 },
+  ]) {
+    assert.throws(
+      () => parseDevices(JSON.stringify([{ ...device, ...appearance }])),
+      /appearance/,
+    );
+  }
+});

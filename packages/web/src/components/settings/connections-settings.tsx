@@ -1,18 +1,13 @@
 "use client";
-import { Monitor, Pencil, Plus, Trash2 } from "lucide-react";
+import { MonitorCog, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useConnections } from "@/components/connection-provider";
+import { DeviceIcon } from "@/components/devices/device-icon";
 import { useDevices } from "@/components/devices/device-provider";
+import { EditDeviceDialog } from "@/components/devices/edit-device-dialog";
 import { ConnectionStatus } from "@/components/layout/connection-status";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -30,8 +25,6 @@ export function ConnectionsSettings() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string>();
   const [editing, setEditing] = useState<Device>();
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
   const devices = registry.devices.filter((device) =>
     `${device.name} ${device.url}`.toLowerCase().includes(search.toLowerCase()),
   );
@@ -82,7 +75,7 @@ export function ConnectionsSettings() {
                         className="flex min-w-0 items-center gap-2 font-medium hover:underline"
                         href={`/devices/${encodeURIComponent(device.id)}`}
                       >
-                        <Monitor className="size-4 shrink-0" />
+                        <DeviceIcon device={device} />
                         <span className="truncate">{device.name}</span>
                       </Link>
                     </TableCell>
@@ -136,12 +129,10 @@ export function ConnectionsSettings() {
                           aria-label={`Edit ${device.name}`}
                           onClick={() => {
                             setEditing(device);
-                            setName(device.name);
-                            setUrl(device.url);
                             setError(undefined);
                           }}
                         >
-                          <Pencil className="size-4" />
+                          <MonitorCog className="size-4" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -183,75 +174,13 @@ export function ConnectionsSettings() {
           </Table>
         </>
       )}
-      <Dialog
-        open={!!editing}
-        onOpenChange={(open) => {
-          if (!open) setEditing(undefined);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit connection</DialogTitle>
-          </DialogHeader>
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!editing) return;
-              try {
-                registry.edit(editing.id, name, url);
-                setEditing(undefined);
-                setError(undefined);
-              } catch (cause) {
-                setError(
-                  cause instanceof Error
-                    ? cause.message
-                    : "Could not save device.",
-                );
-              }
-            }}
-          >
-            <Field>
-              <FieldLabel htmlFor="edit-device-name">Name</FieldLabel>
-              <Input
-                id="edit-device-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-                maxLength={80}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="edit-device-url">Backend URL</FieldLabel>
-              <Input
-                id="edit-device-url"
-                value={url}
-                onChange={(event) => setUrl(event.target.value)}
-                required
-                type="url"
-              />
-            </Field>
-            <p className="text-xs text-muted-foreground">
-              Saving disconnects this device. Reconnect to verify its identity.
-            </p>
-            {error && (
-              <p role="alert" className="text-xs text-destructive">
-                {error}
-              </p>
-            )}
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                type="button"
-                onClick={() => setEditing(undefined)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit">Save changes</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {editing && (
+        <EditDeviceDialog
+          key={editing.id}
+          device={editing}
+          onClose={() => setEditing(undefined)}
+        />
+      )}
     </div>
   );
 }

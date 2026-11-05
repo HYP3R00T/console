@@ -96,8 +96,12 @@ export function ProjectNavigation({
   ];
   const row = (menu: ReactNode) => (
     <NavigationRow actions={menu}>
-      <CollapsibleTrigger className="flex h-8 w-full rounded-md outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring min-w-0 items-center gap-2 px-2 text-left text-sm">
-        <ProjectIcon icon={project.icon} color={project.color} />
+      <CollapsibleTrigger className="flex h-7 w-full rounded-md outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring min-w-0 items-center gap-2 px-2 text-left text-[13px]">
+        <ProjectIcon
+          icon={project.icon}
+          color={project.color}
+          className="size-3.5"
+        />
         <span className="min-w-0 flex-1 truncate">{project.name}</span>
         {!project.available && (
           <span
@@ -125,7 +129,11 @@ export function ProjectNavigation({
               aria-label={project.name}
               title={`${project.name}${pinned ? " · pinned" : ""}`}
             >
-              <ProjectIcon icon={project.icon} color={project.color} />
+              <ProjectIcon
+                icon={project.icon}
+                color={project.color}
+                className="size-3.5"
+              />
             </SidebarAction>
           )}
         </NavigationMenu>
