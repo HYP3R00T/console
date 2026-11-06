@@ -1,5 +1,6 @@
 "use client";
 import { ArrowDown } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
@@ -22,6 +23,7 @@ import {
 } from "./scroll-anchor";
 import { type ModelRef, useChatModels } from "./use-chat-models";
 import { useConversation } from "./use-conversation";
+import { sessionsChanged } from "./use-project-sessions";
 
 type Pending = {
   attachments?: ChatAttachment[];
@@ -37,12 +39,16 @@ export function Chat({
   conversationId,
   title,
   subtitle,
+  projectId,
+  ancestry,
 }: {
   deviceId: string;
   sessionId: string;
   conversationId: string;
   title: string;
   subtitle: string;
+  projectId?: string;
+  ancestry?: { conversationId: number; at: number; name?: string };
 }) {
   const route = usePathname();
   const { setConversation, setInspector } = useWorkspaceChrome();
@@ -64,6 +70,18 @@ export function Chat({
   const [pending, setPending] = useState<Pending>();
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const [continuing, setContinuing] = useState(false);
+  const [forking, setForking] = useState(false);
+  const [createdFork, setCreatedFork] = useState<{
+    id: number;
+    name: string;
+  }>();
+  const forkRequest = useRef<{ entryId: number; creationId: string }>(
+    undefined,
+  );
+  const projectSession = projectId
+    ? `/devices/${deviceId}/projects/${projectId}/sessions/${sessionId}/conversations`
+    : undefined;
   const working = !!stream?.data?.busy || !!stream?.data?.queued;
   const execution = stream?.data?.execution;
   const modelSelection = useChatModels(
@@ -184,6 +202,52 @@ export function Chat({
       setStopping(false);
     }
   }
+  async function continueRun(failedTaskId: number) {
+    setContinuing(true);
+    setError(undefined);
+    try {
+      await state.request(`${path}/continue`, {
+        method: "POST",
+        body: JSON.stringify({ failedTaskId }),
+      });
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not continue the run.",
+      );
+    } finally {
+      setContinuing(false);
+    }
+  }
+  async function fork(entryId: number) {
+    if (!projectSession || forking) return;
+    const creationId =
+      forkRequest.current?.entryId === entryId
+        ? forkRequest.current.creationId
+        : crypto.randomUUID();
+    forkRequest.current = { entryId, creationId };
+    setForking(true);
+    setError(undefined);
+    try {
+      const created = await state.request<{ id: number; name: string }>(
+        `${path}/fork`,
+        {
+          method: "POST",
+          body: JSON.stringify({ at: entryId, creationId }),
+        },
+      );
+      forkRequest.current = undefined;
+      sessionsChanged();
+      setCreatedFork(created);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not fork the conversation.",
+      );
+    } finally {
+      setForking(false);
+    }
+  }
   async function send(whenBusy: "steer" | "followUp" = "followUp") {
     const message = pending ?? {
       content: content.trim(),
@@ -206,6 +270,7 @@ export function Chat({
     };
     if (
       busy ||
+      continuing ||
       stopping ||
       (!message.content && !message.attachments?.length) ||
       (!pending && !modelSelection.model)
@@ -279,6 +344,27 @@ export function Chat({
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <h1 className="sr-only">{title}</h1>
+      {stream.data.planMode && (
+        <p className="text-xs text-muted-foreground">
+          Plan mode · Read-only workspace tools
+        </p>
+      )}
+      {ancestry && projectSession && (
+        <p className="text-xs text-muted-foreground">
+          Forked from{" "}
+          {ancestry.name ? (
+            <Link
+              className="underline underline-offset-2"
+              href={`${projectSession}/${ancestry.conversationId}`}
+            >
+              {ancestry.name}
+            </Link>
+          ) : (
+            "an unavailable conversation"
+          )}
+          {" · "}Entry {ancestry.at}
+        </p>
+      )}
       {stream?.status && stream.status !== "Live" && (
         <p role="status" className="text-xs text-muted-foreground">
           {stream.status}
@@ -332,8 +418,13 @@ export function Chat({
                   activeTools={
                     turn.id === lastTurn ? (stream.data?.activeTools ?? []) : []
                   }
+                  liveTools={execution?.tools}
                   path={path}
                   request={state.request}
+                  fork={
+                    projectSession ? (entryId) => void fork(entryId) : undefined
+                  }
+                  forkDisabled={forking}
                 />
               )),
             ])}
@@ -372,7 +463,31 @@ export function Chat({
           {error}
         </p>
       )}
+      {createdFork && projectSession && (
+        <p role="status" className="text-xs text-muted-foreground">
+          Fork created.{" "}
+          <Link
+            className="underline underline-offset-2"
+            href={`${projectSession}/${createdFork.id}`}
+          >
+            Open {createdFork.name}
+          </Link>
+        </p>
+      )}
       <ExecutionStatus execution={execution} />
+      {execution?.state === "idle" && execution.failure?.canContinue && (
+        <Button
+          className="self-start"
+          variant="outline"
+          size="sm"
+          disabled={busy || stopping || continuing || !!pending}
+          onClick={() => {
+            if (execution.failure) void continueRun(execution.failure.taskId);
+          }}
+        >
+          {continuing ? "Continuing…" : "Continue run"}
+        </Button>
+      )}
       {!execution?.failure && completion?.status === "unanswered" && (
         <p role="status" className="text-sm text-destructive">
           {failureLabel(completion.reason ?? "failed")}

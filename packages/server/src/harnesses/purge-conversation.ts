@@ -8,7 +8,7 @@ import { openDatabase } from "../storage/database.ts";
 export function purgeConversation(
   path: string,
   conversationId: number,
-  beforeErase: () => void,
+  beforeErase: (owned: number[]) => void,
 ) {
   const version = createRequire(import.meta.url)(
     "@earendil-works/pi-durable/package.json",
@@ -20,11 +20,22 @@ export function purgeConversation(
   const db = openDatabase(path);
   try {
     db.exec("PRAGMA secure_delete=ON; BEGIN EXCLUSIVE");
+    db.exec("CREATE TEMP TABLE purge_conversations (id INTEGER PRIMARY KEY)");
+    db.prepare(
+      `INSERT INTO purge_conversations
+       WITH RECURSIVE owned(id) AS (
+         SELECT ?
+         UNION
+         SELECT conversations.id FROM conversations JOIN owned
+           ON conversations.owner_conversation_id=owned.id
+       )
+       SELECT id FROM owned`,
+    ).run(conversationId);
     const dependencies = db
       .prepare(
-        "SELECT id FROM conversations WHERE json_extract(record,'$.parent.conversationId')=? OR owner_conversation_id=?",
+        "SELECT id FROM conversations WHERE json_extract(record,'$.parent.conversationId') IN purge_conversations AND id NOT IN purge_conversations",
       )
-      .all(conversationId, conversationId);
+      .all();
     if (dependencies.length)
       throw new Error(
         "Other conversations depend on this history. Archive and delete those descendants first.",
@@ -42,21 +53,24 @@ export function purgeConversation(
       throw new Error(
         "Stop all work in this session before permanently deleting history.",
       );
-    beforeErase();
+    const owned = db
+      .prepare("SELECT id FROM purge_conversations WHERE id!=?")
+      .all(conversationId) as { id: number }[];
+    beforeErase(owned.map(({ id }) => id));
     db.exec("CREATE TEMP TABLE purge_docs (id INTEGER PRIMARY KEY)");
-    db.prepare(
-      "INSERT INTO purge_docs SELECT id FROM documents WHERE (scope_kind='conversation' AND owner_id=?) OR (scope_kind='task' AND owner_id IN (SELECT id FROM tasks WHERE conversation_id=?))",
-    ).run(conversationId, conversationId);
+    db.exec(
+      "INSERT INTO purge_docs SELECT id FROM documents WHERE (scope_kind='conversation' AND owner_id IN purge_conversations) OR (scope_kind='task' AND owner_id IN (SELECT id FROM tasks WHERE conversation_id IN purge_conversations))",
+    );
     db.exec(
       "DELETE FROM document_revisions WHERE document_id IN (SELECT id FROM purge_docs); DELETE FROM documents WHERE id IN (SELECT id FROM purge_docs)",
     );
     for (const table of ["entries", "submissions", "tasks"])
-      db.prepare(`DELETE FROM ${table} WHERE conversation_id=?`).run(
-        conversationId,
+      db.exec(
+        `DELETE FROM ${table} WHERE conversation_id IN purge_conversations`,
       );
-    db.prepare(
-      "UPDATE conversations SET record=?, owner_conversation_id=NULL, owner_task_id=NULL WHERE id=?",
-    ).run(JSON.stringify({ id: conversationId }), conversationId);
+    db.exec(
+      "UPDATE conversations SET record=json_object('id',id), owner_conversation_id=NULL, owner_task_id=NULL WHERE id IN purge_conversations",
+    );
     db.exec("COMMIT; PRAGMA wal_checkpoint(TRUNCATE); VACUUM");
   } catch (error) {
     if (db.isTransaction) db.exec("ROLLBACK");

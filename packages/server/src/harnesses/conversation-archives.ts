@@ -44,12 +44,17 @@ export class ConversationArchives {
       )
       .run(sessionId, id);
   }
-  deleting(sessionId: string, id: number) {
+  deleting(sessionId: string, id: number, owned: number[] = []) {
     this.store.db
       .prepare(
         "UPDATE conversation_archives SET deletedAt='pending' WHERE sessionId=? AND conversationId=?",
       )
       .run(sessionId, id);
+    const hide = this.store.db.prepare(
+      "INSERT INTO conversation_archives VALUES (?,?,'','',?) ON CONFLICT(sessionId,conversationId) DO UPDATE SET name='', archivedAt='', deletedAt=excluded.deletedAt",
+    );
+    const at = new Date().toISOString();
+    for (const child of owned) hide.run(sessionId, child, at);
   }
   deleted(sessionId: string, id: number) {
     this.store.db

@@ -10,7 +10,11 @@ export type SessionRecord = {
   provider: string;
   modelId: string;
 };
-export type Conversation = { id: number; name: string };
+export type Conversation = {
+  id: number;
+  name: string;
+  parent?: { conversationId: number; at: number };
+};
 export type Session = {
   session: SessionRecord;
   conversations: Conversation[];

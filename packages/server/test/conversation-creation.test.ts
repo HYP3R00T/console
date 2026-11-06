@@ -4,8 +4,82 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { fauxAssistantMessage } from "@earendil-works/pi-ai";
 import { fixture } from "./support/harness-fixture.ts";
+
+test("project forks preserve historical settings and attachments with fresh lifecycle state", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "console-fork-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  let f = await fixture(directory);
+  t.after(() => f.app.close());
+  const project = await f.projects.register("Project", directory);
+  const { sessionId } = (await f.service.list(project.id)).sessions[0];
+  const { harness } = await f.service.session(sessionId);
+  const root = await harness.root(context);
+  const sibling = await f.service.addConversation(sessionId);
+  const list = `/v1/sessions/${sessionId}/conversations`;
+  const source = `${list}/${root.id}`;
+  const attachment = Buffer.from("Forkable evidence").toString("base64");
+  f.faux.setResponses([fauxAssistantMessage("Parent reply")]);
+  const submitted = await f.app.inject({
+    method: "POST",
+    url: `${source}/messages`,
+    payload: {
+      content: "Parent prompt",
+      requestId: randomUUID(),
+      model: { provider: "test", modelId: "test-model" },
+      attachments: [
+        { name: "evidence.txt", mimeType: "text/plain", data: attachment },
+      ],
+    },
+  });
+  assert.equal(submitted.statusCode, 202, submitted.body);
+  await harness.waitForIdle(context);
+  await root.configure(
+    { model: { provider: "test", modelId: "reasoning-model" } },
+    context,
+  );
+  const at = (await f.app.inject(`${source}/history`)).json().messages[0]
+    .entryId;
+  const creationId = randomUUID();
+  const fork = (parent: string) =>
+    f.app.inject({
+      method: "POST",
+      url: `${parent}/fork`,
+      payload: { at, creationId },
+    });
+  assert.equal((await fork(`${list}/${sibling.id}`)).statusCode, 404);
+  const [created, retry] = await Promise.all([fork(source), fork(source)]);
+  assert.equal(created.statusCode, 201, created.body);
+  assert.deepEqual(retry.json(), created.json());
+  const branch = created.json();
+  const path = `${list}/${branch.id}`;
+  assert.deepEqual(
+    (await f.app.inject(list))
+      .json()
+      .conversations.find((item: { id: number }) => item.id === branch.id)
+      .parent,
+    { conversationId: root.id, at },
+  );
+  assert.deepEqual(
+    (await f.app.inject(`${path}/history`))
+      .json()
+      .messages.map((message: { text: string }) => message.text),
+    ["Parent prompt"],
+  );
+  const config = (await f.app.inject(`${path}/configuration`)).json().context;
+  assert.equal(config.model.id, "test-model");
+  assert.equal(config.usage, null);
+  assert.equal((await f.app.inject(`${path}/submissions`)).json().latest, null);
+  assert.equal(
+    (await f.app.inject(`${path}/entries/${at}/attachments/0`)).json().data,
+    attachment,
+  );
+  await f.app.close();
+  f = await fixture(directory);
+  assert.deepEqual((await fork(source)).json(), branch);
+});
 
 test("first-send creation retries reuse conversations across concurrent requests and restart", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "console-draft-"));

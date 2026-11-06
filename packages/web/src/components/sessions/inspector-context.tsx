@@ -19,6 +19,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,10 +32,20 @@ export type ContextSettings = {
   step: number;
   automatic?: boolean;
   modelWindow?: number;
+  estimatedContextTokens?: number;
+  usage?: { tokens: number; cost: number } | null;
+  maxTurns?: number | null;
+  tokenBudget?: number | null;
+  sessionTokens?: number;
   model?: { name: string; provider: string; id: string };
 };
 
 const formatTokens = (value: number) => `${value.toLocaleString()} tokens`;
+const formatCost = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 6,
+});
 
 export function InspectorContext({
   settings,
@@ -42,6 +53,9 @@ export function InspectorContext({
   disabled,
   compacting,
   save,
+  saveTurnLimit,
+  budgetSaving,
+  saveBudget,
   setAutomatic,
   compact,
 }: {
@@ -50,6 +64,9 @@ export function InspectorContext({
   disabled: boolean;
   compacting: boolean;
   save: (tokens: number) => Promise<boolean>;
+  saveTurnLimit: (turns: number | null) => Promise<boolean>;
+  budgetSaving: boolean;
+  saveBudget: (tokens: number | null) => Promise<boolean>;
   setAutomatic: (enabled: boolean) => void;
   compact: (focus: string) => Promise<boolean>;
 }) {
@@ -85,6 +102,14 @@ export function InspectorContext({
                     : ""}
               </dd>
             </div>
+            {settings.estimatedContextTokens !== undefined && (
+              <div>
+                <dt className="text-muted-foreground">
+                  Estimated active context
+                </dt>
+                <dd>{formatTokens(settings.estimatedContextTokens)}</dd>
+              </div>
+            )}
             {nextModel && (
               <div>
                 <dt className="text-muted-foreground">
@@ -101,6 +126,56 @@ export function InspectorContext({
           </dl>
         </CardContent>
       </Card>
+      {settings.usage !== undefined && (
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle>Recorded usage</CardTitle>
+            <CardDescription>
+              Across all runs in this conversation, including compaction.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {settings.usage ? (
+              <dl className="flex flex-col gap-2">
+                <div>
+                  <dt className="text-muted-foreground">Total tokens</dt>
+                  <dd>{formatTokens(settings.usage.tokens)}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Recorded cost (USD)</dt>
+                  <dd>{formatCost.format(settings.usage.cost)}</dd>
+                </div>
+              </dl>
+            ) : (
+              "No usage recorded yet."
+            )}
+          </CardContent>
+        </Card>
+      )}
+      {settings.maxTurns !== undefined && (
+        <IntegerLimit
+          title="Run limit"
+          description="Applies to this conversation. Continue starts a fresh allowance."
+          label="Tool rounds per run"
+          value={settings.maxTurns}
+          disabled={disabled}
+          save={saveTurnLimit}
+        />
+      )}
+      {settings.tokenBudget !== undefined && (
+        <IntegerLimit
+          title="Session token budget"
+          description={
+            settings.sessionTokens === undefined
+              ? "Applies to all chats, reviews and compaction in this session."
+              : `${formatTokens(settings.sessionTokens)} recorded in this session.`
+          }
+          label="Stop new model requests at"
+          value={settings.tokenBudget}
+          disabled={budgetSaving}
+          save={saveBudget}
+        />
+      )}
       <Card size="sm">
         <CardHeader>
           <CardTitle>Compaction settings</CardTitle>
@@ -255,5 +330,87 @@ export function InspectorContext({
         </CardFooter>
       </Card>
     </>
+  );
+}
+
+function IntegerLimit({
+  title,
+  description,
+  label,
+  value,
+  disabled,
+  save,
+}: {
+  title: string;
+  description: string;
+  label: string;
+  value: number | null;
+  disabled: boolean;
+  save: (value: number | null) => Promise<boolean>;
+}) {
+  const id = useId();
+  const [draft, setDraft] = useState<{
+    text: string;
+    original: number | null;
+  }>();
+  const text = draft?.text ?? String(value ?? "");
+  const limit = text === "" ? null : Number(text);
+  const invalid =
+    limit !== null &&
+    (!/^\d+$/.test(text) || !Number.isSafeInteger(limit) || limit < 1);
+  const stale = !!draft && draft.original !== value;
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Field data-disabled={disabled} data-invalid={invalid || stale}>
+          <FieldLabel htmlFor={id}>{label}</FieldLabel>
+          <Input
+            id={id}
+            inputMode="numeric"
+            placeholder="Unlimited"
+            value={text}
+            aria-invalid={invalid || stale}
+            aria-describedby={`${id}-help`}
+            disabled={disabled}
+            onChange={(event) =>
+              setDraft({
+                text: event.target.value,
+                original: draft ? draft.original : value,
+              })
+            }
+          />
+          <FieldDescription id={`${id}-help`}>
+            Leave blank for unlimited.
+          </FieldDescription>
+          {stale ? (
+            <FieldError>
+              The limit changed elsewhere. Reset your draft.
+            </FieldError>
+          ) : (
+            invalid && <FieldError>Enter a positive whole number.</FieldError>
+          )}
+        </Field>
+      </CardContent>
+      {draft && (limit !== value || stale) && (
+        <CardFooter className="justify-end gap-2">
+          <Button variant="ghost" size="xs" onClick={() => setDraft(undefined)}>
+            Reset draft
+          </Button>
+          <Button
+            size="xs"
+            disabled={disabled || invalid || stale}
+            onClick={async () => {
+              if (await save(limit)) setDraft(undefined);
+            }}
+          >
+            Save limit
+          </Button>
+        </CardFooter>
+      )}
+    </Card>
   );
 }

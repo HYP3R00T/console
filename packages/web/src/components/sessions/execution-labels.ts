@@ -9,11 +9,13 @@ export function executionNeedsAttention(execution?: Execution): boolean {
       execution.compactions.length > 0 ||
       execution.state === "retrying" ||
       execution.state === "deferred" ||
+      execution.state === "finishing" ||
       execution.state === "compacting")
   );
 }
 
 const failures: Record<string, string> = {
+  budget_limit: "This session reached its token budget.",
   model_error: "The model request failed after retries.",
   no_model: "The selected model is unavailable. Choose an available model.",
   aborted: "This run was stopped.",

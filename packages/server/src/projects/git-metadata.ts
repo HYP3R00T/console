@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { realpath } from "node:fs/promises";
+import { isAbsolute } from "node:path";
 import { gitEnvironment } from "./git.ts";
 
 export type GitWorktree = {
@@ -133,5 +135,50 @@ export async function inspectGit(path: string): Promise<GitMetadata> {
           ? "Git is not installed or the directory is unavailable."
           : "Git metadata could not be read.",
     };
+  }
+}
+
+/** Accept only a real linked worktree of the project's current repository. */
+export async function linkedWorktreePath(project: string, selected: string) {
+  if (!isAbsolute(selected)) return undefined;
+  try {
+    const path = await realpath(selected);
+    const [
+      worktrees,
+      projectRoot,
+      projectCommon,
+      targetCommon,
+      targetRoot,
+      targetGit,
+    ] = await Promise.all([
+      readGit(project, ["worktree", "list", "--porcelain", "-z"]),
+      readGit(project, ["rev-parse", "--show-toplevel"]),
+      readGit(project, [
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-common-dir",
+      ]),
+      readGit(path, [
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-common-dir",
+      ]),
+      readGit(path, ["rev-parse", "--show-toplevel"]),
+      readGit(path, ["rev-parse", "--absolute-git-dir"]),
+    ]);
+    const common = await realpath(targetCommon.replace(/\n$/, ""));
+    if (
+      (await realpath(targetGit.replace(/\n$/, ""))) === common ||
+      targetRoot.replace(/\n$/, "") !== path ||
+      (await realpath(projectRoot.replace(/\n$/, ""))) === path ||
+      (await realpath(projectCommon.replace(/\n$/, ""))) !== common ||
+      !parseWorktrees(worktrees).some(
+        (tree) => tree.path === path && !tree.prunable && !tree.bare,
+      )
+    )
+      return undefined;
+    return path;
+  } catch {
+    return undefined;
   }
 }

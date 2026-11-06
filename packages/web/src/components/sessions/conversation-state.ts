@@ -7,6 +7,8 @@ export type ChatMessage = {
   failed: boolean;
   attachments?: MessageAttachment[];
   toolName?: string;
+  reviewId?: number;
+  activityLabel?: string;
   toolCalls?: { id: string; name: string; arguments: string }[];
 };
 export type QueuedInput = {
@@ -28,9 +30,9 @@ export type Execution = {
   attempt?: number;
   retryAt?: number;
   pollAt?: number;
-  failure?: { reason: string; taskId: number };
+  failure?: { reason: string; taskId: number; canContinue?: boolean };
   compactionFailure?: { trigger: string };
-  tools: { callId: string; name: string; status: string }[];
+  tools: { callId: string; name: string; status: string; reviewId?: number }[];
   compactions: {
     taskId: number;
     trigger: string;
@@ -55,5 +57,6 @@ export type ChatSnapshot = {
   queue?: QueuedInput[];
   hasEarlier: boolean;
   thinkingLevel?: string;
+  planMode?: boolean;
   model?: { provider: string; modelId: string };
 };
