@@ -5,6 +5,7 @@ import {
 } from "@earendil-works/chord/context";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type {
+  Conversation,
   ConversationId,
   Cursor,
   EntryId,
@@ -21,9 +22,16 @@ import {
   prepareAttachments,
   readAttachment,
 } from "./attachments.ts";
-import { conversationConfiguration } from "./configuration.ts";
+import {
+  type ConfigurationChange,
+  conversationConfiguration,
+} from "./configuration.ts";
 import { ConversationArchives } from "./conversation-archives.ts";
 import { ConversationInfo, SessionInfo } from "./documents.ts";
+import {
+  defaultInspectionGuidance,
+  defaultWorkspaceGuidance,
+} from "./guidance.ts";
 import { queueView } from "./queue.ts";
 import { HarnessRuntime } from "./runtime.ts";
 import {
@@ -69,6 +77,27 @@ export class HarnessService {
         if (!project.available)
           throw new HarnessError(409, "Project directory is unavailable.");
         return { id: project.id, name: project.name, directory: project.path };
+      },
+      undefined,
+      undefined,
+      {
+        projectInstructions: (sessionId) => {
+          const projectId = store.session(sessionId)?.projectId;
+          return projectId
+            ? projects.store.agentSettings(projectId).instructions
+            : "";
+        },
+        workspaceGuidance: () =>
+          projects.store.workspaceGuidance() ?? defaultWorkspaceGuidance,
+        inspectionGuidance: (sessionId) => {
+          const projectId = store.session(sessionId)?.projectId;
+          return (
+            (projectId &&
+              projects.store.agentSettings(projectId).inspectionGuidance) ||
+            defaultInspectionGuidance
+          );
+        },
+        compaction: (sessionId) => store.compaction(sessionId),
       },
     );
     projects.afterRegister = (id) =>
@@ -256,6 +285,10 @@ export class HarnessService {
       init: async (tx, id) => {
         const info = await tx.doc(ConversationInfo, id);
         info.name = record.projectId === standaloneOwner ? record.name : "Main";
+        const tools =
+          record.projectId &&
+          this.projects.store.agentSettings(record.projectId).tools;
+        if (tools) (await tx.doc(AgentDoc, id)).tools = tools;
       },
     });
   }
@@ -354,6 +387,10 @@ export class HarnessService {
             const info = await tx.doc(ConversationInfo, id);
             name = `Conversation ${counter.nextConversation++}`;
             info.name = name;
+            const tools = this.projects.store.agentSettings(
+              record.projectId,
+            ).tools;
+            if (tools) (await tx.doc(AgentDoc, id)).tools = tools;
             if (creationId) {
               counter.creations ??= {};
               counter.creations[creationId] = id;
@@ -377,73 +414,212 @@ export class HarnessService {
       throw new HarnessError(404, "Conversation not found in this session.");
     return { record, harness, conversation };
   }
+  private readConfiguration(
+    record: HarnessRecord,
+    harness: Harness,
+    conversation: Conversation,
+  ) {
+    return conversationConfiguration(
+      harness,
+      conversation,
+      record.projectId
+        ? this.projects.store.agentSettings(record.projectId)
+        : undefined,
+      {
+        compaction: this.store.compaction(record.sessionId),
+        workspaceGuidance: this.projects.store.workspaceGuidance(),
+        projectName: this.projects.store.get(record.projectId)?.name,
+        model: (provider, modelId) =>
+          this.availableModel({ provider, modelId }),
+      },
+    );
+  }
+
   configuration(sessionId: string, id: string) {
     return this.serial(sessionId, async () => {
-      const { harness, conversation } = await this.conversation(sessionId, id);
-      return conversationConfiguration(harness, conversation);
+      const { record, harness, conversation } = await this.conversation(
+        sessionId,
+        id,
+      );
+      return this.readConfiguration(record, harness, conversation);
     });
   }
+
+  private async assertIdle(harness: Harness, conversationId?: ConversationId) {
+    const inspection = await harness.inspect(context);
+    if (
+      inspection.tasks.some(
+        ({ record }) =>
+          conversationId === undefined ||
+          record.conversationId === conversationId,
+      ) ||
+      inspection.submissions.some(
+        (submission) =>
+          conversationId === undefined ||
+          submission.conversationId === conversationId,
+      )
+    )
+      throw new HarnessError(
+        409,
+        conversationId === undefined
+          ? "Stop or finish all work in this session first."
+          : "Stop or finish this conversation first.",
+      );
+  }
+
   configureConversation(
     sessionId: string,
     id: string,
-    change: {
-      revision: string;
-      tools?: string[] | null;
-      instructions?: string | null;
-    },
+    change: ConfigurationChange,
   ) {
     return this.serial(sessionId, async () => {
-      const { harness, conversation } = await this.conversation(sessionId, id);
-      const current = await conversationConfiguration(harness, conversation);
+      const { record, harness, conversation } = await this.conversation(
+        sessionId,
+        id,
+      );
+      const projectChange =
+        change.projectTools !== undefined ||
+        change.projectInstructions !== undefined ||
+        change.inspectionGuidance !== undefined;
+      const conversationChange =
+        change.tools !== undefined || change.instructions !== undefined;
+      const sessionChange =
+        change.keepRecentTokens !== undefined ||
+        change.automaticCompaction !== undefined;
+      const machineChange = change.workspaceGuidance !== undefined;
+      if (
+        Number(projectChange) +
+          Number(conversationChange) +
+          Number(sessionChange) +
+          Number(machineChange) !==
+        1
+      )
+        throw new HarnessError(
+          400,
+          "Change one configuration scope at a time.",
+        );
+      if (!projectChange && !machineChange)
+        await this.assertIdle(
+          harness,
+          sessionChange ? undefined : conversation.id,
+        );
+      const current = await this.readConfiguration(
+        record,
+        harness,
+        conversation,
+      );
       if (current.revision !== change.revision)
         throw new HarnessError(
           409,
           "Configuration changed. Refresh and retry.",
         );
-      const inspection = await harness.inspect(context);
+
+      const selected = projectChange ? change.projectTools : change.tools;
       if (
-        inspection.tasks.some(
-          (task) => task.record.conversationId === conversation.id,
-        ) ||
-        inspection.submissions.some(
-          (submission) => submission.conversationId === conversation.id,
-        )
-      )
-        throw new HarnessError(
-          409,
-          "Stop or finish this conversation before changing configuration.",
-        );
-      const agent = await conversation.agent(context);
-      const catalog = agent.extensions.flatMap(
-        (extension) => extension.tools ?? [],
-      );
-      if (
-        change.tools &&
-        (new Set(change.tools).size !== change.tools.length ||
-          change.tools.some(
-            (name) => !catalog.some((tool) => tool.name === name),
+        selected &&
+        (new Set(selected).size !== selected.length ||
+          selected.some(
+            (name) => !current.tools.some((tool) => tool.name === name),
           ))
       )
         throw new HarnessError(400, "Unknown or duplicate tool.");
-      await conversation.configure(
-        {
-          ...(change.tools !== undefined
-            ? {
-                tools:
-                  change.tools === null
-                    ? null
-                    : catalog.filter((tool) =>
-                        change.tools?.includes(tool.name),
-                      ),
-              }
-            : {}),
-          ...(change.instructions !== undefined
-            ? { instructions: change.instructions?.trim() || null }
-            : {}),
-        },
+
+      if (change.workspaceGuidance !== undefined) {
+        const workspace = current.guidance?.workspace;
+        const stored = this.projects.store.workspaceGuidance();
+        if (stored !== (workspace?.customized ? workspace.text : null))
+          throw new HarnessError(
+            409,
+            "Workspace guidance changed. Refresh and retry.",
+          );
+        this.projects.store.setWorkspaceGuidance(
+          change.workspaceGuidance?.trim() || null,
+        );
+      } else if (projectChange) {
+        if (!current.project)
+          throw new HarnessError(400, "This conversation has no project.");
+        this.projects.assertWritable(record.projectId);
+        // Other sessions can write the same project while the catalog is being read.
+        if (
+          JSON.stringify(
+            this.projects.store.agentSettings(record.projectId),
+          ) !== JSON.stringify(current.project)
+        )
+          throw new HarnessError(
+            409,
+            "Project configuration changed. Refresh and retry.",
+          );
+        this.projects.store.setAgentSettings(record.projectId, {
+          ...current.project,
+          ...(change.inspectionGuidance !== undefined && {
+            inspectionGuidance: change.inspectionGuidance?.trim() || null,
+          }),
+          tools:
+            change.projectTools === undefined
+              ? current.project.tools
+              : change.projectTools,
+          instructions:
+            change.projectInstructions === undefined
+              ? current.project.instructions
+              : (change.projectInstructions?.trim() ?? ""),
+        });
+      } else if (sessionChange) {
+        const { min, max, step } = current.context;
+        const tokens =
+          change.keepRecentTokens ?? current.context.keepRecentTokens;
+        if (tokens < min || tokens > max || tokens % step !== 0)
+          throw new HarnessError(400, "Invalid recent context size.");
+        this.store.setCompaction(
+          sessionId,
+          tokens,
+          change.automaticCompaction ?? current.context.automatic,
+        );
+      } else {
+        const agent = await conversation.agent(context);
+        const catalog = agent.extensions.flatMap(
+          (extension) => extension.tools ?? [],
+        );
+        await conversation.configure(
+          {
+            tools:
+              selected == null
+                ? selected
+                : catalog.filter((tool) => selected.includes(tool.name)),
+            instructions:
+              change.instructions === undefined
+                ? undefined
+                : change.instructions?.trim() || null,
+          },
+          context,
+        );
+      }
+      return this.readConfiguration(record, harness, conversation);
+    });
+  }
+
+  private availableModel(model: ModelRef) {
+    return this.providers.store.enabled(model.provider)
+      ? this.providers.models.getModel(model.provider, model.modelId)
+      : undefined;
+  }
+
+  compactConversation(sessionId: string, id: string, focus?: string) {
+    return this.serial(sessionId, async () => {
+      const { harness, conversation } = await this.conversation(sessionId, id);
+      await this.assertIdle(harness, conversation.id);
+      const agent = await conversation.agent(context);
+      if (!agent.model)
+        throw new HarnessError(
+          409,
+          "Send a message with a model before compacting.",
+        );
+      if (!this.availableModel(agent.model))
+        throw new HarnessError(409, "The conversation model is unavailable.");
+      const taskId = await conversation.compact(
+        focus?.trim() || undefined,
         context,
       );
-      return conversationConfiguration(harness, conversation);
+      return { taskId };
     });
   }
   async archivedConversations() {

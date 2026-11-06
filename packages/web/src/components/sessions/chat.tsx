@@ -66,6 +66,13 @@ export function Chat({
   const [stopping, setStopping] = useState(false);
   const working = !!stream?.data?.busy || !!stream?.data?.queued;
   const execution = stream?.data?.execution;
+  const modelSelection = useChatModels(
+    state.request,
+    pending?.model ?? stream?.data?.model,
+    pending?.thinkingLevel ?? stream?.data?.thinkingLevel,
+  );
+  const selectedModel = modelSelection.model;
+  const savedModel = stream?.data?.model;
   useLayoutEffect(() => {
     const inspector = {
       route,
@@ -77,18 +84,25 @@ export function Chat({
           request={state.request}
           working={working}
           execution={execution}
+          selectedModel={selectedModel}
+          savedModel={savedModel}
         />
       ),
     };
     setInspector(inspector);
     return () =>
       setInspector((current) => (current === inspector ? undefined : current));
-  }, [route, deviceId, path, state.request, working, execution, setInspector]);
-  const modelSelection = useChatModels(
+  }, [
+    route,
+    deviceId,
+    path,
     state.request,
-    pending?.model ?? stream?.data?.model,
-    pending?.thinkingLevel ?? stream?.data?.thinkingLevel,
-  );
+    working,
+    execution,
+    selectedModel,
+    savedModel,
+    setInspector,
+  ]);
   const [showLatest, setShowLatest] = useState(false);
   const [error, setError] = useState<string>();
   const [completion, setCompletion] = useState<{

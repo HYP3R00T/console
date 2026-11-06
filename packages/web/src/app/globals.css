@@ -397,7 +397,7 @@
   padding-left: 1rem;
   color: var(--muted-foreground);
 }
-.message-markdown pre {
+.message-markdown pre:not([data-slot="code-block-content"]) {
   max-width: 100%;
   overflow-x: auto;
   border-radius: var(--radius-lg);

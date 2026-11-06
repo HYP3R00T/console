@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { DEFAULT_COMPACTION_POLICY } from "@earendil-works/pi-durable";
 import { openDatabase } from "../storage/database.ts";
 
 // Project IDs are UUIDs. This reserved owner groups machine-level conversations.
@@ -25,6 +26,16 @@ export class HarnessStore {
     this.db.exec(
       "CREATE TABLE IF NOT EXISTS harnesses (id TEXT PRIMARY KEY, sessionId TEXT NOT NULL UNIQUE, projectId TEXT NOT NULL, name TEXT NOT NULL, createdAt TEXT NOT NULL, provider TEXT NOT NULL, modelId TEXT NOT NULL)",
     );
+    this.db.exec(
+      "CREATE TABLE IF NOT EXISTS session_context_settings (sessionId TEXT PRIMARY KEY, keepRecentTokens INTEGER NOT NULL)",
+    );
+    const contextColumns = this.db
+      .prepare("PRAGMA table_info(session_context_settings)")
+      .all();
+    if (!contextColumns.some((column) => column.name === "automatic"))
+      this.db.exec(
+        "ALTER TABLE session_context_settings ADD COLUMN automatic INTEGER NOT NULL DEFAULT 1",
+      );
     const columns = this.db.prepare("PRAGMA table_info(harnesses)").all();
     if (!columns.some((column) => column.name === "number")) {
       this.db.exec("BEGIN IMMEDIATE");
@@ -115,6 +126,26 @@ export class HarnessStore {
       this.db.exec("ROLLBACK");
       throw error;
     }
+  }
+  compaction(sessionId: string) {
+    const row = this.db
+      .prepare(
+        "SELECT keepRecentTokens, automatic FROM session_context_settings WHERE sessionId=?",
+      )
+      .get(sessionId);
+    return {
+      keepRecentTokens: Number(
+        row?.keepRecentTokens ?? DEFAULT_COMPACTION_POLICY.keepRecentTokens,
+      ),
+      enabled: row ? row.automatic === 1 : DEFAULT_COMPACTION_POLICY.enabled,
+    };
+  }
+  setCompaction(sessionId: string, keepRecentTokens: number, enabled: boolean) {
+    this.db
+      .prepare(
+        "INSERT INTO session_context_settings (sessionId, keepRecentTokens, automatic) VALUES (?,?,?) ON CONFLICT(sessionId) DO UPDATE SET keepRecentTokens=excluded.keepRecentTokens, automatic=excluded.automatic",
+      )
+      .run(sessionId, keepRecentTokens, Number(enabled));
   }
   close() {
     this.db.close();

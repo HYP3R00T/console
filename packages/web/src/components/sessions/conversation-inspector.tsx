@@ -1,32 +1,49 @@
 "use client";
-import { RotateCcw } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import {
   startTransition,
   useCallback,
   useEffect,
-  useId,
   useRef,
   useState,
 } from "react";
-import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { useBackendRequest } from "@/hooks/use-backend-request";
 import type { Execution } from "./conversation-state";
 import { executionNeedsAttention } from "./execution-labels";
 import { ExecutionStatus } from "./execution-status";
+import { type ContextSettings, InspectorContext } from "./inspector-context";
+import {
+  type Guidance,
+  InstructionEditor,
+  RuntimeGuidance,
+} from "./inspector-instructions";
+import { type InspectorTool, InspectorTools } from "./inspector-tools";
+import type { ChatModel, ModelRef } from "./use-chat-models";
 
+type Change = {
+  tools?: string[] | null;
+  instructions?: string | null;
+  projectInstructions?: string | null;
+  workspaceGuidance?: string | null;
+  inspectionGuidance?: string | null;
+  automaticCompaction?: boolean;
+  keepRecentTokens?: number;
+};
 type Configuration = {
   revision: string;
-  tools: {
-    name: string;
-    extension: string;
-    description: string;
-    parameters: object;
-    enabled: boolean;
-  }[];
+  tools: InspectorTool[];
+  guidance?: Guidance;
+  project?: { instructions: string };
+  context?: ContextSettings;
   toolSource: "default" | "conversation";
   instructions: string;
   sections: { key: string; text: string }[];
@@ -44,22 +61,22 @@ export function ConversationInspector({
   request,
   working,
   execution,
+  selectedModel,
+  savedModel,
 }: {
   path: string;
   request: ReturnType<typeof useBackendRequest>["request"];
   working: boolean;
   execution?: Execution;
+  selectedModel?: ChatModel;
+  savedModel?: ModelRef;
 }) {
-  const prefix = useId();
   const [data, setData] = useState<Configuration>();
-  const [instructions, setInstructions] = useState<string>();
-  const [revision, setRevision] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const [loadError, setLoadError] = useState<string>();
   const generation = useRef(0);
   const loaded = useRef(false);
-  const dirty = useRef(false);
   const savingRef = useRef(false);
   const refresh = useCallback(
     async (signal?: AbortSignal) => {
@@ -77,10 +94,6 @@ export function ConversationInspector({
         const reveal = () => {
           setLoadError(undefined);
           setData(next);
-          if (!dirty.current) {
-            setInstructions(next.instructions);
-            setRevision(next.revision);
-          }
         };
         if (loaded.current) reveal();
         else startTransition(reveal);
@@ -96,6 +109,9 @@ export function ConversationInspector({
     },
     [path, request],
   );
+  const savedProvider = savedModel?.provider;
+  const savedModelId = savedModel?.modelId;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Refresh as soon as the stream reports a saved model change.
   useEffect(() => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
@@ -109,222 +125,182 @@ export function ConversationInspector({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [refresh]);
-  async function update(
-    change: { tools?: string[] | null; instructions?: string | null },
-    expected = data?.revision,
-  ) {
-    if (!expected) return;
+  }, [refresh, savedProvider, savedModelId]);
+  async function mutate(action: () => Promise<void>) {
+    if (savingRef.current) return false;
     generation.current += 1;
     savingRef.current = true;
     setSaving(true);
     setError(undefined);
     try {
-      const next = await request<Configuration>(`${path}/configuration`, {
-        method: "PATCH",
-        body: JSON.stringify({ revision: expected, ...change }),
-      });
-      setData(next);
-      if (change.instructions !== undefined) {
-        dirty.current = false;
-        setInstructions(next.instructions);
-        setRevision(next.revision);
-      } else if (revision === expected) setRevision(next.revision);
+      await action();
+      return true;
     } catch (cause) {
       setError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not save configuration.",
+        cause instanceof Error ? cause.message : "Could not save changes.",
       );
+      return false;
     } finally {
       savingRef.current = false;
       setSaving(false);
     }
   }
-  const disabled = working || saving;
+
+  async function update(change: Change) {
+    if (!data) return false;
+    return mutate(async () => {
+      const next = await request<Configuration>(`${path}/configuration`, {
+        method: "PATCH",
+        body: JSON.stringify({ revision: data.revision, ...change }),
+      });
+      setData(next);
+    });
+  }
+  const compacting = !!execution?.compactions.length;
+  const busy = working || compacting;
+  const disabled = busy || saving;
   return (
     <div className="flex h-full min-h-0 flex-col p-4">
       {(error || loadError) && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="pb-2 text-xs text-destructive">
           {error || loadError}
         </p>
       )}
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="pr-2">
-          {executionNeedsAttention(execution) && (
-            <section
-              aria-labelledby={`${prefix}-execution-heading`}
-              className="border-b border-border pb-4"
-            >
-              <h2
-                id={`${prefix}-execution-heading`}
-                className="mb-3 text-sm font-semibold"
-              >
-                Execution
-              </h2>
-              <ExecutionStatus execution={execution} details />
-            </section>
-          )}
-          <section
-            id={`${prefix}-tools`}
-            aria-labelledby={`${prefix}-tools-heading`}
-            className="border-b border-border pb-5 pt-4"
+      {!data && !loadError && <ConversationInspectorLoading />}
+      {data && (
+        <Tabs defaultValue="tools" className="min-h-0 flex-1 gap-3">
+          <TabsList
+            aria-label="Conversation settings"
+            className="w-full shrink-0"
           >
-            <h2
-              id={`${prefix}-tools-heading`}
-              className="text-sm font-semibold"
-            >
-              Tools
-            </h2>
-            {!data && !loadError && <ConversationInspectorLoading />}
-            {working && (
-              <p className="py-2 text-xs text-muted-foreground">
-                Editable when idle
-              </p>
-            )}
-            <div className="flex items-center justify-between py-3 text-xs text-muted-foreground">
-              <span>
-                {data?.toolSource === "conversation" ? "Custom" : "Default"}
-              </span>
-              <ControlTooltip label="Use default tools">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6"
-                  aria-label="Use default tools"
-                  disabled={disabled || data?.toolSource !== "conversation"}
-                  onClick={() => void update({ tools: null })}
-                >
-                  <RotateCcw className="size-3.5" />
-                </Button>
-              </ControlTooltip>
-            </div>
-            {[...new Set(data?.tools.map((tool) => tool.extension))].map(
-              (extension) => (
-                <section key={extension} className="mb-5">
-                  <h3 className="mb-2 text-xs text-muted-foreground">
-                    {extension === "coding-tools" ? "Coding" : "Inspection"}
-                  </h3>
-                  {data?.tools
-                    .filter((tool) => tool.extension === extension)
-                    .map((tool) => (
-                      <div
-                        key={tool.name}
-                        className="flex items-start gap-2 rounded-md px-1 py-2 hover:bg-accent/40"
-                      >
-                        <details className="min-w-0 flex-1">
-                          <summary className="cursor-pointer text-xs font-medium">
-                            {tool.name}
-                          </summary>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            {tool.description}
-                          </p>
-                          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-[11px] text-muted-foreground">
-                            {JSON.stringify(tool.parameters, null, 2)}
-                          </pre>
-                        </details>
-                        <Checkbox
-                          aria-label={`Enable ${tool.name}`}
-                          checked={tool.enabled}
-                          disabled={disabled}
-                          onCheckedChange={(checked) =>
-                            void update({
-                              tools: data.tools
-                                .filter((item) =>
-                                  item.name === tool.name
-                                    ? checked
-                                    : item.enabled,
-                                )
-                                .map((item) => item.name),
-                            })
-                          }
+            <TabsTrigger value="tools">Tools</TabsTrigger>
+            <TabsTrigger value="instructions">Instructions</TabsTrigger>
+            {data.context && <TabsTrigger value="context">Context</TabsTrigger>}
+          </TabsList>
+          {executionNeedsAttention(execution) && (
+            <Card size="sm" className="shrink-0">
+              <CardHeader>
+                <CardTitle>Execution</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ExecutionStatus execution={execution} details />
+              </CardContent>
+            </Card>
+          )}
+          <TabsContent value="tools" keepMounted className="min-h-0">
+            <ScrollArea className="h-full">
+              <div className="flex min-w-0 flex-col gap-4 px-1 py-2 pr-3">
+                <InspectorTools
+                  tools={data.tools}
+                  custom={data.toolSource === "conversation"}
+                  working={busy}
+                  saving={saving}
+                  update={(tools) => void update({ tools })}
+                />
+              </div>
+            </ScrollArea>
+          </TabsContent>
+          <TabsContent value="instructions" keepMounted className="min-h-0">
+            <ScrollArea className="h-full">
+              <div className="flex min-w-0 flex-col gap-4 px-1 py-2 pr-3">
+                <InstructionEditor
+                  label="Conversation instructions"
+                  scope="Applies to each reply in this conversation, starting with the next model request after you save."
+                  placeholder="Add guidance for this conversation…"
+                  value={data.instructions}
+                  disabled={disabled}
+                  save={(instructions) => update({ instructions })}
+                />
+                {data.project && (
+                  <InstructionEditor
+                    label="Shared project instructions"
+                    scope="Saved in Console and applied to model requests across this project. Separate from AGENTS.md, which the agent can read with file tools."
+                    placeholder="Add shared conventions or project goals…"
+                    value={data.project.instructions}
+                    disabled={saving}
+                    save={(projectInstructions) =>
+                      update({ projectInstructions })
+                    }
+                  />
+                )}
+                {(data.guidance || data.sections.length > 0) && (
+                  <Collapsible className="group/guidance">
+                    <CollapsibleTrigger
+                      render={<Button variant="ghost" size="sm" />}
+                      className="h-auto min-h-7 w-full justify-start whitespace-normal"
+                    >
+                      <ChevronRight
+                        aria-hidden
+                        data-icon="inline-start"
+                        className="group-data-panel-open/guidance:rotate-90"
+                      />
+                      Built-in guidance and environment
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-3">
+                      <div className="flex min-w-0 flex-col gap-4">
+                        {data.guidance?.inspection && (
+                          <InstructionEditor
+                            label="Project inspection rules"
+                            scope="Tell the agent what to inspect and how to cite evidence in this project."
+                            value={data.guidance.inspection.text}
+                            customized={data.guidance.inspection.customized}
+                            disabled={saving}
+                            save={(inspectionGuidance) =>
+                              update({ inspectionGuidance })
+                            }
+                          />
+                        )}
+                        {data.guidance && (
+                          <InstructionEditor
+                            label="Machine-wide evidence rules"
+                            scope="Set how the agent verifies claims across all conversations on this machine."
+                            value={data.guidance.workspace.text}
+                            customized={data.guidance.workspace.customized}
+                            disabled={saving}
+                            save={(workspaceGuidance) =>
+                              update({ workspaceGuidance })
+                            }
+                          />
+                        )}
+                        <RuntimeGuidance
+                          guidance={data.guidance}
+                          sections={data.sections}
                         />
                       </div>
-                    ))}
-                </section>
-              ),
-            )}
-          </section>
-          <section
-            id={`${prefix}-instructions`}
-            aria-labelledby={`${prefix}-instructions-heading`}
-            className="py-5"
-          >
-            <h2
-              id={`${prefix}-instructions-heading`}
-              className="text-sm font-semibold"
-            >
-              Instructions
-            </h2>
-            {!data && !loadError && <ConversationInspectorLoading />}
-            {working && (
-              <p className="py-2 text-xs text-muted-foreground">
-                Editable when idle
-              </p>
-            )}
-            <div className="space-y-4 py-3 pr-2">
-              {data?.sections.map((section) => (
-                <details key={section.key}>
-                  <summary className="cursor-pointer text-xs text-muted-foreground">
-                    {section.key === "workspace"
-                      ? "Workspace"
-                      : section.key === "console_project"
-                        ? "Project"
-                        : section.key}
-                  </summary>
-                  <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed">
-                    {section.text}
-                  </p>
-                </details>
-              ))}
-              <label
-                htmlFor="conversation-instructions"
-                className="block text-xs font-medium"
-              >
-                Conversation
-              </label>
-              <Textarea
-                id="conversation-instructions"
-                placeholder="Add instructions…"
-                value={instructions ?? ""}
-                maxLength={16000}
-                disabled={!data || disabled}
-                onChange={(event) => {
-                  dirty.current = event.target.value !== data?.instructions;
-                  setInstructions(event.target.value);
-                }}
-                className="min-h-48 text-xs"
-              />
-              <div className="flex items-center justify-end gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={
-                    disabled || !data || instructions === data.instructions
-                  }
-                  onClick={() => {
-                    setError(undefined);
-                    dirty.current = false;
-                    setInstructions(data?.instructions);
-                    setRevision(data?.revision);
-                  }}
-                >
-                  Reset
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={
-                    disabled || !data || instructions === data.instructions
-                  }
-                  onClick={() => void update({ instructions }, revision)}
-                >
-                  Save
-                </Button>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
               </div>
-            </div>
-          </section>
-        </div>
-      </ScrollArea>
+            </ScrollArea>
+          </TabsContent>
+          {data.context && (
+            <TabsContent value="context" keepMounted className="min-h-0">
+              <ScrollArea className="h-full">
+                <div className="flex min-w-0 flex-col gap-4 px-1 py-2 pr-3">
+                  <InspectorContext
+                    settings={data.context}
+                    selectedModel={selectedModel}
+                    compacting={compacting}
+                    disabled={disabled}
+                    save={(keepRecentTokens) => update({ keepRecentTokens })}
+                    setAutomatic={(automaticCompaction) =>
+                      void update({ automaticCompaction })
+                    }
+                    compact={(focus) =>
+                      mutate(async () => {
+                        await request(`${path}/compact`, {
+                          method: "POST",
+                          body: JSON.stringify({ focus }),
+                        });
+                      })
+                    }
+                  />
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          )}
+        </Tabs>
+      )}
     </div>
   );
 }
