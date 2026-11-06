@@ -46,8 +46,15 @@ export class HarnessStore {
       this.db.exec(
         "ALTER TABLE session_context_settings ADD COLUMN automatic INTEGER NOT NULL DEFAULT 1",
       );
+    if (!contextColumns.some((column) => column.name === "tokenBudget"))
+      this.db.exec(
+        "ALTER TABLE session_context_settings ADD COLUMN tokenBudget INTEGER",
+      );
     this.db.exec(
       "CREATE TABLE IF NOT EXISTS runtime_defaults (id INTEGER PRIMARY KEY CHECK (id=1), revision INTEGER NOT NULL, provider TEXT, modelId TEXT, thinkingLevel TEXT)",
+    );
+    this.db.exec(
+      "CREATE TABLE IF NOT EXISTS conversation_worktrees (sessionId TEXT NOT NULL, conversationId INTEGER NOT NULL, path TEXT NOT NULL UNIQUE, PRIMARY KEY(sessionId,conversationId))",
     );
     this.db.exec(
       "INSERT OR IGNORE INTO runtime_defaults (id, revision) VALUES (1, 0)",
@@ -201,6 +208,60 @@ export class HarnessStore {
         "INSERT INTO session_context_settings (sessionId, keepRecentTokens, automatic) VALUES (?,?,?) ON CONFLICT(sessionId) DO UPDATE SET keepRecentTokens=excluded.keepRecentTokens, automatic=excluded.automatic",
       )
       .run(sessionId, keepRecentTokens, Number(enabled));
+  }
+  tokenBudget(sessionId: string): number | null {
+    const row = this.db
+      .prepare(
+        "SELECT tokenBudget FROM session_context_settings WHERE sessionId=?",
+      )
+      .get(sessionId);
+    return row?.tokenBudget == null ? null : Number(row.tokenBudget);
+  }
+  setTokenBudget(sessionId: string, limit: number | null) {
+    this.db
+      .prepare(
+        "INSERT INTO session_context_settings (sessionId,keepRecentTokens,automatic,tokenBudget) VALUES (?,?,?,?) ON CONFLICT(sessionId) DO UPDATE SET tokenBudget=excluded.tokenBudget",
+      )
+      .run(
+        sessionId,
+        DEFAULT_COMPACTION_POLICY.keepRecentTokens,
+        Number(DEFAULT_COMPACTION_POLICY.enabled),
+        limit,
+      );
+  }
+  worktree(sessionId: string, conversationId: number): string | null {
+    const row = this.db
+      .prepare(
+        "SELECT path FROM conversation_worktrees WHERE sessionId=? AND conversationId=?",
+      )
+      .get(sessionId, conversationId) as { path: string } | undefined;
+    return row?.path ?? null;
+  }
+  setWorktree(sessionId: string, conversationId: number, path: string | null) {
+    if (path === null) {
+      this.db
+        .prepare(
+          "DELETE FROM conversation_worktrees WHERE sessionId=? AND conversationId=?",
+        )
+        .run(sessionId, conversationId);
+      return true;
+    }
+    const owner = this.db
+      .prepare(
+        "SELECT sessionId,conversationId FROM conversation_worktrees WHERE path=?",
+      )
+      .get(path);
+    if (
+      owner &&
+      (owner.sessionId !== sessionId || owner.conversationId !== conversationId)
+    )
+      return false;
+    this.db
+      .prepare(
+        "INSERT INTO conversation_worktrees VALUES (?,?,?) ON CONFLICT(sessionId,conversationId) DO UPDATE SET path=excluded.path",
+      )
+      .run(sessionId, conversationId, path);
+    return true;
   }
   close() {
     this.db.close();

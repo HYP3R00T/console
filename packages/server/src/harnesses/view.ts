@@ -1,11 +1,22 @@
 import type {
+  ConversationId,
   ConversationView,
   EntryRecord,
   InboxState,
   LiveState,
+  TaskGraph,
 } from "@earendil-works/pi-durable";
+import { codeModeCalls } from "./advanced-tools.ts";
 import { attachedInput } from "./attachments.ts";
+import {
+  BackgroundReview,
+  BackgroundReviewEntry,
+} from "./background-review.ts";
+import { PlanExtension } from "./plan.ts";
+import { PostRunEntry } from "./post-run.ts";
 import { queueView } from "./queue.ts";
+import { canContinue } from "./service.ts";
+import { budgetReached } from "./token-budget.ts";
 
 const visibleTools = new Set([
   // Keep results from the retired inspection tools visible in saved history.
@@ -16,7 +27,13 @@ const visibleTools = new Set([
   "write",
   "edit",
   "bash",
+  "submit_plan",
+  "review_workspace",
+  "codemode",
+  "tool_search",
 ]);
+const isVisibleTool = (name: string) =>
+  visibleTools.has(name) || name.startsWith("mcp__");
 type ChatMessage = {
   id: string;
   entryId: number;
@@ -31,6 +48,8 @@ type ChatMessage = {
     thumbnail?: string;
   }[];
   toolName?: string;
+  reviewId?: number;
+  activityLabel?: string;
   toolCalls?: { id: string; name: string; arguments: string }[];
 };
 
@@ -68,11 +87,32 @@ const failureReasons = new Set([
 const safeReason = (reason: string) =>
   failureReasons.has(reason) ? reason : "failed";
 
+function reviewReference(name: string, details: unknown) {
+  if (
+    name !== "review_workspace" ||
+    !details ||
+    typeof details !== "object" ||
+    !("reviewId" in details)
+  )
+    return {};
+  const { reviewId } = details;
+  return typeof reviewId === "number" &&
+    Number.isSafeInteger(reviewId) &&
+    reviewId > 0
+    ? { reviewId }
+    : {};
+}
+
 /** Only publish stable lifecycle metadata. Diagnostics can contain credentials or provider payloads. */
 export function executionView(live: LiveState | undefined) {
-  const tools = (live?.tools ?? [])
-    .filter((tool) => visibleTools.has(tool.name) && tool.status !== "done")
-    .map(({ callId, name, status }) => ({ callId, name, status }));
+  const tools = [...(live?.tools ?? []), ...(live?.nestedTools ?? [])]
+    .filter((tool) => isVisibleTool(tool.name) && tool.status !== "done")
+    .map(({ callId, name, status, details }) => ({
+      callId,
+      name,
+      status,
+      ...reviewReference(name, details),
+    }));
   const compactions = (live?.compactions ?? []).map(
     ({ taskId, trigger, blocking, attempt, retry }) => ({
       taskId,
@@ -104,8 +144,13 @@ export function executionView(live: LiveState | undefined) {
     ...(live?.runFailure
       ? {
           failure: {
-            reason: safeReason(live.runFailure.reason),
+            reason:
+              live.runFailure.reason === "model_error" &&
+              live.runFailure.detail === budgetReached
+                ? "budget_limit"
+                : safeReason(live.runFailure.reason),
             taskId: live.runFailure.taskId,
+            ...(canContinue(live.runFailure.reason) && { canContinue: true }),
           },
         }
       : {}),
@@ -115,6 +160,23 @@ export function executionView(live: LiveState | undefined) {
     tools,
     compactions,
   };
+}
+
+function resultText(message: {
+  content: unknown;
+  toolName: string;
+  details?: unknown;
+}) {
+  const output = text(message.content);
+  if (message.toolName !== "codemode") return output;
+  const calls = codeModeCalls(message.details);
+  if (!calls.length) return output;
+  const rows = calls
+    .slice(0, 30)
+    .map(({ name, status }) => `- ${name}: ${status}`);
+  if (calls.length > rows.length)
+    rows.push(`- ${calls.length - rows.length} more`);
+  return `Nested tools\n${rows.join("\n")}\n\n${output}`;
 }
 
 /** Raw entry boundaries include invisible system/reset/compaction records. */
@@ -128,73 +190,136 @@ export function historyWindow(
   };
 }
 export function messages(entries: readonly EntryRecord[]) {
-  return entries.flatMap((entry) =>
-    (entry.model ?? []).flatMap<ChatMessage>((message, index) => {
-      if (message.role === "toolResult" && visibleTools.has(message.toolName))
-        return [
+  return entries.flatMap<ChatMessage>((entry) =>
+    BackgroundReviewEntry.is(entry)
+      ? [
           {
-            id: `${entry.id}:${index}`,
+            id: `${entry.id}:review`,
             entryId: entry.id,
-            role: "tool" as const,
-            text: preview(text(message.content), 4000),
-            failed: message.isError,
-            toolName: message.toolName,
+            role: "tool",
+            text: entry.data.text,
+            failed: entry.data.status !== "completed",
+            activityLabel: `Background review · ${entry.data.status}`,
+            reviewId: entry.data.reviewId,
           },
-        ];
-      if (message.role !== "user" && message.role !== "assistant") return [];
-      const calls =
-        message.role === "assistant"
-          ? message.content
-              .filter(
-                (block) =>
-                  block.type === "toolCall" && visibleTools.has(block.name),
-              )
-              .map((block) => ({
-                id: block.type === "toolCall" ? block.id : "",
-                name: block.type === "toolCall" ? block.name : "",
-                arguments:
-                  block.type === "toolCall"
-                    ? preview(JSON.stringify(block.arguments), 1000)
-                    : "",
-              }))
-          : [];
-      if (
-        !text(message.content) &&
-        !calls.length &&
-        message.role === "assistant" &&
-        message.stopReason === "toolUse"
-      )
-        return [];
-      return [
-        {
-          id: `${entry.id}:${index}`,
-          entryId: entry.id,
-          role: message.role,
-          text:
-            message.role === "user"
-              ? (attachedInput(entry)?.text ?? text(message.content))
-              : text(message.content),
-          ...(message.role === "user" && attachedInput(entry)
-            ? {
-                attachments: attachedInput(entry)?.attachments.map(
-                  ({ name, mimeType, size, thumbnail }, index) => ({
-                    name,
-                    mimeType,
-                    size,
-                    index,
-                    ...(thumbnail ? { thumbnail } : {}),
-                  }),
-                ),
-              }
-            : {}),
-          ...(calls.length ? { toolCalls: calls } : {}),
-          failed:
-            message.role === "assistant" &&
-            ["error", "aborted"].includes(message.stopReason),
-        },
-      ];
-    }),
+        ]
+      : PostRunEntry.is(entry)
+        ? [
+            {
+              id: `${entry.id}:check`,
+              entryId: entry.id,
+              role: "tool",
+              text: entry.data.output,
+              failed: entry.data.status !== "passed",
+              activityLabel: `Post-run check · ${entry.data.status}`,
+            },
+          ]
+        : (entry.model ?? []).flatMap<ChatMessage>((message, index) => {
+            if (
+              message.role === "toolResult" &&
+              isVisibleTool(message.toolName)
+            )
+              return [
+                {
+                  id: `${entry.id}:${index}`,
+                  entryId: entry.id,
+                  role: "tool" as const,
+                  text: preview(resultText(message), 4000),
+                  failed: message.isError,
+                  toolName: message.toolName,
+                  ...reviewReference(message.toolName, message.details),
+                },
+              ];
+            if (message.role !== "user" && message.role !== "assistant")
+              return [];
+            const calls =
+              message.role === "assistant"
+                ? message.content
+                    .filter(
+                      (block) =>
+                        block.type === "toolCall" && isVisibleTool(block.name),
+                    )
+                    .map((block) => ({
+                      id: block.type === "toolCall" ? block.id : "",
+                      name: block.type === "toolCall" ? block.name : "",
+                      arguments:
+                        block.type === "toolCall"
+                          ? preview(JSON.stringify(block.arguments), 1000)
+                          : "",
+                    }))
+                : [];
+            if (
+              !text(message.content) &&
+              !calls.length &&
+              message.role === "assistant" &&
+              message.stopReason === "toolUse"
+            )
+              return [];
+            return [
+              {
+                id: `${entry.id}:${index}`,
+                entryId: entry.id,
+                role: message.role,
+                text:
+                  message.role === "user"
+                    ? (attachedInput(entry)?.text ?? text(message.content))
+                    : text(message.content),
+                ...(message.role === "user" && attachedInput(entry)
+                  ? {
+                      attachments: attachedInput(entry)?.attachments.map(
+                        ({ name, mimeType, size, thumbnail }, index) => ({
+                          name,
+                          mimeType,
+                          size,
+                          index,
+                          ...(thumbnail ? { thumbnail } : {}),
+                        }),
+                      ),
+                    }
+                  : {}),
+                ...(calls.length ? { toolCalls: calls } : {}),
+                failed:
+                  message.role === "assistant" &&
+                  ["error", "aborted"].includes(message.stopReason),
+              },
+            ];
+          }),
   );
+}
+
+export function taskGraphView(graph: TaskGraph, root: ConversationId) {
+  const byConversation = new Map<
+    ConversationId,
+    (typeof graph.tasks)[string][]
+  >();
+  for (const task of Object.values(graph.tasks)) {
+    const tasks = byConversation.get(task.conversationId) ?? [];
+    tasks.push(task);
+    byConversation.set(task.conversationId, tasks);
+  }
+  const scope = new Set([root]);
+  const tasks = [];
+  for (const id of scope) {
+    for (const task of byConversation.get(id) ?? []) {
+      for (const child of task.conversations) scope.add(child);
+      const { state } = task;
+      tasks.push({
+        id: task.id,
+        kind: task.kind,
+        owner: task.owner,
+        status: state.status,
+        blocked: task.blocked,
+        background: task.background,
+        abortRequested: task.abortRequested,
+        ...(task.kind === BackgroundReview.definition.name && {
+          stoppable: true,
+          reviewId: task.conversations[0],
+        }),
+        ...(state.status === "sleeping" && { wakeAt: state.until }),
+      });
+    }
+  }
+  return { tasks: tasks.slice(0, 100), more: tasks.length > 100 };
 }
 export function conversationView(view: ConversationView) {
   const live = view.docs["pi.live"] as LiveState | undefined;
@@ -216,12 +341,15 @@ export function conversationView(view: ConversationView) {
     busy: !!live?.run,
     partial: text(generation?.message?.content),
     activeTools: ((live?.tools ?? []) as { name: string; status: string }[])
-      .filter((tool) => visibleTools.has(tool.name) && tool.status !== "done")
+      .filter((tool) => isVisibleTool(tool.name) && tool.status !== "done")
       .map(({ name, status }) => ({ name, status })),
     queued: inbox?.items?.length ?? 0,
     queue: queueView(inbox?.items ?? []),
     model: agent?.model,
     thinkingLevel: agent?.thinkingLevel,
+    planMode:
+      Array.isArray(agent?.extensions) &&
+      agent.extensions.includes(PlanExtension.name),
   };
 }
 

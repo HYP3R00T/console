@@ -23,9 +23,12 @@ export type InspectorTool = {
   description: string;
   parameters: Parameters;
   enabled: boolean;
+  deferred?: boolean;
 };
 const toolGroups: Record<string, string> = {
   "coding-tools": "Coding",
+  "console.advanced-tools": "Code Mode and discovery",
+  "console.mcp": "MCP",
 };
 const purposes: Record<string, string> = {
   read: "Read a text file or inspect an image.",
@@ -96,26 +99,30 @@ export function InspectorTools({
   custom,
   working,
   saving,
+  planMode = false,
   update,
 }: {
   tools: InspectorTool[];
   custom: boolean;
   working: boolean;
   saving: boolean;
+  planMode?: boolean;
   update: (tools: string[] | null) => void;
 }) {
-  const disabled = saving || working;
+  const disabled = saving || working || planMode;
   const enabled = tools.filter((tool) => tool.enabled).map((tool) => tool.name);
   const groups = [...new Set(tools.map((tool) => tool.extension))];
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-muted-foreground">
-          {working
-            ? "Tool access can be changed when this chat is idle."
-            : "Tool access for this conversation."}
+          {planMode
+            ? "Tool access is fixed while Plan mode is active."
+            : working
+              ? "Tool access can be changed when this chat is idle."
+              : "Tool access for this conversation."}
         </p>
-        {custom && (
+        {custom && !planMode && (
           <Button
             variant="outline"
             size="xs"
@@ -150,6 +157,11 @@ export function InspectorTools({
                             className="group-data-panel-open/tool:rotate-90"
                           />
                           <code className="wrap-anywhere">{tool.name}</code>
+                          {tool.deferred && (
+                            <span className="text-muted-foreground">
+                              Discoverable
+                            </span>
+                          )}
                         </CollapsibleTrigger>
                         <Switch
                           size="sm"

@@ -8,7 +8,14 @@ import {
   useState,
 } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Collapsible,
   CollapsibleContent,
@@ -26,10 +33,24 @@ import {
   InstructionEditor,
   RuntimeGuidance,
 } from "./inspector-instructions";
+import {
+  InspectorTasks,
+  PostRunSettings,
+  ScheduleReview,
+} from "./inspector-tasks";
 import { type InspectorTool, InspectorTools } from "./inspector-tools";
+import {
+  InspectorWorkspace,
+  type RemoteWorkspace,
+} from "./inspector-workspace";
+import { MessageMarkdown } from "./message-markdown";
 import type { ChatModel, ModelRef } from "./use-chat-models";
 
 type Change = {
+  mcp?: boolean;
+  codeMode?: boolean;
+  sandbox?: boolean;
+  remoteProfile?: string | null;
   tools?: string[] | null;
   instructions?: string | null;
   projectInstructions?: string | null;
@@ -37,13 +58,30 @@ type Change = {
   inspectionGuidance?: string | null;
   automaticCompaction?: boolean;
   keepRecentTokens?: number;
+  maxTurns?: number | null;
+  tokenBudget?: number | null;
+  worktree?: string | null;
+  planMode?: boolean;
+  postRunCommand?: string | null;
 };
 type Configuration = {
+  mcpEnabled?: boolean;
+  mcpSuspended?: boolean;
+  mcp?: {
+    invalid: boolean;
+    servers: { name: string; connected: boolean; tools: number }[];
+  };
+  codeMode?: boolean;
+  sandbox?: boolean;
+  remote?: RemoteWorkspace;
   revision: string;
   tools: InspectorTool[];
   guidance?: Guidance;
   project?: { instructions: string };
   context?: ContextSettings;
+  plan?: { active: boolean; markdown?: string };
+  postRunCommand?: string | null;
+  worktree?: string | null;
   toolSource: "default" | "conversation";
   instructions: string;
   sections: { key: string; text: string }[];
@@ -73,6 +111,7 @@ export function ConversationInspector({
 }) {
   const [data, setData] = useState<Configuration>();
   const [saving, setSaving] = useState(false);
+  const [tasksOpen, setTasksOpen] = useState(false);
   const [error, setError] = useState<string>();
   const [loadError, setLoadError] = useState<string>();
   const generation = useRef(0);
@@ -159,6 +198,12 @@ export function ConversationInspector({
   const compacting = !!execution?.compactions.length;
   const busy = working || compacting;
   const disabled = busy || saving;
+  const remote = data?.remote;
+  const showRemote = !!(
+    remote?.profiles.length ||
+    remote?.profile ||
+    remote?.invalid
+  );
   return (
     <div className="flex h-full min-h-0 flex-col p-4">
       {(error || loadError) && (
@@ -168,7 +213,11 @@ export function ConversationInspector({
       )}
       {!data && !loadError && <ConversationInspectorLoading />}
       {data && (
-        <Tabs defaultValue="tools" className="min-h-0 flex-1 gap-3">
+        <Tabs
+          defaultValue="tools"
+          onValueChange={(value) => setTasksOpen(value === "tasks")}
+          className="min-h-0 flex-1 gap-3"
+        >
           <TabsList
             aria-label="Conversation settings"
             className="w-full shrink-0"
@@ -176,6 +225,9 @@ export function ConversationInspector({
             <TabsTrigger value="tools">Tools</TabsTrigger>
             <TabsTrigger value="instructions">Instructions</TabsTrigger>
             {data.context && <TabsTrigger value="context">Context</TabsTrigger>}
+            {data.postRunCommand !== undefined && (
+              <TabsTrigger value="tasks">Tasks</TabsTrigger>
+            )}
           </TabsList>
           {executionNeedsAttention(execution) && (
             <Card size="sm" className="shrink-0">
@@ -190,11 +242,161 @@ export function ConversationInspector({
           <TabsContent value="tools" keepMounted className="min-h-0">
             <ScrollArea className="h-full">
               <div className="flex min-w-0 flex-col gap-4 px-1 py-2 pr-3">
+                {data.plan && (
+                  <Card size="sm">
+                    <CardHeader>
+                      <CardTitle>
+                        {data.plan.active ? "Plan mode active" : "Plan mode"}
+                      </CardTitle>
+                      <CardDescription>
+                        The assistant can read workspace files and save a plan.
+                        Exit to restore the previous tools.
+                      </CardDescription>
+                    </CardHeader>
+                    {data.plan.markdown && (
+                      <CardContent>
+                        <MessageMarkdown compact text={data.plan.markdown} />
+                      </CardContent>
+                    )}
+                    <CardFooter>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={disabled}
+                        onClick={() =>
+                          void update({ planMode: !data.plan?.active })
+                        }
+                      >
+                        {data.plan.active
+                          ? "Exit Plan mode"
+                          : "Enter Plan mode"}
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                )}
+                {(showRemote ||
+                  data.worktree !== undefined ||
+                  data.sandbox !== undefined) && (
+                  <InspectorWorkspace
+                    path={path}
+                    request={request}
+                    assigned={data.worktree}
+                    disabled={disabled}
+                    save={(worktree) => update({ worktree })}
+                    sandbox={data.sandbox}
+                    saveSandbox={(sandbox) => update({ sandbox })}
+                    remote={showRemote ? remote : undefined}
+                    saveRemote={(remoteProfile) => update({ remoteProfile })}
+                    hostMcp={data.mcpEnabled || data.mcpSuspended}
+                  />
+                )}
+                {data.codeMode !== undefined && !data.plan?.active && (
+                  <Card size="sm">
+                    <CardHeader>
+                      <CardTitle>Code Mode</CardTitle>
+                      <CardDescription>
+                        Let the assistant compose enabled tools in sandboxed
+                        JavaScript and discover deferred tools.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardFooter>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={disabled}
+                        onClick={() =>
+                          void update({ codeMode: !data.codeMode })
+                        }
+                      >
+                        {data.codeMode
+                          ? "Disable Code Mode"
+                          : "Enable Code Mode"}
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                )}
+                {data.mcp &&
+                  (data.mcp.invalid ||
+                    data.mcp.servers.length > 0 ||
+                    data.mcpEnabled) && (
+                    <Card size="sm">
+                      <CardHeader>
+                        <CardTitle>MCP tools</CardTitle>
+                        <CardDescription>
+                          Tools from servers configured on this backend. Calls
+                          run with each server’s own permissions.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {data.mcp.invalid && (
+                          <p role="alert">
+                            The backend MCP configuration is invalid or has
+                            unsafe file permissions.
+                          </p>
+                        )}
+                        <ul className="flex flex-col gap-1">
+                          {data.mcp.servers.map((server) => (
+                            <li key={server.name}>
+                              {server.name} ·{" "}
+                              {server.connected
+                                ? `${server.tools} tools`
+                                : "Disconnected"}
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                      <CardFooter className="flex-wrap gap-2">
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          disabled={
+                            disabled ||
+                            !!data.plan?.active ||
+                            (!data.mcpEnabled &&
+                              (!!data.sandbox ||
+                                !!data.remote?.profile ||
+                                !data.mcp.servers.some(
+                                  (server) =>
+                                    server.connected && server.tools > 0,
+                                )))
+                          }
+                          onClick={() => void update({ mcp: !data.mcpEnabled })}
+                        >
+                          {data.mcpEnabled ? "Disable MCP" : "Enable MCP"}
+                        </Button>
+                        {data.mcp.servers.some(
+                          (server) => !server.connected,
+                        ) && (
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            disabled={saving}
+                            onClick={() =>
+                              void mutate(async () => {
+                                await request(`${path}/mcp/reconnect`, {
+                                  method: "POST",
+                                  body: "{}",
+                                });
+                                setData(
+                                  await request<Configuration>(
+                                    `${path}/configuration`,
+                                  ),
+                                );
+                              })
+                            }
+                          >
+                            Reconnect servers
+                          </Button>
+                        )}
+                      </CardFooter>
+                    </Card>
+                  )}
                 <InspectorTools
                   tools={data.tools}
                   custom={data.toolSource === "conversation"}
                   working={busy}
                   saving={saving}
+                  planMode={data.plan?.active}
                   update={(tools) => void update({ tools })}
                 />
               </div>
@@ -273,6 +475,25 @@ export function ConversationInspector({
               </div>
             </ScrollArea>
           </TabsContent>
+          {data.postRunCommand !== undefined && (
+            <TabsContent value="tasks" keepMounted className="min-h-0">
+              <ScrollArea className="h-full">
+                <div className="flex min-w-0 flex-col gap-4 px-1 py-2 pr-3">
+                  <InspectorTasks
+                    path={path}
+                    request={request}
+                    active={tasksOpen}
+                  />
+                  <ScheduleReview path={path} request={request} />
+                  <PostRunSettings
+                    value={data.postRunCommand}
+                    disabled={disabled}
+                    save={(postRunCommand) => update({ postRunCommand })}
+                  />
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          )}
           {data.context && (
             <TabsContent value="context" keepMounted className="min-h-0">
               <ScrollArea className="h-full">
@@ -283,6 +504,9 @@ export function ConversationInspector({
                     compacting={compacting}
                     disabled={disabled}
                     save={(keepRecentTokens) => update({ keepRecentTokens })}
+                    saveTurnLimit={(maxTurns) => update({ maxTurns })}
+                    budgetSaving={saving}
+                    saveBudget={(tokenBudget) => update({ tokenBudget })}
                     setAutomatic={(automaticCompaction) =>
                       void update({ automaticCompaction })
                     }

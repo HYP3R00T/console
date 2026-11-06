@@ -1,12 +1,334 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import { WorkspaceSandboxes } from "../src/execution/sandbox.ts";
 import { fixture } from "./support/harness-fixture.ts";
+
+test("workspace sandbox confines file and shell tools and persists across restart", {
+  timeout: 10000,
+}, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "console-sandbox-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const workspace = join(directory, "project");
+  const privateFile = join(directory, "outside.txt");
+  const escaped = join(directory, "escaped.txt");
+  await mkdir(workspace);
+  await writeFile(privateFile, "outside-secret-fixture");
+  await symlink(privateFile, join(workspace, "outside-link"));
+  let f = await fixture(directory);
+  t.after(() => f.app.close());
+  const project = await f.projects.register("Sandbox", workspace);
+  const { sessionId } = (await f.service.list(project.id)).sessions[0];
+  const { harness } = await f.service.session(sessionId);
+  const root = await harness.root(context);
+  const id = String(root.id);
+  const path = `/v1/sessions/${sessionId}/conversations/${id}`;
+  const change = async (settings: {
+    sandbox?: boolean;
+    postRunCommand?: string;
+  }) => {
+    const { revision } = (await f.app.inject(`${path}/configuration`)).json();
+    return f.app.inject({
+      method: "PATCH",
+      url: `${path}/configuration`,
+      payload: { revision, ...settings },
+    });
+  };
+  const enabled = await change({ sandbox: true });
+  if (
+    enabled.statusCode === 409 &&
+    process.env.CONSOLE_REQUIRE_SANDBOX_TEST !== "1"
+  ) {
+    assert.match(enabled.body, /Linux Bubblewrap/);
+    t.skip("Host does not permit Bubblewrap namespaces");
+    return;
+  }
+  assert.equal(enabled.statusCode, 200, enabled.body);
+  assert.equal(enabled.json().sandbox, true);
+  const check = await change({
+    postRunCommand: `test -f /workspace/inside.txt && test ! -e '${privateFile}' && printf check-inside`,
+  });
+  assert.equal(check.statusCode, 200, check.body);
+  await f.app.close();
+  f = await fixture(directory);
+  assert.equal(
+    (await f.app.inject(`${path}/configuration`)).json().sandbox,
+    true,
+  );
+
+  const pool = new WorkspaceSandboxes(join(directory, "sessions"));
+  t.after(() => pool.close());
+  const readonly = await pool.open(1234, workspace, true, false);
+  assert.equal(
+    (await readonly.writeFile("read-only.txt", "forbidden", context)).ok,
+    false,
+  );
+  pool.close();
+
+  process.env.CONSOLE_SANDBOX_TEST_VALUE = "host-only";
+  t.after(() => delete process.env.CONSOLE_SANDBOX_TEST_VALUE);
+  const tool = (name: string, args: Record<string, string>) =>
+    fauxAssistantMessage(fauxToolCall(name, args), { stopReason: "toolUse" });
+  f.faux.setResponses([
+    tool("write", { path: "inside.txt", content: "workspace write" }),
+    tool("write", { path: escaped, content: "escape attempt" }),
+    tool("read", { path: "outside-link" }),
+    tool("bash", {
+      command: `test "$PWD" = /workspace && test ! -e '${privateFile}' && test -z "$CONSOLE_SANDBOX_TEST_VALUE" && test "$(wc -l </proc/net/route)" -eq 1 && printf namespace-ok`,
+    }),
+    fauxAssistantMessage("Sandbox checks finished."),
+  ]);
+  await f.service.submit(sessionId, id, "Test the sandbox", randomUUID(), {
+    model: { provider: "test", modelId: "test-model" },
+  });
+  const reopened = (await f.service.session(sessionId)).harness;
+  await reopened.waitForIdle(context);
+  assert.equal(
+    await readFile(join(workspace, "inside.txt"), "utf8"),
+    "workspace write",
+  );
+  await assert.rejects(readFile(escaped), { code: "ENOENT" });
+  const history = (await f.app.inject(`${path}/history`)).json();
+  const toolResults = history.messages.filter(
+    (message: { role: string }) => message.role === "tool",
+  );
+  assert.ok(
+    toolResults.some((message: { text: string }) =>
+      message.text.includes("namespace-ok"),
+    ),
+  );
+  assert.ok(
+    toolResults.some((message: { text: string }) =>
+      message.text.includes("check-inside"),
+    ),
+  );
+  assert.doesNotMatch(
+    JSON.stringify(toolResults),
+    /outside-secret-fixture|host-only/,
+  );
+});
+
+test("attached worktrees route edits and owned reviewers, survive restart, and fail closed when moved", {
+  timeout: 10000,
+}, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "console-worktree-routing-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const projectPath = join(directory, "project");
+  const linked = join(directory, "linked");
+  await mkdir(projectPath);
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: projectPath, stdio: "ignore" });
+  git("init", "-q");
+  git(
+    "-c",
+    "user.name=Test",
+    "-c",
+    "user.email=test@example.invalid",
+    "-c",
+    "commit.gpgsign=false",
+    "commit",
+    "--allow-empty",
+    "-qm",
+    "initial",
+  );
+  git("worktree", "add", "-q", "-b", "review-workspace", linked);
+  let f = await fixture(directory);
+  t.after(() => f.app.close());
+  const project = await f.projects.register("Workspaces", projectPath);
+  const { sessionId } = (await f.service.list(project.id)).sessions[0];
+  const { harness } = await f.service.session(sessionId);
+  const root = await harness.root(context);
+  const sibling = await f.service.addConversation(sessionId);
+  const base = `/v1/sessions/${sessionId}/conversations`;
+  const path = `${base}/${root.id}`;
+  const attach = async (url: string, worktree: string | null) => {
+    const config = (await f.app.inject(`${url}/configuration`)).json();
+    return f.app.inject({
+      method: "PATCH",
+      url: `${url}/configuration`,
+      payload: { revision: config.revision, worktree },
+    });
+  };
+  assert.deepEqual((await f.app.inject(`${path}/worktrees`)).json().worktrees, [
+    { path: linked, branch: "review-workspace" },
+  ]);
+  assert.equal((await attach(path, projectPath)).statusCode, 400);
+  assert.equal((await attach(path, linked)).statusCode, 200);
+  assert.equal((await attach(`${base}/${sibling.id}`, linked)).statusCode, 409);
+  await f.app.close();
+  f = await fixture(directory);
+  const reopened = (await f.service.session(sessionId)).harness;
+  assert.equal(
+    (await f.app.inject(`${path}/configuration`)).json().guidance.directory,
+    linked,
+  );
+  const model = { provider: "test", modelId: "test-model" };
+  f.faux.setResponses([
+    (request) => {
+      assert.ok(JSON.stringify(request.messages).includes(linked));
+      return fauxAssistantMessage(
+        fauxToolCall("write", {
+          path: "evidence.txt",
+          content: "linked evidence",
+        }),
+        { stopReason: "toolUse" },
+      );
+    },
+    fauxAssistantMessage(
+      fauxToolCall("review_workspace", { brief: "Read evidence.txt." }),
+      { stopReason: "toolUse" },
+    ),
+    fauxAssistantMessage(fauxToolCall("read", { path: "evidence.txt" }), {
+      stopReason: "toolUse",
+    }),
+    (request) => {
+      assert.ok(JSON.stringify(request.messages).includes("linked evidence"));
+      return fauxAssistantMessage("Reviewed the linked worktree.");
+    },
+    fauxAssistantMessage("Done in the linked worktree."),
+  ]);
+  await f.service.submit(
+    sessionId,
+    String(root.id),
+    "Write and review",
+    randomUUID(),
+    { model },
+  );
+  await reopened.waitForIdle(context);
+  assert.equal(
+    await readFile(join(linked, "evidence.txt"), "utf8"),
+    "linked evidence",
+  );
+  await assert.rejects(readFile(join(projectPath, "evidence.txt")), {
+    code: "ENOENT",
+  });
+  assert.match(
+    (await f.app.inject(`${path}/history`)).body,
+    /Reviewed the linked worktree/,
+  );
+  await rename(linked, `${linked}-moved`);
+  f.faux.setResponses([
+    fauxAssistantMessage(
+      fauxToolCall("write", { path: "escaped.txt", content: "wrong checkout" }),
+      { stopReason: "toolUse" },
+    ),
+    fauxAssistantMessage("Done."),
+  ]);
+  await f.service.submit(
+    sessionId,
+    String(root.id),
+    "Write again",
+    randomUUID(),
+    { model },
+  );
+  await reopened.waitForIdle(context);
+  await assert.rejects(readFile(join(projectPath, "escaped.txt")), {
+    code: "ENOENT",
+  });
+  assert.equal((await attach(path, null)).statusCode, 200);
+});
+
+test("Plan mode restricts execution, saves the plan and restores the prior tool selection after restart", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "console-plan-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const workspace = join(directory, "project");
+  await mkdir(workspace);
+  await writeFile(join(workspace, "inside.txt"), "inside evidence");
+  await writeFile(join(directory, "outside.txt"), "private outside content");
+  await symlink(join(directory, "outside.txt"), join(workspace, "escape.txt"));
+  let f = await fixture(directory);
+  t.after(() => f.app.close());
+  const project = await f.projects.register("Plan", workspace);
+  const { sessionId } = (await f.service.list(project.id)).sessions[0];
+  const { harness } = await f.service.session(sessionId);
+  const root = await harness.root(context);
+  const id = String(root.id);
+  const url = `/v1/sessions/${sessionId}/conversations/${id}`;
+  const configure = (
+    revision: string,
+    change: { tools?: string[]; planMode?: boolean },
+  ) =>
+    f.app.inject({
+      method: "PATCH",
+      url: `${url}/configuration`,
+      payload: { revision, ...change },
+    });
+  const initial = await f.service.configuration(sessionId, id);
+  const selected = await configure(initial.revision, { tools: ["bash"] });
+  assert.equal(selected.statusCode, 200, selected.body);
+  const entered = await configure(selected.json().revision, { planMode: true });
+  assert.equal(entered.statusCode, 200, entered.body);
+  assert.equal(entered.json().plan.active, true);
+  assert.deepEqual(
+    entered.json().tools.map((tool: { name: string }) => tool.name),
+    ["read", "submit_plan"],
+  );
+  assert.equal(
+    (await configure(entered.json().revision, { tools: ["bash"] })).statusCode,
+    409,
+  );
+  f.faux.setResponses([
+    fauxAssistantMessage(
+      fauxToolCall("write", { path: "changed.txt", content: "forbidden" }),
+      { stopReason: "toolUse" },
+    ),
+    fauxAssistantMessage(fauxToolCall("read", { path: "escape.txt" }), {
+      stopReason: "toolUse",
+    }),
+    fauxAssistantMessage(fauxToolCall("read", { path: "inside.txt" }), {
+      stopReason: "toolUse",
+    }),
+    fauxAssistantMessage(
+      fauxToolCall("submit_plan", { markdown: "1. Review the evidence." }),
+      { stopReason: "toolUse" },
+    ),
+  ]);
+  await f.service.submit(sessionId, id, "Plan this change", randomUUID(), {
+    model: { provider: "test", modelId: "test-model" },
+  });
+  await harness.waitForIdle(context);
+  await assert.rejects(readFile(join(workspace, "changed.txt")), {
+    code: "ENOENT",
+  });
+  const history = (await f.app.inject(`${url}/history`)).body;
+  assert.match(history, /inside evidence/);
+  assert.match(history, /only read files within the workspace/);
+  assert.doesNotMatch(history, /private outside content/);
+  await f.app.close();
+  f = await fixture(directory);
+  const saved = await f.service.configuration(sessionId, id);
+  assert.deepEqual(saved.plan, {
+    active: true,
+    markdown: "1. Review the evidence.",
+  });
+  const exited = await configure(saved.revision, { planMode: false });
+  assert.equal(exited.statusCode, 200, exited.body);
+  assert.deepEqual(exited.json().plan, {
+    active: false,
+    markdown: "1. Review the evidence.",
+  });
+  assert.deepEqual(
+    exited
+      .json()
+      .tools.filter((tool: { enabled: boolean }) => tool.enabled)
+      .map((tool: { name: string }) => tool.name),
+    ["bash"],
+  );
+});
 
 test("native coding tools execute in the project; configuration is isolated, validated and survives restart", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "console-configuration-"));
@@ -27,7 +349,7 @@ test("native coding tools execute in the project; configuration is isolated, val
   const initial = await f.service.configuration(sessionId, id);
   assert.deepEqual(
     initial.tools.map((tool) => tool.name),
-    ["read", "write", "edit", "bash"],
+    ["read", "write", "edit", "bash", "review_workspace"],
   );
   const readTool = initial.tools.find((tool) => tool.name === "read");
   assert.ok(readTool);

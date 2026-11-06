@@ -227,12 +227,17 @@ test("status labels distinguish failure and retry states without showing arbitra
 
 test("execution notices explain waits and failures without occupying space for idle or routine work", () => {
   assert.equal(executionNeedsAttention(), false);
-  for (const state of ["idle", "running", "tools", "finishing"] as const)
+  for (const state of ["idle", "running", "tools"] as const)
     assert.equal(
       executionNeedsAttention({ state, tools: [], compactions: [] }),
       false,
     );
-  for (const state of ["retrying", "deferred", "compacting"] as const)
+  for (const state of [
+    "retrying",
+    "deferred",
+    "compacting",
+    "finishing",
+  ] as const)
     assert.equal(
       executionNeedsAttention({ state, tools: [], compactions: [] }),
       true,

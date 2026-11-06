@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { copyJson } from "@earendil-works/chord";
 import {
   BACKGROUND_CONTEXT as context,
   withAbortSignal,
@@ -12,16 +13,29 @@ import type {
   Harness,
   ModelRef,
   SubmissionId,
+  TaskId,
 } from "@earendil-works/pi-durable";
-import { AgentDoc, InboxDoc, LiveDoc } from "@earendil-works/pi-durable";
+import {
+  AgentDoc,
+  configure,
+  InboxDoc,
+  LiveDoc,
+  type RunFailureReason,
+} from "@earendil-works/pi-durable";
+import { CodingTools } from "@earendil-works/pi-durable/tools";
+import { RemoteWorkspaceDoc } from "../execution/remote-workspaces.ts";
+import { SandboxDoc } from "../execution/sandbox.ts";
+import { linkedWorktreePath } from "../projects/git-metadata.ts";
 import { ProjectError, type ProjectService } from "../projects/service.ts";
 import type { ProviderService } from "../providers/service.ts";
+import { selectAdvancedTools, selectExtensionTools } from "./advanced-tools.ts";
 import {
   AttachmentError,
   type AttachmentInput,
   prepareAttachments,
   readAttachment,
 } from "./attachments.ts";
+import { BackgroundReview, ReviewRequests } from "./background-review.ts";
 import {
   type ConfigurationChange,
   conversationConfiguration,
@@ -32,13 +46,27 @@ import {
   defaultInspectionGuidance,
   defaultWorkspaceGuidance,
 } from "./guidance.ts";
+import { mcpExtensionName } from "./mcp-tools.ts";
+import { PlanDoc, PlanExtension } from "./plan.ts";
+import { PostRunDoc } from "./post-run.ts";
 import { queueView } from "./queue.ts";
+import { ReviewExtension, ReviewerAgent } from "./reviewer.ts";
 import { HarnessRuntime } from "./runtime.ts";
 import {
   type HarnessRecord,
   type HarnessStore,
   standaloneOwner,
 } from "./store.ts";
+import { budgetReached, exceedsBudget } from "./token-budget.ts";
+
+export function canContinue(reason: RunFailureReason) {
+  return (
+    reason === "turn_limit" ||
+    reason === "interrupted" ||
+    reason === "restart_limit" ||
+    reason === "model_error"
+  );
+}
 
 export class HarnessError extends Error {
   readonly statusCode: number;
@@ -97,6 +125,8 @@ export class HarnessService {
           );
         },
         compaction: (sessionId) => store.compaction(sessionId),
+        tokenBudget: (sessionId) => store.tokenBudget(sessionId),
+        worktree: (sessionId, id) => store.worktree(sessionId, id),
       },
     );
     projects.afterRegister = (id) =>
@@ -376,14 +406,25 @@ export class HarnessService {
   }
   async conversations(sessionId: string) {
     const { record, harness } = await this.session(sessionId);
-    const records = await harness.commit(
-      (tx) => tx.scanConversations({}, 200),
-      context,
-    );
+    const records = await harness.commit(async (tx) => {
+      const visible = [];
+      let cursor: Cursor | undefined;
+      do {
+        const page = await tx.scanConversations({}, 200, cursor);
+        visible.push(...page.items.filter((item) => !item.owner));
+        cursor = page.next;
+      } while (cursor && visible.length <= 200);
+      return { items: visible.slice(0, 200), more: visible.length > 200 };
+    }, context);
     const conversations = await Promise.all(
       records.items.map(async (row) => {
         const info = await harness.snapshot(ConversationInfo, row.id, context);
-        return { id: row.id, ...info, name: info?.name ?? "Conversation" };
+        return {
+          id: row.id,
+          ...info,
+          name: info?.name ?? "Conversation",
+          parent: row.parent,
+        };
       }),
     );
     return {
@@ -391,7 +432,7 @@ export class HarnessService {
       conversations: conversations.filter(
         (item) => !this.archives.get(sessionId, item.id),
       ),
-      more: !!records.next,
+      more: records.more,
     };
   }
   addConversation(sessionId: string, creationId?: string) {
@@ -455,17 +496,172 @@ export class HarnessService {
       return { id: conversation.id, name };
     });
   }
+  forkConversation(
+    sessionId: string,
+    id: string,
+    at: number,
+    creationId: string,
+  ) {
+    return this.serial(sessionId, async () => {
+      const { record, conversation } = await this.conversation(sessionId, id);
+      if (record.projectId === standaloneOwner)
+        throw new HarnessError(409, "Forks are available in project sessions.");
+      const entryId = at as EntryId;
+      const key = `fork:${conversation.id}:${entryId}:${creationId}`;
+      this.projects.assertWritable(record.projectId);
+      return conversation.commit(async (tx) => {
+        const counter = await tx.doc(SessionInfo);
+        const existing = counter.creations?.[key];
+        if (existing !== undefined) {
+          if (this.archives.get(sessionId, existing))
+            throw new HarnessError(410, "The fork was archived or deleted.");
+          const info = await tx.doc(
+            ConversationInfo,
+            existing as ConversationId,
+          );
+          return { id: existing, name: info.name };
+        }
+        const { items } = await tx.scanEntries(
+          {
+            conversationId: conversation.id,
+            minEntryId: entryId,
+            maxEntryId: entryId,
+          },
+          1,
+        );
+        if (!items.length)
+          throw new HarnessError(
+            404,
+            "Fork point not found in this conversation.",
+          );
+        const fork = await tx.forkConversation(conversation.id, entryId, {
+          ownership: { kind: "ownerless" },
+        });
+        const info = await tx.doc(ConversationInfo, fork.id);
+        info.name = `Conversation ${counter.nextConversation++}`;
+        info.createdAt = new Date().toISOString();
+        delete info.lastSubmissionId;
+        delete info.archived;
+        counter.creations ??= {};
+        counter.creations[key] = fork.id;
+        return { id: fork.id, name: info.name };
+      }, context);
+    });
+  }
   async conversation(sessionId: string, id: string) {
     if (this.archives.get(sessionId, Number(id)))
       throw new HarnessError(404, "Conversation is archived or deleted.");
     const { record, harness } = await this.session(sessionId);
-    const conversation = await harness.conversation(
-      Number(id) as ConversationId,
+    const conversationId = Number(id) as ConversationId;
+    const row = await harness.commit(
+      (tx) => tx.conversation(conversationId),
       context,
     );
+    const conversation =
+      row && !row.owner
+        ? await harness.conversation(conversationId, context)
+        : undefined;
     if (!conversation)
       throw new HarnessError(404, "Conversation not found in this session.");
     return { record, harness, conversation };
+  }
+
+  async review(sessionId: string, id: string, reviewId: string) {
+    const { harness, conversation } = await this.conversation(sessionId, id);
+    const childId = Number(reviewId) as ConversationId;
+    const child = await harness.commit(
+      (tx) => tx.conversation(childId),
+      context,
+    );
+    if (child?.owner?.conversationId !== conversation.id)
+      throw new HarnessError(404, "Review not found in this conversation.");
+    const agent = await harness.snapshot(AgentDoc, childId, context);
+    if (
+      !Array.isArray(agent?.extensions) ||
+      !agent.extensions.includes(ReviewerAgent.name)
+    )
+      throw new HarnessError(404, "Review not found in this conversation.");
+    const review = await harness.conversation(childId, context);
+    if (!review) throw new HarnessError(404, "Review not found.");
+    return review;
+  }
+
+  async worktrees(sessionId: string, id: string) {
+    const { record } = await this.conversation(sessionId, id);
+    if (!record.projectId) return { worktrees: [] };
+    const git = await this.projects.gitMetadata(record.projectId);
+    if (git.status !== "repository" || !git.root) return { worktrees: [] };
+    return {
+      worktrees: git.worktrees
+        .slice(1)
+        .filter(
+          (tree) => tree.path !== git.root && !tree.prunable && !tree.bare,
+        )
+        .map(({ path, branch }) => ({ path, branch })),
+    };
+  }
+
+  scheduleReview(
+    sessionId: string,
+    id: string,
+    brief: string,
+    requestId: string,
+    at?: number,
+  ) {
+    return this.serial(sessionId, async () => {
+      const { harness, conversation } = await this.conversation(sessionId, id);
+      const agent = await conversation.agent(context);
+      const taskId = await conversation.commit(async (tx) => {
+        const request = await tx.doc(
+          ReviewRequests,
+          conversation.id,
+          requestId,
+          null,
+        );
+        if (request.taskId !== undefined) return request.taskId;
+        const trimmed = brief.trim();
+        if (!trimmed) throw new HarnessError(400, "Provide a review brief.");
+        if (!agent.model || !this.availableModel(agent.model))
+          throw new HarnessError(
+            409,
+            "Choose an available conversation model before scheduling a review.",
+          );
+        const id = await tx.createTask(
+          BackgroundReview,
+          {
+            brief: trimmed,
+            at: at ?? Date.now(),
+            model: agent.model,
+            thinkingLevel: agent.thinkingLevel ?? null,
+          },
+          { ownership: { kind: "conversation" }, background: true },
+        );
+        request.taskId = id;
+        return id;
+      }, context);
+      harness.resume();
+      return { id: taskId };
+    });
+  }
+
+  stopReview(sessionId: string, id: string, taskId: string) {
+    return this.serial(sessionId, async () => {
+      const { harness, conversation } = await this.conversation(sessionId, id);
+      const task = await harness.commit(
+        (tx) => tx.task(Number(taskId) as TaskId),
+        context,
+      );
+      if (
+        task?.conversationId !== conversation.id ||
+        task.kind !== BackgroundReview.definition.name
+      )
+        throw new HarnessError(
+          404,
+          "Background review not found in this conversation.",
+        );
+      await harness.abortTask(task.id, context);
+      return { stopped: true };
+    });
   }
   private readConfiguration(
     record: HarnessRecord,
@@ -480,6 +676,12 @@ export class HarnessService {
         : undefined,
       {
         compaction: this.store.compaction(record.sessionId),
+        tokenBudget: this.store.tokenBudget(record.sessionId),
+        mcp: this.runtime.mcp.status(),
+        remote: this.runtime.remote.status(),
+        worktree: record.projectId
+          ? this.store.worktree(record.sessionId, conversation.id)
+          : undefined,
         workspaceGuidance: this.projects.store.workspaceGuidance(),
         projectName: this.projects.store.get(record.projectId)?.name,
         model: (provider, modelId) =>
@@ -535,10 +737,21 @@ export class HarnessService {
         change.projectInstructions !== undefined ||
         change.inspectionGuidance !== undefined;
       const conversationChange =
-        change.tools !== undefined || change.instructions !== undefined;
-      const sessionChange =
+        change.tools !== undefined ||
+        change.instructions !== undefined ||
+        change.maxTurns !== undefined ||
+        change.planMode !== undefined ||
+        change.postRunCommand !== undefined ||
+        change.worktree !== undefined ||
+        change.sandbox !== undefined ||
+        change.remoteProfile !== undefined ||
+        change.codeMode !== undefined ||
+        change.mcp !== undefined;
+      const compactionChange =
         change.keepRecentTokens !== undefined ||
         change.automaticCompaction !== undefined;
+      const sessionChange =
+        compactionChange || change.tokenBudget !== undefined;
       const machineChange = change.workspaceGuidance !== undefined;
       if (
         Number(projectChange) +
@@ -551,10 +764,12 @@ export class HarnessService {
           400,
           "Change one configuration scope at a time.",
         );
-      if (!projectChange && !machineChange)
+      if (conversationChange || compactionChange)
         await this.assertIdle(
           harness,
-          sessionChange ? undefined : conversation.id,
+          sessionChange || change.remoteProfile !== undefined
+            ? undefined
+            : conversation.id,
         );
       const current = await this.readConfiguration(
         record,
@@ -566,13 +781,116 @@ export class HarnessService {
           409,
           "Configuration changed. Refresh and retry.",
         );
+      if (
+        change.tools !== undefined &&
+        (current.plan.active || change.planMode !== undefined)
+      )
+        throw new HarnessError(409, "Exit Plan mode before changing tools.");
+      if (change.codeMode !== undefined) {
+        if (current.plan.active || change.planMode !== undefined)
+          throw new HarnessError(
+            409,
+            "Exit Plan mode before changing Code Mode.",
+          );
+        if (change.tools !== undefined)
+          throw new HarnessError(
+            400,
+            "Change Code Mode separately from the tool selection.",
+          );
+      }
+      if (change.mcp !== undefined) {
+        if (current.plan.active || change.planMode !== undefined)
+          throw new HarnessError(
+            409,
+            "Exit Plan mode before changing MCP access.",
+          );
+        if (
+          change.tools !== undefined ||
+          change.codeMode !== undefined ||
+          change.sandbox !== undefined
+        )
+          throw new HarnessError(
+            400,
+            "Change MCP access separately from other tool settings.",
+          );
+        if (change.mcp && (current.sandbox || current.remote?.profile))
+          throw new HarnessError(
+            409,
+            "Use local execution without a workspace sandbox before enabling host MCP tools.",
+          );
+        if (
+          change.mcp &&
+          !current.mcp?.servers.some(
+            (server) => server.connected && server.tools > 0,
+          )
+        )
+          throw new HarnessError(
+            409,
+            "No configured MCP server has tools available.",
+          );
+      }
+      if (change.sandbox && (current.mcpEnabled || current.mcpSuspended))
+        throw new HarnessError(
+          409,
+          "Disable host MCP access before enabling the workspace sandbox.",
+        );
+      if (current.remote?.profile && (change.sandbox || change.worktree))
+        throw new HarnessError(
+          409,
+          "Return to local execution before enabling a sandbox or attaching a worktree.",
+        );
+      if (change.remoteProfile !== undefined) {
+        if (
+          change.tools !== undefined ||
+          change.instructions !== undefined ||
+          change.maxTurns !== undefined ||
+          change.planMode !== undefined ||
+          change.postRunCommand !== undefined ||
+          change.worktree !== undefined ||
+          change.sandbox !== undefined ||
+          change.codeMode !== undefined ||
+          change.mcp !== undefined
+        )
+          throw new HarnessError(
+            400,
+            "Change the execution destination separately.",
+          );
+        if (change.remoteProfile) {
+          if (
+            current.worktree ||
+            current.sandbox ||
+            current.mcpEnabled ||
+            current.mcpSuspended
+          )
+            throw new HarnessError(
+              409,
+              "Detach the worktree and disable the workspace sandbox and host MCP access before selecting an SSH profile.",
+            );
+          try {
+            await this.runtime.remote.environment(
+              change.remoteProfile,
+              context,
+            );
+          } catch (error) {
+            throw new HarnessError(409, (error as Error).message);
+          }
+        }
+      }
 
       const selected = projectChange ? change.projectTools : change.tools;
       if (
         selected &&
         (new Set(selected).size !== selected.length ||
           selected.some(
-            (name) => !current.tools.some((tool) => tool.name === name),
+            (name) =>
+              !(
+                projectChange
+                  ? [
+                      ...(CodingTools.tools ?? []),
+                      ...(ReviewExtension.tools ?? []),
+                    ]
+                  : current.tools
+              )?.some((tool) => tool.name === name),
           ))
       )
         throw new HarnessError(400, "Unknown or duplicate tool.");
@@ -617,23 +935,163 @@ export class HarnessService {
               : (change.projectInstructions?.trim() ?? ""),
         });
       } else if (sessionChange) {
-        const { min, max, step } = current.context;
-        const tokens =
-          change.keepRecentTokens ?? current.context.keepRecentTokens;
-        if (tokens < min || tokens > max || tokens % step !== 0)
-          throw new HarnessError(400, "Invalid recent context size.");
-        this.store.setCompaction(
-          sessionId,
-          tokens,
-          change.automaticCompaction ?? current.context.automatic,
-        );
+        if (compactionChange) {
+          const { min, max, step } = current.context;
+          const tokens =
+            change.keepRecentTokens ?? current.context.keepRecentTokens;
+          if (tokens < min || tokens > max || tokens % step !== 0)
+            throw new HarnessError(400, "Invalid recent context size.");
+          this.store.setCompaction(
+            sessionId,
+            tokens,
+            change.automaticCompaction ?? current.context.automatic,
+          );
+        }
+        if (change.tokenBudget !== undefined)
+          this.store.setTokenBudget(sessionId, change.tokenBudget);
       } else {
+        if (change.worktree !== undefined) {
+          if (record.projectId === standaloneOwner)
+            throw new HarnessError(
+              409,
+              "Only project conversations can attach a Git worktree.",
+            );
+          if (
+            change.tools !== undefined ||
+            change.instructions !== undefined ||
+            change.planMode !== undefined ||
+            change.sandbox !== undefined ||
+            change.codeMode !== undefined ||
+            change.mcp !== undefined ||
+            change.maxTurns !== undefined ||
+            change.postRunCommand !== undefined
+          )
+            throw new HarnessError(
+              400,
+              "Change the workspace separately from other conversation settings.",
+            );
+          const project = await this.project(record.projectId);
+          const path =
+            change.worktree === null
+              ? null
+              : await linkedWorktreePath(project.path, change.worktree);
+          if (path === undefined)
+            throw new HarnessError(
+              400,
+              "Choose an existing linked worktree of this project.",
+            );
+          this.projects.assertWritable(record.projectId);
+          if (current.sandbox)
+            await this.probeSandbox(path ?? project.path, false);
+          if (!this.store.setWorktree(sessionId, conversation.id, path))
+            throw new HarnessError(
+              409,
+              "This worktree is assigned to another conversation.",
+            );
+          this.runtime.releaseSandbox(sessionId, conversation.id);
+          return this.readConfiguration(record, harness, conversation);
+        }
+        if (change.sandbox && !current.sandbox) {
+          const standalone = record.projectId === standaloneOwner;
+          let directory: string;
+          if (standalone)
+            directory = await this.runtime.standaloneWorkspace(sessionId);
+          else {
+            const project = await this.project(record.projectId);
+            const assigned = this.store.worktree(sessionId, conversation.id);
+            if (
+              assigned &&
+              (await linkedWorktreePath(project.path, assigned)) !== assigned
+            )
+              throw new HarnessError(
+                409,
+                "The assigned Git worktree is unavailable.",
+              );
+            directory = assigned ?? project.path;
+          }
+          await this.probeSandbox(directory, standalone);
+        }
         const agent = await conversation.agent(context);
         const catalog = agent.extensions.flatMap(
           (extension) => extension.tools ?? [],
         );
-        await conversation.configure(
-          {
+        const stored = await harness.snapshot(
+          AgentDoc,
+          conversation.id,
+          context,
+        );
+        await conversation.commit(async (tx) => {
+          if (change.remoteProfile !== undefined)
+            (await tx.doc(RemoteWorkspaceDoc, conversation.id)).profile =
+              change.remoteProfile;
+          if (
+            change.codeMode !== undefined &&
+            change.codeMode !== current.codeMode
+          )
+            selectAdvancedTools(
+              await tx.doc(AgentDoc, conversation.id),
+              change.codeMode,
+              current.mcpEnabled,
+            );
+          if (change.mcp !== undefined && change.mcp !== current.mcpEnabled) {
+            const agent = await tx.doc(AgentDoc, conversation.id);
+            const tools =
+              this.runtime.mcp.extension().tools?.map((tool) => tool.name) ??
+              [];
+            const names =
+              !change.mcp && current.codeMode
+                ? tools.filter((name) => name !== "tool_search")
+                : tools;
+            selectExtensionTools(agent, mcpExtensionName, names, change.mcp, [
+              "tool_search",
+            ]);
+          }
+          if (change.sandbox !== undefined)
+            (await tx.doc(SandboxDoc, conversation.id)).enabled =
+              change.sandbox;
+          if (change.postRunCommand !== undefined) {
+            const check = await tx.doc(PostRunDoc, conversation.id);
+            const command = change.postRunCommand?.trim();
+            if (command) check.command = command;
+            else delete check.command;
+          }
+          if (
+            change.planMode !== undefined &&
+            change.planMode !== current.plan.active
+          ) {
+            const plan = await tx.doc(PlanDoc, conversation.id);
+            if (change.planMode) {
+              plan.previous = structuredClone({
+                ...(stored?.extensions !== undefined && {
+                  extensions: stored.extensions,
+                }),
+                ...(stored?.tools !== undefined && { tools: stored.tools }),
+                ...(stored?.modelTools !== undefined && {
+                  modelTools: stored.modelTools,
+                }),
+              });
+              await configure(tx, conversation.id, {
+                extensions: [
+                  ...agent.extensions.filter(
+                    (extension) => extension.name === "console.workspace",
+                  ),
+                  PlanExtension,
+                ],
+                tools: PlanExtension.tools,
+                modelTools: null,
+              });
+            } else {
+              const agent = await tx.doc(AgentDoc, conversation.id);
+              const previous = copyJson(plan.previous ?? {});
+              delete agent.extensions;
+              delete agent.tools;
+              delete agent.modelTools;
+              Object.assign(agent, previous);
+              delete plan.previous;
+            }
+          }
+          await configure(tx, conversation.id, {
+            maxTurns: change.maxTurns,
             tools:
               selected == null
                 ? selected
@@ -642,9 +1100,10 @@ export class HarnessService {
               change.instructions === undefined
                 ? undefined
                 : change.instructions?.trim() || null,
-          },
-          context,
-        );
+          });
+        }, context);
+        if (change.sandbox !== undefined || change.planMode !== undefined)
+          this.runtime.releaseSandbox(sessionId, conversation.id);
       }
       return this.readConfiguration(record, harness, conversation);
     });
@@ -656,10 +1115,23 @@ export class HarnessService {
       : undefined;
   }
 
+  private async probeSandbox(directory: string, standalone: boolean) {
+    try {
+      await this.runtime.probeSandbox(directory, standalone);
+    } catch {
+      throw new HarnessError(
+        409,
+        "Could not start the workspace sandbox. It requires a permitted workspace and Linux Bubblewrap with unprivileged namespaces.",
+      );
+    }
+  }
+
   compactConversation(sessionId: string, id: string, focus?: string) {
     return this.serial(sessionId, async () => {
       const { harness, conversation } = await this.conversation(sessionId, id);
       await this.assertIdle(harness, conversation.id);
+      if (await exceedsBudget(harness, this.store.tokenBudget(sessionId)))
+        throw new HarnessError(409, budgetReached);
       const agent = await conversation.agent(context);
       if (!agent.model)
         throw new HarnessError(
@@ -731,6 +1203,7 @@ export class HarnessService {
         const info = await tx.doc(ConversationInfo, conversation.id);
         info.archived = true;
       }, context);
+      this.runtime.releaseSandbox(sessionId, conversation.id);
       return { archived: true };
     });
   }
@@ -760,9 +1233,10 @@ export class HarnessService {
       if (!record) throw new HarnessError(404, "Session not found.");
       this.maintaining.add(sessionId);
       try {
-        await this.runtime.purge(sessionId, Number(id), () =>
-          this.archives.deleting(sessionId, Number(id)),
+        await this.runtime.purge(sessionId, Number(id), (owned) =>
+          this.archives.deleting(sessionId, Number(id), owned),
         );
+        this.store.setWorktree(sessionId, Number(id), null);
         this.archives.deleted(sessionId, Number(id));
       } catch (error) {
         throw new HarnessError(
@@ -822,6 +1296,8 @@ export class HarnessService {
       await this.rememberSubmission(harness, conversation.id, existing.id);
       return existing;
     }
+    if (await exceedsBudget(harness, this.store.tokenBudget(sessionId)))
+      throw new HarnessError(409, budgetReached);
     if (record.projectId !== standaloneOwner)
       await this.project(record.projectId);
     const agent = await conversation.agent(context);
@@ -852,26 +1328,23 @@ export class HarnessService {
       model.modelId !== agent.model?.modelId;
     const changedThinking =
       thinkingLevel !== undefined && thinkingLevel !== agent.thinkingLevel;
-    if (changedModel || changedThinking) {
-      const live = await harness.snapshot(LiveDoc, conversation.id, context);
-      const inbox = await harness.snapshot(InboxDoc, conversation.id, context);
-      if (live?.run || inbox?.items.length)
-        throw new HarnessError(
-          409,
-          "Wait until this conversation is idle before changing its model or thinking level.",
-        );
-      await conversation.configure(
-        {
+    const submissionId = await conversation.commit(async (tx) => {
+      if (changedModel || changedThinking) {
+        const live = await tx.doc(LiveDoc, conversation.id);
+        const inbox = await tx.doc(InboxDoc, conversation.id);
+        if (live.run || inbox.items.length)
+          throw new HarnessError(
+            409,
+            "Wait until this conversation is idle before changing its model or thinking level.",
+          );
+        await configure(tx, conversation.id, {
           model,
           thinkingLevel:
             (thinkingLevel as ModelThinkingLevel | undefined) ??
             (changedModel ? null : undefined),
-        },
-        context,
-      );
-    }
-    const submission = await conversation.submit(
-      {
+        });
+      }
+      const submissionId = await conversation.submit(tx, {
         type: "input",
         whenBusy: selection?.whenBusy ?? "followUp",
         content: attached?.blocks ?? content,
@@ -884,10 +1357,13 @@ export class HarnessService {
               },
             }
           : {}),
-      },
-      context,
-    );
-    await this.rememberSubmission(harness, conversation.id, submission.id);
+      });
+      (await tx.doc(ConversationInfo, conversation.id)).lastSubmissionId =
+        submissionId;
+      return submissionId;
+    }, context);
+    const submission = await harness.submission(submissionId, context);
+    if (!submission) throw new Error("Committed submission could not be read.");
     return submission.status(context);
   }
   private serial<T>(sessionId: string, action: () => Promise<T>): Promise<T> {
@@ -918,18 +1394,65 @@ export class HarnessService {
       this.admit(sessionId, id, content, requestId, selection),
     );
   }
+
+  continueConversation(sessionId: string, id: string, failedTaskId: number) {
+    return this.serial(sessionId, async () => {
+      const { harness, conversation } = await this.conversation(sessionId, id);
+      const requestId = `console.continue:${failedTaskId}`;
+      const agent = await conversation.agent(context);
+      const modelAvailable =
+        !!agent.model && !!this.availableModel(agent.model);
+      const exhausted = await exceedsBudget(
+        harness,
+        this.store.tokenBudget(sessionId),
+      );
+      const submissionId = await conversation.commit(async (tx) => {
+        const existing = await tx.submissionByRequest(
+          conversation.id,
+          requestId,
+        );
+        if (existing) return existing.id;
+        if (exhausted) throw new HarnessError(409, budgetReached);
+        const live = await tx.doc(LiveDoc, conversation.id);
+        if (
+          live.run ||
+          live.runFailure?.taskId !== failedTaskId ||
+          !canContinue(live.runFailure.reason)
+        )
+          throw new HarnessError(
+            409,
+            "This run is no longer available to continue.",
+          );
+        if (!modelAvailable)
+          throw new HarnessError(409, "The conversation model is unavailable.");
+        const submissionId = await conversation.submit(tx, {
+          type: "continue",
+          requestId,
+        });
+        (await tx.doc(ConversationInfo, conversation.id)).lastSubmissionId =
+          submissionId;
+        return submissionId;
+      }, context);
+      return { id: submissionId };
+    });
+  }
   async attachment(
     sessionId: string,
     id: string,
     entryId: string,
     index: number,
   ) {
-    const { harness, conversation } = await this.conversation(sessionId, id);
-    const entry = await harness.commit(
-      (tx) => tx.entry(Number(entryId) as EntryId),
+    const { conversation } = await this.conversation(sessionId, id);
+    const at = Number(entryId) as EntryId;
+    const {
+      items: [entry],
+    } = await conversation.entries(
+      { minEntryId: at, maxEntryId: at },
+      1,
+      undefined,
       context,
     );
-    if (!entry || entry.conversationId !== conversation.id)
+    if (!entry)
       throw new HarnessError(404, "Attachment not found in this conversation.");
     const file = readAttachment(entry, index);
     if (!file) throw new HarnessError(404, "Attachment not found.");
@@ -1030,7 +1553,7 @@ export class HarnessService {
   stop(sessionId: string) {
     return this.serial(sessionId, async () => {
       const { harness } = await this.session(sessionId);
-      await this.abortConversations(harness, context);
+      await this.abortConversations(harness, context, true);
       return { stopped: true };
     });
   }

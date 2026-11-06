@@ -19,9 +19,18 @@ importers:
       '@earendil-works/pi-ai':
         specifier: 1.5.0
         version: 1.5.0(patch_hash=c2d8416292c08abaf446b1e685cb297b6e3208a99b6600f30fb3fb929f1625d7)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(zod@4.6.7)
+      '@earendil-works/pi-codemode':
+        specifier: 1.5.0
+        version: 1.5.0
       '@earendil-works/pi-durable':
         specifier: 1.5.0
         version: 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(zod@4.6.7)
+      '@earendil-works/pi-env':
+        specifier: 1.5.0
+        version: 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(zod@4.6.7)
+      '@earendil-works/pi-mcp':
+        specifier: 1.5.0
+        version: 1.5.0
       '@fastify/cors':
         specifier: ^11.3.1
         version: 11.3.1
@@ -413,6 +422,14 @@ packages:
 
   '@earendil-works/pi-durable@1.5.0':
     resolution: {integrity: sha512-xeBP2vIo5NvsCMQ4Y/V+Z164xQEi9JWiBWHdjn4Z15EnFqV3c0FxJAX26FqyyyintrYyk+Enre94GNcvRlBA5g==}
+    engines: {node: '>=22.19.0'}
+
+  '@earendil-works/pi-env@1.5.0':
+    resolution: {integrity: sha512-i8OcpTYbby55drYJYnFInN6OEiswUPCASSjsaT0KaLOeaRUJd3hYqyfmjPMuYdl8d1O7czD1mR/cC/c4nPv4Vg==}
+    engines: {node: '>=22.19.0'}
+
+  '@earendil-works/pi-mcp@1.5.0':
+    resolution: {integrity: sha512-DURw3IwHCTMHV8CzUJWVp9css27NowsCWfXt4xg2r09IZ+P1O/Uq58hp0hb9WJO0dbkaKGXKBIkV4LVXcu2nlg==}
     engines: {node: '>=22.19.0'}
 
   '@earendil-works/pi-schema@1.5.0':
@@ -3646,6 +3663,28 @@ snapshots:
       - utf-8-validate
       - ws
       - zod
+
+  '@earendil-works/pi-env@1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(zod@4.6.7)':
+    dependencies:
+      '@earendil-works/chord': 1.5.0
+      '@earendil-works/pi-durable': 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(zod@4.6.7)
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@modelcontextprotocol/sdk'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - esbuild
+      - kerberos
+      - supports-color
+      - undici
+      - utf-8-validate
+      - ws
+      - zod
+
+  '@earendil-works/pi-mcp@1.5.0':
+    dependencies:
+      cross-spawn: 7.0.6
 
   '@earendil-works/pi-schema@1.5.0': {}
 

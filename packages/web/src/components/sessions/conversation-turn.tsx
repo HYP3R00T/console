@@ -1,7 +1,8 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, GitFork } from "lucide-react";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
+import { Button } from "@/components/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
@@ -9,8 +10,10 @@ import {
 } from "@/components/ui/collapsible";
 import type { useBackendRequest } from "@/hooks/use-backend-request";
 import { MessageAttachments } from "./attachment-list";
+import type { Execution } from "./conversation-state";
 import type { ConversationTurn as Turn } from "./conversation-turns";
 import { MessageMarkdown } from "./message-markdown";
+import { ReviewTranscript } from "./review-transcript";
 import { ToolActivity } from "./tool-activity";
 
 export function ConversationTurn({
@@ -18,16 +21,36 @@ export function ConversationTurn({
   working,
   partial,
   activeTools,
+  liveTools,
   path,
   request,
+  fork,
+  forkDisabled,
 }: {
   turn: Turn;
   working: boolean;
   partial?: string;
   activeTools: { name: string; status: string }[];
+  liveTools?: Execution["tools"];
   path: string;
   request: ReturnType<typeof useBackendRequest>["request"];
+  fork?: (entryId: number) => void;
+  forkDisabled?: boolean;
 }) {
+  const shownReviews = new Set<number>();
+  const forkAction = (entryId: number) =>
+    fork && (
+      <Button
+        type="button"
+        size="xs"
+        variant="ghost"
+        disabled={forkDisabled}
+        onClick={() => fork(entryId)}
+      >
+        <GitFork data-icon="inline-start" />
+        Fork from here
+      </Button>
+    );
   const files = (message: NonNullable<Turn["prompt"]>) =>
     !!message.attachments?.length && (
       <MessageAttachments
@@ -60,6 +83,7 @@ export function ConversationTurn({
               </p>
             </BubbleContent>
           </Bubble>
+          {forkAction(turn.prompt.entryId)}
         </article>
       )}
       {(turn.activity.length > 0 || working) && (
@@ -81,14 +105,31 @@ export function ConversationTurn({
               {!turn.prompt && (
                 <p>Earlier prompt is outside the loaded history.</p>
               )}
-              {turn.activity.map((event) => (
-                <ToolActivity
-                  key={event.id}
-                  label={event.label}
-                  content={event.content}
-                  failed={event.failed}
-                />
-              ))}
+              {turn.activity.flatMap((event) => {
+                const reviewId =
+                  event.reviewId ??
+                  liveTools?.find((tool) => tool.callId === event.callId)
+                    ?.reviewId;
+                const showReview =
+                  reviewId !== undefined && !shownReviews.has(reviewId);
+                if (reviewId !== undefined) shownReviews.add(reviewId);
+                return [
+                  <ToolActivity
+                    key={event.id}
+                    label={event.label}
+                    content={event.content}
+                    failed={event.failed}
+                  />,
+                  showReview && (
+                    <ReviewTranscript
+                      key={`review:${reviewId}`}
+                      reviewId={reviewId}
+                      path={path}
+                      request={request}
+                    />
+                  ),
+                ];
+              })}
               {working && (
                 <p role="status">
                   {activeTools.length
@@ -114,6 +155,9 @@ export function ConversationTurn({
               Response interrupted or failed.
             </p>
           )}
+          {!message.failed &&
+            !message.toolCalls?.length &&
+            forkAction(message.entryId)}
         </article>
       ))}
       {partial && (

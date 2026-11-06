@@ -16,6 +16,7 @@ import {
   historyWindow,
   messages,
   submissionView,
+  taskGraphView,
 } from "./view.ts";
 
 const uuid = { type: "string", format: "uuid" };
@@ -194,6 +195,134 @@ export function registerHarnessRoutes(
           ),
     );
     routes.get<{ Params: Scope }>(
+      `${base}/tasks`,
+      { schema: { params: conversationParams } },
+      (req) =>
+        service.operation(async () => {
+          const { harness, conversation } = await service.conversation(
+            req.params.sessionId,
+            req.params.conversationId,
+          );
+          const watch = await harness.watchTaskGraph(context);
+          try {
+            return taskGraphView(watch.value, conversation.id);
+          } finally {
+            await watch.stop();
+          }
+        }),
+    );
+    routes.post<{
+      Params: Scope;
+      Body: { brief: string; requestId: string; at?: number };
+    }>(
+      `${base}/reviews`,
+      {
+        schema: {
+          params: conversationParams,
+          body: {
+            ...creation,
+            required: ["brief", "requestId"],
+            properties: {
+              brief: { type: "string", minLength: 1, maxLength: 8000 },
+              requestId: uuid,
+              at: { type: "integer", minimum: 0, maximum: 8640000000000000 },
+            },
+          },
+        },
+      },
+      async (req, reply) =>
+        reply
+          .code(202)
+          .send(
+            await service.operation(() =>
+              service.scheduleReview(
+                req.params.sessionId,
+                req.params.conversationId,
+                req.body.brief,
+                req.body.requestId,
+                req.body.at,
+              ),
+            ),
+          ),
+    );
+    routes.delete<{ Params: Scope & { taskId: string } }>(
+      `${base}/reviews/tasks/:taskId`,
+      {
+        schema: {
+          params: params({
+            sessionId: uuid,
+            conversationId: recordId,
+            taskId: recordId,
+          }),
+        },
+      },
+      (req) =>
+        service.operation(() =>
+          service.stopReview(
+            req.params.sessionId,
+            req.params.conversationId,
+            req.params.taskId,
+          ),
+        ),
+    );
+    routes.get<{ Params: Scope & { reviewId: string } }>(
+      `${base}/reviews/:reviewId`,
+      {
+        schema: {
+          params: params({
+            sessionId: uuid,
+            conversationId: recordId,
+            reviewId: recordId,
+          }),
+        },
+      },
+      (req) =>
+        service.operation(async () => {
+          const review = await service.review(
+            req.params.sessionId,
+            req.params.conversationId,
+            req.params.reviewId,
+          );
+          const watch = await review.watch(context);
+          try {
+            const snapshot = conversationView(watch.value);
+            return {
+              messages: snapshot.messages.map(({ id, role, text, failed }) => ({
+                id,
+                role,
+                text: text.slice(0, 16000),
+                failed,
+              })),
+              partial: snapshot.partial.slice(0, 16000),
+              busy: snapshot.busy,
+              execution: snapshot.execution,
+            };
+          } finally {
+            await watch.stop();
+          }
+        }),
+    );
+    routes.get<{ Params: Scope }>(
+      `${base}/worktrees`,
+      { schema: { params: conversationParams } },
+      (req) =>
+        service.operation(() =>
+          service.worktrees(req.params.sessionId, req.params.conversationId),
+        ),
+    );
+    routes.post<{ Params: Scope }>(
+      `${base}/mcp/reconnect`,
+      { schema: { params: conversationParams, body: creation } },
+      (req) =>
+        service.operation(async () => {
+          await service.conversation(
+            req.params.sessionId,
+            req.params.conversationId,
+          );
+          return service.runtime.mcp.reconnect();
+        }),
+    );
+    routes.get<{ Params: Scope }>(
       `${base}/configuration`,
       { schema: { params: conversationParams } },
       (req) =>
@@ -215,6 +344,39 @@ export function registerHarnessRoutes(
         },
       ],
     };
+    routes.post<{ Params: Scope; Body: { at: number; creationId: string } }>(
+      `${base}/fork`,
+      {
+        schema: {
+          params: conversationParams,
+          body: {
+            ...creation,
+            required: ["at", "creationId"],
+            properties: {
+              at: {
+                type: "integer",
+                minimum: 1,
+                maximum: Number.MAX_SAFE_INTEGER,
+              },
+              creationId: uuid,
+            },
+          },
+        },
+      },
+      async (req, reply) =>
+        reply
+          .code(201)
+          .send(
+            await service.operation(() =>
+              service.forkConversation(
+                req.params.sessionId,
+                req.params.conversationId,
+                req.body.at,
+                req.body.creationId,
+              ),
+            ),
+          ),
+    );
     const instructions = {
       anyOf: [{ type: "null" }, { type: "string", maxLength: 16000 }],
     };
@@ -236,6 +398,45 @@ export function registerHarnessRoutes(
               workspaceGuidance: instructions,
               inspectionGuidance: instructions,
               automaticCompaction: { type: "boolean" },
+              planMode: { type: "boolean" },
+              sandbox: { type: "boolean" },
+              remoteProfile: {
+                anyOf: [
+                  { type: "null" },
+                  { type: "string", pattern: "^[a-z][a-z0-9-]{0,23}$" },
+                ],
+              },
+              codeMode: { type: "boolean" },
+              mcp: { type: "boolean" },
+              postRunCommand: {
+                anyOf: [{ type: "null" }, { type: "string", maxLength: 1000 }],
+              },
+              maxTurns: {
+                anyOf: [
+                  { type: "null" },
+                  {
+                    type: "integer",
+                    minimum: 1,
+                    maximum: Number.MAX_SAFE_INTEGER,
+                  },
+                ],
+              },
+              tokenBudget: {
+                anyOf: [
+                  { type: "null" },
+                  {
+                    type: "integer",
+                    minimum: 1,
+                    maximum: Number.MAX_SAFE_INTEGER,
+                  },
+                ],
+              },
+              worktree: {
+                anyOf: [
+                  { type: "null" },
+                  { type: "string", minLength: 1, maxLength: 4096 },
+                ],
+              },
               keepRecentTokens: {
                 type: "integer",
                 minimum: contextRetention.min,
@@ -425,6 +626,37 @@ export function registerHarnessRoutes(
             ),
           ),
         ),
+    );
+    routes.post<{ Params: Scope; Body: { failedTaskId: number } }>(
+      `${base}/continue`,
+      {
+        schema: {
+          params: conversationParams,
+          body: {
+            ...creation,
+            required: ["failedTaskId"],
+            properties: {
+              failedTaskId: {
+                type: "integer",
+                minimum: 1,
+                maximum: Number.MAX_SAFE_INTEGER,
+              },
+            },
+          },
+        },
+      },
+      async (req, reply) =>
+        reply
+          .code(202)
+          .send(
+            await service.operation(() =>
+              service.continueConversation(
+                req.params.sessionId,
+                req.params.conversationId,
+                req.body.failedTaskId,
+              ),
+            ),
+          ),
     );
     routes.post<{ Params: Scope }>(
       `${base}/stop`,

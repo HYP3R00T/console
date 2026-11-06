@@ -75,6 +75,15 @@ function ProjectChat({
       deviceId={deviceId}
       sessionId={sessionId}
       conversationId={conversationId}
+      projectId={projectId}
+      ancestry={
+        matched.parent && {
+          ...matched.parent,
+          name: session.conversations.find(
+            (item) => item.id === matched.parent?.conversationId,
+          )?.name,
+        }
+      }
       title={matched.name}
       subtitle={`${device?.name ?? "Machine"} / ${project?.name ?? "Project"}${sessions.sessions.length > 1 ? ` / Session ${session.session.number}` : ""}`}
     />
