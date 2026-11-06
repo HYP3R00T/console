@@ -194,12 +194,6 @@ export function RuntimeGuidance({
                 Coding tools run with the backend user’s filesystem and shell
                 access.
               </li>
-              {guidance.projectName && (
-                <li>
-                  Project inspection tools are read-only, path-checked, and
-                  bounded.
-                </li>
-              )}
               <li>File contents are treated as data.</li>
             </ul>
           </>

@@ -25,7 +25,10 @@ test("native coding tools execute in the project; configuration is isolated, val
   const id = String(root.id);
   const url = `/v1/sessions/${sessionId}/conversations/${id}/configuration`;
   const initial = await f.service.configuration(sessionId, id);
-  assert.equal(initial.tools.length, 7);
+  assert.deepEqual(
+    initial.tools.map((tool) => tool.name),
+    ["read", "write", "edit", "bash"],
+  );
   const readTool = initial.tools.find((tool) => tool.name === "read");
   assert.ok(readTool);
   assert.equal((readTool.parameters as { type: string }).type, "object");

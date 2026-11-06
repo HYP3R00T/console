@@ -10,7 +10,7 @@ The backend owns provider credentials, registered projects and durable conversat
 - `src/providers/`: Pi AI catalog, API-key/OAuth login, enabled state, credentials and model favorites.
 - `src/projects/`: directory registrations, project defaults, Git setup/inspection and project archive/restore.
 - `src/harnesses/`: project/session index, Durable runtime, conversation admission, history, event projections and conversation configuration.
-- `src/execution/`: host-owned execution adapters: project inspection and the injectable Durable coding environment factory.
+- `src/execution/`: the injectable host environment for Durable's coding tools.
 - `src/storage/`: shared SQLite setup and process ownership.
 
 Paths above are relative to `packages/server`. Feature routes live with their owning service; do not add a second application-wide endpoint registry to documentation.
@@ -27,7 +27,7 @@ Backend
 - Each Console session opens one internal Durable Harness. The UI calls this a session; it does not display a separate harness level.
 - A project starts with Session 1/Main. Additional sessions and conversations receive automatic names.
 - Console owns project/session associations. Durable owns conversation history, inbox, tasks and checkpoints.
-- Standalone sessions retain private working directories; they do not receive project inspection tools.
+- Standalone sessions retain private working directories.
 
 Data is created automatically under `~/.local/share/console`: `providers.sqlite`, `projects.sqlite`, `harnesses.sqlite` and `sessions/`. Provider credentials are plaintext in the private provider database, protected by filesystem permissions. Do not commit or expose these files. No environment-file configuration is used.
 
@@ -47,7 +47,7 @@ HTTP commands mutate state; SSE observes conversation updates. Route files conta
   - `POST` to the conversation's `/stop` interrupts its work and withdraws its queued inputs without stopping sibling conversations. Steering joins at Durable's next safe boundary, rather than interrupting an in-flight provider request.
   - `POST /archive` hides an individual conversation; busy work requires `{stop:true}`. `POST /restore` restores an archived conversation. `GET /v1/archives/conversations` lists machine-wide conversation archives. `DELETE /archive` permanently erases an already archived conversation, subject to dependency and idle checks.
   - `GET /configuration` returns the tool catalog and input schemas, enabled tools, runtime facts, editable guidance, the configured model and session compaction settings. `PATCH /configuration` rejects stale revisions and changes one scope per request.
-  - Conversation changes require idle work. A tool list sets the enabled names and `null` enables all built-in tools. Project tool defaults are copied when a conversation is created. Project instructions and inspection guidance apply across the project. Workspace guidance applies across the machine. Both guidance overrides can restore defaults with `null`; execution facts and file handling rules remain runtime-owned.
+  - Conversation changes require idle work. A tool list sets the enabled names and `null` enables all built-in tools. Project tool defaults are copied when a conversation is created. Project instructions and evidence rules apply across the project. Workspace guidance applies across the machine. Both guidance overrides can restore defaults with `null`; execution facts and file handling rules remain runtime-owned.
   - Automatic compaction and the recent-token retention target are shared by conversations in one session. Changes require an idle session. `POST /compact` admits a Durable compaction task for an idle conversation with an available model, optionally focusing the summary. Compaction preserves chat history.
   - Rename preserves IDs/history. `POST /v1/sessions/:sessionId/stop` stops the whole session, including sibling conversations and queued input.
 
@@ -61,7 +61,7 @@ The current connection policy permits the local website origins and rejects othe
 - Project Remove archives the registration and its histories without deleting source files. Busy projects require explicit Stop all and archive; work must settle before archival. Restore retains identities/history without restarting interrupted work.
 - Existing-directory registration resolves canonical paths and rejects duplicates. Paths are immutable; names/icons/colors are editable.
 - New/clone setup uses the configured projects root, rejects occupied destinations and creates missing parents only when requested. Public HTTPS clones use isolated Git configuration; private Git authentication is not implemented. Git setup is bounded and cancels on HTTP disconnect, unlike admitted conversation work.
-- All conversations receive Durable’s bundled `read`, `write`, `edit` and `bash` tools. Their host-owned environment starts in the project directory or standalone workspace. These tools have the backend OS user’s access, including paths outside that directory; tool selection is not OS confinement. Project conversations also retain the bounded, path-checked `list_directory`, `read_file` and `search_text` inspection tools. Durable storage stays outside the execution environment.
+- All conversations offer Durable’s bundled `read`, `write`, `edit` and `bash` tools. The working directory is the project directory or standalone workspace. Tools have the backend OS user’s access, including paths outside that directory. Retired tool names are ignored in saved selections, and past calls remain visible in history. Durable storage stays outside the execution environment.
 
 ## Execution visibility
 
@@ -96,7 +96,7 @@ Deletion records a non-restorable pending marker before erasing history. Interru
 
 ## Durable 1.5 migration
 
-Console pins Durable, Pi AI, Chord and Pi Schema to 1.5.0 together. Inspection tools use Pi Schema; SSE consumes tagged watch values; report logging reads the new report kind. The Pi AI declaration patch still supplies JSON import attributes required by TypeScript.
+Console pins Durable, Pi AI and Chord to 1.5.0 together. SSE consumes tagged watch values and report logging reads the new report kind. The Pi AI declaration patch still supplies JSON import attributes required by TypeScript.
 
 Conversation watches now hold bounded history windows; the API uses their `before` marker to preserve older-history pagination. SSE remains watch-based, so deferred storage writes do not delay live updates. The bundled SQLite adapter handles storage batching; Console has no custom Durable storage or SQL executor.
 

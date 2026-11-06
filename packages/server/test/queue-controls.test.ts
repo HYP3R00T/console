@@ -67,7 +67,7 @@ async function setup(t: test.TestContext) {
 test("queued inputs can be edited, withdrawn and promoted to steering without rewriting history", async (t) => {
   const f = await setup(t);
   const hold = held(
-    fauxAssistantMessage([fauxToolCall("list_directory", { path: "." })], {
+    fauxAssistantMessage([fauxToolCall("bash", { command: "pwd" })], {
       stopReason: "toolUse",
     }),
   );

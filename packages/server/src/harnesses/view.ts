@@ -8,6 +8,7 @@ import { attachedInput } from "./attachments.ts";
 import { queueView } from "./queue.ts";
 
 const visibleTools = new Set([
+  // Keep results from the retired inspection tools visible in saved history.
   "list_directory",
   "read_file",
   "search_text",
