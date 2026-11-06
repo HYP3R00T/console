@@ -167,7 +167,7 @@ function ShellLayout({
           >
             {hasContext && <AppSidebar />}
           </WorkspaceSidebar>
-          <ResizablePanel id="workspace" minSize={240} className="py-2 pr-2">
+          <ResizablePanel id="workspace" minSize={240} className="py-2">
             <div className="h-full min-h-0 overflow-hidden rounded-xl border border-solid border-border/50">
               <Content>{children}</Content>
             </div>
