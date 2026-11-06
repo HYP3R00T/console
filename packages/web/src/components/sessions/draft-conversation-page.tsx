@@ -95,6 +95,7 @@ function DraftChat({
     state.request,
     draft.pending?.model,
     draft.pending?.thinkingLevel,
+    true,
   );
   useEffect(() => {
     active.current = true;

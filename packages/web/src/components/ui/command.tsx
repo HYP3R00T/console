@@ -33,10 +33,12 @@ function CommandDialog({
   title = "Command Palette",
   description = "Search for a command to run...",
   children,
+  trigger,
   className,
   showCloseButton = false,
   ...props
 }: Omit<React.ComponentProps<typeof Dialog>, "children"> & {
+  trigger?: React.ReactNode;
   title?: string;
   description?: string;
   className?: string;
@@ -45,10 +47,7 @@ function CommandDialog({
 }) {
   return (
     <Dialog {...props}>
-      <DialogHeader className="sr-only">
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
+      {trigger}
       <DialogContent
         className={cn(
           "top-1/3 translate-y-0 overflow-hidden rounded-md p-0",
@@ -56,6 +55,10 @@ function CommandDialog({
         )}
         showCloseButton={showCloseButton}
       >
+        <DialogHeader className="sr-only">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
         {children}
       </DialogContent>
     </Dialog>

@@ -11,7 +11,13 @@ export type ChatModel = {
   input?: string[];
 };
 export type ModelRef = { provider: string; modelId: string };
-const keyOf = (model: { provider: string; id: string }) =>
+export type RuntimeDefaults = { model: ModelRef; thinkingLevel?: string };
+export type RuntimeDefaultsSnapshot = {
+  revision: number;
+  defaults: RuntimeDefaults | null;
+  models: ChatModel[];
+};
+export const modelKey = (model: { provider: string; id: string }) =>
   JSON.stringify([model.provider, model.id]);
 type ModelChoice = { key: string; level?: string };
 
@@ -25,14 +31,14 @@ export function resolveChatModelSelection(
   const selected =
     choice?.key ??
     (current
-      ? keyOf({ provider: current.provider, id: current.modelId })
+      ? modelKey({ provider: current.provider, id: current.modelId })
       : models[0]
-        ? keyOf(models[0])
+        ? modelKey(models[0])
         : undefined);
-  const model = models.find((model) => keyOf(model) === selected);
+  const model = models.find((model) => modelKey(model) === selected);
   const levels = model?.thinkingLevels ?? [];
   const savedKey = current
-    ? keyOf({ provider: current.provider, id: current.modelId })
+    ? modelKey({ provider: current.provider, id: current.modelId })
     : undefined;
   const preferred =
     choice?.level ?? (selected === savedKey ? thinkingLevel : undefined);
@@ -44,7 +50,9 @@ export function useChatModels(
   request: ReturnType<typeof useBackendRequest>["request"],
   current?: ModelRef,
   thinkingLevel?: string,
+  useMachineDefaults = false,
 ) {
+  const [defaults, setDefaults] = useState<RuntimeDefaults>();
   const [models, setModels] = useState<ChatModel[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string>();
@@ -54,12 +62,27 @@ export function useChatModels(
     let timer: ReturnType<typeof setTimeout>;
     const load = async () => {
       try {
-        const data = await request<{ models: ChatModel[] }>(
-          "/v1/models/favorites",
+        const data = await request<{
+          models: ChatModel[];
+          defaults?: RuntimeDefaults | null;
+        }>(
+          useMachineDefaults
+            ? "/v1/machine/runtime-defaults"
+            : "/v1/models/favorites",
           { signal: controller.signal },
         );
         if (!controller.signal.aborted) {
           setModels(data.models);
+          setDefaults(
+            data.defaults &&
+              data.models.some(
+                (model) =>
+                  model.provider === data.defaults?.model.provider &&
+                  model.id === data.defaults.model.modelId,
+              )
+              ? data.defaults
+              : undefined,
+          );
           setLoaded(true);
           setError(undefined);
         }
@@ -78,11 +101,11 @@ export function useChatModels(
       controller.abort();
       clearTimeout(timer);
     };
-  }, [request]);
+  }, [request, useMachineDefaults]);
   const { selected, model, level } = resolveChatModelSelection(
     models,
-    current,
-    thinkingLevel,
+    current ?? defaults?.model,
+    current ? thinkingLevel : defaults?.thinkingLevel,
     choice,
   );
   return {
@@ -92,7 +115,7 @@ export function useChatModels(
     selected,
     level,
     error,
-    keyOf,
+    keyOf: modelKey,
     chooseModel: (key: string | null) => {
       if (key && key !== selected) setChoice({ key });
     },
