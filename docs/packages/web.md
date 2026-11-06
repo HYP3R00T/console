@@ -76,6 +76,7 @@ Machine settings → Runtime defaults saves the model and optional thinking leve
 ## Commands and client preferences
 
 - The bottom bar opens the command palette and shows its current shortcut, which defaults to Ctrl/Command+K. Search commands and saved machines. Available commands follow the current route and connection. New conversation opens a draft on the current machine and preserves the project and session scope when present.
+- Selected commands run after the palette finishes closing, so popup cleanup can finish before route transitions begin.
 - Client preferences → Keyboard shortcuts changes, removes or resets bindings. Shortcuts use Ctrl or Command with a letter or digit and optional Alt or Shift. Duplicate bindings are rejected. Browsers or the OS may reserve some combinations.
 - The command catalog and default bindings live in `src/lib/commands.ts`. Shortcut overrides use `console.shortcuts.v1` in browser local storage. Appearance uses the existing `theme` key. Navigation memory uses `console.navigation.v1`. Sidebar dimensions and visibility last for the open client session.
 - Client preferences work offline and are shared across machines viewed in the same browser. Machine runtime defaults are saved by each backend and shared with its connected clients.

@@ -2,7 +2,7 @@
 
 import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDevices } from "@/components/devices/device-provider";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { useNavigationMemory } from "@/components/layout/navigation-memory";
@@ -36,6 +36,7 @@ export function CommandPalette({ actions }: { actions: CommandActions }) {
   const { memory } = useNavigationMemory();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const pendingAction = useRef<() => void>(undefined);
   const openingShortcut = shortcutFor("palette.open", overrides);
   const shortcutLabel =
     ready && openingShortcut
@@ -82,10 +83,25 @@ export function CommandPalette({ actions }: { actions: CommandActions }) {
     return () => window.removeEventListener("keydown", keyDown);
   }, [actions, open, overrides, ready]);
 
+  function select(run: () => void) {
+    pendingAction.current = run;
+    setOpen(false);
+  }
+
   return (
     <CommandDialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) pendingAction.current = undefined;
+        setOpen(nextOpen);
+      }}
+      onOpenChangeComplete={(isOpen) => {
+        if (isOpen || !pendingAction.current) return;
+        const run = pendingAction.current;
+        pendingAction.current = undefined;
+        // Base UI reports close completion inside its synchronous popup cleanup.
+        queueMicrotask(run);
+      }}
       className="sm:max-w-lg"
       trigger={
         <ControlTooltip
@@ -132,10 +148,7 @@ export function CommandPalette({ actions }: { actions: CommandActions }) {
                   key={id}
                   value={id}
                   keywords={[commands[id].label]}
-                  onSelect={() => {
-                    setOpen(false);
-                    run();
-                  }}
+                  onSelect={() => select(run)}
                 >
                   {commands[id].label}
                   {shortcut && <CommandShortcut>{shortcut}</CommandShortcut>}
@@ -150,13 +163,14 @@ export function CommandPalette({ actions }: { actions: CommandActions }) {
                   key={device.id}
                   value={`device:${device.id}`}
                   keywords={[device.name, device.url]}
-                  onSelect={() => {
-                    setOpen(false);
-                    router.push(
-                      memory.routes[device.id] ??
-                        `/devices/${encodeURIComponent(device.id)}`,
-                    );
-                  }}
+                  onSelect={() =>
+                    select(() => {
+                      router.push(
+                        memory.routes[device.id] ??
+                          `/devices/${encodeURIComponent(device.id)}`,
+                      );
+                    })
+                  }
                 >
                   {device.name}
                   <span className="ml-auto truncate text-muted-foreground">
