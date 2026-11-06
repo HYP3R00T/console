@@ -5,6 +5,7 @@ export type ChatModel = {
   provider: string;
   id: string;
   name: string;
+  contextWindow?: number;
   reasoning: boolean;
   thinkingLevels: string[];
   input?: string[];

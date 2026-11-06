@@ -8,6 +8,7 @@ import {
 import type { FastifyInstance } from "fastify";
 import { ProjectError } from "../projects/service.ts";
 import { AttachmentError, type AttachmentInput } from "./attachments.ts";
+import { type ConfigurationChange, contextRetention } from "./configuration.ts";
 import { ConversationInfo } from "./documents.ts";
 import { HarnessError, type HarnessService } from "./service.ts";
 import {
@@ -155,14 +156,21 @@ export function registerHarnessRoutes(
           ),
         ),
     );
-    routes.patch<{
-      Params: Scope;
-      Body: {
-        revision: string;
-        tools?: string[] | null;
-        instructions?: string | null;
-      };
-    }>(
+    const toolSelection = {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "array",
+          maxItems: 100,
+          uniqueItems: true,
+          items: { type: "string", maxLength: 120 },
+        },
+      ],
+    };
+    const instructions = {
+      anyOf: [{ type: "null" }, { type: "string", maxLength: 16000 }],
+    };
+    routes.patch<{ Params: Scope; Body: ConfigurationChange }>(
       `${base}/configuration`,
       {
         schema: {
@@ -173,19 +181,18 @@ export function registerHarnessRoutes(
             required: ["revision"],
             properties: {
               revision: { type: "string", pattern: "^[a-f0-9]{64}$" },
-              tools: {
-                anyOf: [
-                  { type: "null" },
-                  {
-                    type: "array",
-                    maxItems: 100,
-                    uniqueItems: true,
-                    items: { type: "string", maxLength: 120 },
-                  },
-                ],
-              },
-              instructions: {
-                anyOf: [{ type: "null" }, { type: "string", maxLength: 16000 }],
+              tools: toolSelection,
+              instructions,
+              projectTools: toolSelection,
+              projectInstructions: instructions,
+              workspaceGuidance: instructions,
+              inspectionGuidance: instructions,
+              automaticCompaction: { type: "boolean" },
+              keepRecentTokens: {
+                type: "integer",
+                minimum: contextRetention.min,
+                maximum: contextRetention.max,
+                multipleOf: contextRetention.step,
               },
             },
           },
@@ -199,6 +206,28 @@ export function registerHarnessRoutes(
             req.body,
           ),
         ),
+    );
+    routes.post<{ Params: Scope; Body: { focus?: string } }>(
+      `${base}/compact`,
+      {
+        schema: {
+          params: conversationParams,
+          body: {
+            ...creation,
+            properties: { focus: { type: "string", maxLength: 2000 } },
+          },
+        },
+      },
+      async (req, reply) => {
+        const task = await service.operation(() =>
+          service.compactConversation(
+            req.params.sessionId,
+            req.params.conversationId,
+            req.body.focus,
+          ),
+        );
+        return reply.code(202).send(task);
+      },
     );
     routes.get("/v1/archives/conversations", () =>
       service.operation(() => service.archivedConversations()),

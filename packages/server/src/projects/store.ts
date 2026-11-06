@@ -3,6 +3,12 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { openDatabase } from "../storage/database.ts";
 
+export type ProjectAgentSettings = {
+  tools: string[] | null;
+  instructions: string;
+  inspectionGuidance?: string | null;
+};
+
 export type Project = {
   id: string;
   name: string;
@@ -26,6 +32,9 @@ export class ProjectStore {
       this.db.exec(
         "CREATE TABLE IF NOT EXISTS machine_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
       );
+      this.db.exec(
+        "CREATE TABLE IF NOT EXISTS project_agent_settings (projectId TEXT PRIMARY KEY, value TEXT NOT NULL)",
+      );
       const columns = new Set(
         this.db
           .prepare("PRAGMA table_info(projects)")
@@ -46,6 +55,42 @@ export class ProjectStore {
     } catch (error) {
       this.db.exec("ROLLBACK");
       throw error;
+    }
+  }
+  agentSettings(id: string): ProjectAgentSettings {
+    const row = this.db
+      .prepare("SELECT value FROM project_agent_settings WHERE projectId=?")
+      .get(id);
+    return row
+      ? JSON.parse(String(row.value))
+      : { tools: null, instructions: "" };
+  }
+  setAgentSettings(id: string, settings: ProjectAgentSettings) {
+    this.db
+      .prepare(
+        "INSERT INTO project_agent_settings VALUES (?,?) ON CONFLICT(projectId) DO UPDATE SET value=excluded.value",
+      )
+      .run(id, JSON.stringify(settings));
+  }
+  workspaceGuidance(): string | null {
+    const row = this.db
+      .prepare(
+        "SELECT value FROM machine_settings WHERE key='workspaceGuidance'",
+      )
+      .get();
+    return row ? String(row.value) : null;
+  }
+  setWorkspaceGuidance(value: string | null) {
+    if (value === null) {
+      this.db
+        .prepare("DELETE FROM machine_settings WHERE key='workspaceGuidance'")
+        .run();
+    } else {
+      this.db
+        .prepare(
+          "INSERT INTO machine_settings VALUES ('workspaceGuidance', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        )
+        .run(value);
     }
   }
   projectsRoot() {
