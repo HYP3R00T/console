@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_COMPACTION_POLICY } from "@earendil-works/pi-durable";
+import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
+import {
+  DEFAULT_COMPACTION_POLICY,
+  type ModelRef,
+} from "@earendil-works/pi-durable";
 import { openDatabase } from "../storage/database.ts";
 
 // Project IDs are UUIDs. This reserved owner groups machine-level conversations.
@@ -16,6 +20,12 @@ export type HarnessRecord = {
   number: number;
   provider: string;
   modelId: string;
+  thinkingLevel: ModelThinkingLevel | null;
+};
+
+export type RuntimeDefaults = {
+  model: ModelRef;
+  thinkingLevel?: ModelThinkingLevel;
 };
 export const harnessDataPath = () =>
   join(homedir(), ".local", "share", "console", "sessions");
@@ -36,7 +46,15 @@ export class HarnessStore {
       this.db.exec(
         "ALTER TABLE session_context_settings ADD COLUMN automatic INTEGER NOT NULL DEFAULT 1",
       );
+    this.db.exec(
+      "CREATE TABLE IF NOT EXISTS runtime_defaults (id INTEGER PRIMARY KEY CHECK (id=1), revision INTEGER NOT NULL, provider TEXT, modelId TEXT, thinkingLevel TEXT)",
+    );
+    this.db.exec(
+      "INSERT OR IGNORE INTO runtime_defaults (id, revision) VALUES (1, 0)",
+    );
     const columns = this.db.prepare("PRAGMA table_info(harnesses)").all();
+    if (!columns.some((column) => column.name === "thinkingLevel"))
+      this.db.exec("ALTER TABLE harnesses ADD COLUMN thinkingLevel TEXT");
     if (!columns.some((column) => column.name === "number")) {
       this.db.exec("BEGIN IMMEDIATE");
       try {
@@ -86,6 +104,7 @@ export class HarnessStore {
     provider = "",
     modelId = "",
     sessionId: string = randomUUID(),
+    thinkingLevel: ModelThinkingLevel | null = null,
   ) {
     this.db.exec("BEGIN IMMEDIATE");
     try {
@@ -104,11 +123,12 @@ export class HarnessStore {
         number,
         provider,
         modelId,
+        thinkingLevel,
         createdAt: new Date().toISOString(),
       };
       this.db
         .prepare(
-          "INSERT INTO harnesses(id,sessionId,projectId,name,createdAt,provider,modelId,number) VALUES (?,?,?,?,?,?,?,?)",
+          "INSERT INTO harnesses(id,sessionId,projectId,name,createdAt,provider,modelId,number,thinkingLevel) VALUES (?,?,?,?,?,?,?,?,?)",
         )
         .run(
           row.id,
@@ -119,6 +139,7 @@ export class HarnessStore {
           provider,
           modelId,
           number,
+          thinkingLevel,
         );
       this.db.exec("COMMIT");
       return row;
@@ -126,6 +147,40 @@ export class HarnessStore {
       this.db.exec("ROLLBACK");
       throw error;
     }
+  }
+  runtimeDefaults(): { revision: number; defaults: RuntimeDefaults | null } {
+    const row = this.db
+      .prepare("SELECT * FROM runtime_defaults WHERE id=1")
+      .get() as {
+      revision: number;
+      provider: string | null;
+      modelId: string | null;
+      thinkingLevel: ModelThinkingLevel | null;
+    };
+    return {
+      revision: row.revision,
+      defaults:
+        row.provider && row.modelId
+          ? {
+              model: { provider: row.provider, modelId: row.modelId },
+              thinkingLevel: row.thinkingLevel ?? undefined,
+            }
+          : null,
+    };
+  }
+  setRuntimeDefaults(revision: number, defaults: RuntimeDefaults | null) {
+    return (
+      this.db
+        .prepare(
+          "UPDATE runtime_defaults SET revision=revision+1, provider=?, modelId=?, thinkingLevel=? WHERE id=1 AND revision=?",
+        )
+        .run(
+          defaults?.model.provider ?? null,
+          defaults?.model.modelId ?? null,
+          defaults?.thinkingLevel ?? null,
+          revision,
+        ).changes === 1
+    );
   }
   compaction(sessionId: string) {
     const row = this.db

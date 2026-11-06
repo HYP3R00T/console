@@ -95,6 +95,54 @@ export function registerHarnessRoutes(
           .code(201)
           .send(await service.operation(() => service.create(req.params.id))),
     );
+    routes.get("/v1/machine/runtime-defaults", () =>
+      service.operation(() => service.runtimeDefaults()),
+    );
+    routes.put<{
+      Body: {
+        revision: number;
+        defaults: {
+          model: { provider: string; modelId: string };
+          thinkingLevel?: string;
+        } | null;
+      };
+    }>(
+      "/v1/machine/runtime-defaults",
+      {
+        schema: {
+          body: {
+            type: "object",
+            required: ["revision", "defaults"],
+            additionalProperties: false,
+            properties: {
+              revision: { type: "integer", minimum: 0 },
+              defaults: {
+                anyOf: [
+                  { type: "null" },
+                  {
+                    type: "object",
+                    required: ["model"],
+                    additionalProperties: false,
+                    properties: {
+                      model,
+                      thinkingLevel: {
+                        type: "string",
+                        minLength: 1,
+                        maxLength: 40,
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+      (req) =>
+        service.operation(() =>
+          service.updateRuntimeDefaults(req.body.revision, req.body.defaults),
+        ),
+    );
     routes.get("/v1/standalone", () =>
       service.operation(() => service.listStandalone()),
     );

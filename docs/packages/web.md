@@ -68,3 +68,14 @@ Tests in `test/` cover connection isolation/cancellation, remembered bookmarks, 
 For a production build, run `pnpm build`, then `pnpm --filter @console/web start`. Development uses the owner's separately running `mise run dev:web`; do not restart it without permission.
 
 Machine Archives lists individually archived conversations and archived projects, hiding empty sections. Delete all conversations confirms a snapshot of the listed conversations, retries dependent parents after deleting archived descendants, and reports partial failures; blocked items remain archived. Restore returns a conversation to its original scope. Permanent conversation deletion warns that messages, attachments and saved work state are erased; dependent forks and busy sessions block deletion. Archived projects must be restored before conversation restoration. Project archives retain their existing restore workflow; permanent project deletion is not implemented. Pending interrupted deletion cannot be restored and can be retried. Permanent deletion is not performed by the row Archive action.
+
+## Runtime defaults
+
+Machine settings → Runtime defaults saves the model and optional thinking level for new conversations on that backend. Connected settings pages refresh automatically and preserve unsaved edits when another client changes the defaults. New chat drafts show the eligible machine default and let users pick another model before sending.
+
+## Commands and client preferences
+
+- The bottom bar opens the command palette and shows its current shortcut, which defaults to Ctrl/Command+K. Search commands and saved machines. Available commands follow the current route and connection. New conversation opens a draft on the current machine and preserves the project and session scope when present.
+- Client preferences → Keyboard shortcuts changes, removes or resets bindings. Shortcuts use Ctrl or Command with a letter or digit and optional Alt or Shift. Duplicate bindings are rejected. Browsers or the OS may reserve some combinations.
+- The command catalog and default bindings live in `src/lib/commands.ts`. Shortcut overrides use `console.shortcuts.v1` in browser local storage. Appearance uses the existing `theme` key. Navigation memory uses `console.navigation.v1`. Sidebar dimensions and visibility last for the open client session.
+- Client preferences work offline and are shared across machines viewed in the same browser. Machine runtime defaults are saved by each backend and shared with its connected clients.

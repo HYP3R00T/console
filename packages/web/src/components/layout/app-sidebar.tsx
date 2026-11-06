@@ -3,7 +3,9 @@
 import {
   Archive,
   ArrowLeft,
+  Bot,
   Folder,
+  Keyboard,
   KeyRound,
   Palette,
   Settings2,
@@ -53,6 +55,11 @@ export function AppSidebar() {
                   href: "/settings/appearance",
                   icon: Palette,
                 },
+                {
+                  label: "Keyboard shortcuts",
+                  href: "/settings/shortcuts",
+                  icon: Keyboard,
+                },
               ].map(({ label, href, icon: Icon }) => (
                 <SidebarAction
                   key={href}
@@ -75,6 +82,7 @@ export function AppSidebar() {
             >
               {[
                 { id: "providers", label: "Providers", icon: KeyRound },
+                { id: "runtime", label: "Runtime defaults", icon: Bot },
                 { id: "projects", label: "Projects", icon: Folder },
                 { id: "archives", label: "Archives", icon: Archive },
               ].map(({ id, label, icon: Icon }) => {

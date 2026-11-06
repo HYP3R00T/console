@@ -200,7 +200,7 @@ export class HarnessService {
           "Creation identity belongs to a project session.",
         );
       const record =
-        existing ?? this.store.insert(standaloneOwner, "", "", creationId);
+        existing ?? (await this.insertSession(standaloneOwner, creationId));
       if (this.maintaining.has(record.sessionId))
         throw new HarnessError(503, "Session maintenance is in progress.");
       const harness = await this.ready(record);
@@ -243,19 +243,82 @@ export class HarnessService {
     return selected;
   }
 
+  async runtimeDefaults() {
+    const { models } = await this.providers.favorites();
+    return { ...this.store.runtimeDefaults(), models };
+  }
+
+  async updateRuntimeDefaults(
+    revision: number,
+    defaults: { model: ModelRef; thinkingLevel?: string } | null,
+  ) {
+    const level = defaults?.thinkingLevel as ModelThinkingLevel | undefined;
+    if (defaults) {
+      const selected = await this.model(defaults.model);
+      if (level !== undefined && !selected.thinkingLevels.includes(level))
+        throw new HarnessError(
+          400,
+          "This thinking level is unavailable for the selected model.",
+        );
+    }
+    if (
+      !this.store.setRuntimeDefaults(
+        revision,
+        defaults && { model: defaults.model, thinkingLevel: level },
+      )
+    )
+      throw new HarnessError(
+        409,
+        "Defaults changed. Reload settings and try again.",
+      );
+    return this.store.runtimeDefaults();
+  }
+
+  private async availableDefaults() {
+    const { defaults } = this.store.runtimeDefaults();
+    if (!defaults) return undefined;
+    const { models } = await this.providers.favorites();
+    const selected = models.find(
+      (model) =>
+        model.provider === defaults.model.provider &&
+        model.id === defaults.model.modelId,
+    );
+    if (!selected) return undefined;
+    return {
+      model: defaults.model,
+      thinkingLevel:
+        defaults.thinkingLevel &&
+        selected.thinkingLevels.includes(defaults.thinkingLevel)
+          ? defaults.thinkingLevel
+          : undefined,
+    };
+  }
+
+  private async insertSession(
+    projectId: string,
+    creationId?: string,
+    model?: ModelRef,
+  ) {
+    const defaults = model
+      ? { model, thinkingLevel: undefined }
+      : await this.availableDefaults();
+    if (projectId !== standaloneOwner) this.projects.assertWritable(projectId);
+    return this.store.insert(
+      projectId,
+      defaults?.model.provider,
+      defaults?.model.modelId,
+      creationId,
+      defaults?.thinkingLevel,
+    );
+  }
+
   async ensureDefault(projectId: string) {
     this.projects.assertWritable(projectId);
     const project = this.projects.store.get(projectId);
     if (!project) throw new HarnessError(404, "Project not found.");
     const record =
-      this.store.list(projectId)[0] ?? this.store.insert(projectId);
-    await this.initialize(
-      record,
-      project.path,
-      record.modelId
-        ? { provider: record.provider, modelId: record.modelId }
-        : undefined,
-    );
+      this.store.list(projectId)[0] ?? (await this.insertSession(projectId));
+    await this.initialize(record, project.path);
     return record;
   }
   create(projectId: string, model?: ModelRef) {
@@ -265,23 +328,20 @@ export class HarnessService {
     const project = await this.project(projectId);
     if (model) await this.model(model);
     await this.ensureDefault(projectId);
-    this.projects.assertWritable(projectId);
-    const record = this.store.insert(
-      projectId,
-      model?.provider,
-      model?.modelId,
-    );
-    await this.initialize(record, project.path, model);
+    const record = await this.insertSession(projectId, undefined, model);
+    await this.initialize(record, project.path);
     return record;
   }
-  private async initialize(
-    record: HarnessRecord,
-    cwd: string,
-    model: ModelRef | undefined,
-  ) {
+  private async initialize(record: HarnessRecord, cwd: string) {
     const harness = await this.runtime.open(record.sessionId);
     return harness.root(context, {
-      agent: { ...(model ? { model } : {}), cwd },
+      agent: {
+        model: record.modelId
+          ? { provider: record.provider, modelId: record.modelId }
+          : undefined,
+        thinkingLevel: record.thinkingLevel ?? undefined,
+        cwd,
+      },
       init: async (tx, id) => {
         const info = await tx.doc(ConversationInfo, id);
         info.name = record.projectId === standaloneOwner ? record.name : "Main";
@@ -297,16 +357,7 @@ export class HarnessService {
       record.projectId === standaloneOwner
         ? await this.runtime.standaloneWorkspace(record.sessionId)
         : (await this.projects.get(record.projectId)).path;
-    await this.initialize(
-      record,
-      cwd,
-      record.modelId
-        ? {
-            provider: record.provider,
-            modelId: record.modelId,
-          }
-        : undefined,
-    );
+    await this.initialize(record, cwd);
     return this.runtime.open(record.sessionId);
   }
   async session(sessionId: string) {
@@ -372,14 +423,17 @@ export class HarnessService {
       const project = await this.project(record.projectId);
       const root = await harness.root(context);
       const agent = await harness.snapshot(AgentDoc, root.id, context);
+      const defaults = await this.availableDefaults();
+      this.projects.assertWritable(record.projectId);
       let name = "Conversation";
       const conversation = await harness.createConversation(
         {
           ownership: { kind: "ownerless" },
           agent: {
-            ...(agent?.model
-              ? { model: agent.model, thinkingLevel: agent.thinkingLevel }
-              : {}),
+            model: defaults?.model ?? agent?.model,
+            thinkingLevel: defaults
+              ? defaults.thinkingLevel
+              : agent?.thinkingLevel,
             cwd: project.path,
           },
           init: async (tx, id) => {

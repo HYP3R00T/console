@@ -105,3 +105,9 @@ Before the first 1.5 backend start, stop the backend and back up the complete Co
 Partial answer/tool progress is now persisted within 1,000 ms by default; a crash can lose that recent progress. In-flight model requests interrupted by a crash consume retry attempts, and exhausted retries or restart limits end visibly rather than parking forever. Clean close and browser disconnect retain their existing behavior.
 
 `test/durable-migration.test.ts` restores a disposable 1.4 fixture, verifies inherited history, tool output, instructions, selected tools, forks, new writes and reopening, checks bounded-history pagination, and compares the SQLite schema before exercising offline deletion. The full suite also covers SSE delivery, queueing, archives and abrupt tool-result recovery. Owner data is not migrated by these tests.
+
+## Runtime defaults
+
+`GET /v1/machine/runtime-defaults` returns the machine's saved model and optional thinking level, revision, and eligible favorite models. `PUT` accepts the current revision and a replacement `defaults` object, or `null` to clear the machine default. It rejects stale writes, unavailable models and unsupported thinking levels.
+
+New standalone conversations, session roots and project conversations copy the machine default when eligible. Existing conversations and retried creation IDs retain their stored configuration. An unavailable default remains saved but is skipped during creation. Without an eligible machine default, project conversations still inherit their session root's model and standalone or session roots may be unconfigured. An explicit model on message admission follows the usual conversation rules.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, usePathname } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import {
   type ReactNode,
   useEffect,
@@ -9,6 +9,12 @@ import {
   ViewTransition,
 } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
+import {
+  type CommandActions,
+  CommandPalette,
+} from "@/components/commands/command-palette";
+import { ShortcutPreferences } from "@/components/commands/shortcut-preferences";
+import { useConnection } from "@/components/connection-provider";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { DeviceRail } from "@/components/layout/device-rail";
@@ -53,7 +59,15 @@ function ShellLayout({
   contextKey: string;
 }) {
   const pathname = usePathname();
-  const { isMobile, open, setOpen, openMobile, setOpenMobile } = useSidebar();
+  const router = useRouter();
+  const { deviceId, projectId, sessionId } = useParams<{
+    deviceId?: string;
+    projectId?: string;
+    sessionId?: string;
+  }>();
+  const { client } = useConnection(deviceId);
+  const { isMobile, open, setOpen, openMobile, setOpenMobile, toggleSidebar } =
+    useSidebar();
   const chrome = useWorkspaceChrome();
   const active =
     chrome.conversation?.route === pathname ? chrome.conversation : undefined;
@@ -124,6 +138,41 @@ function ShellLayout({
   const identityLabel = active
     ? `${active.subtitle} / ${active.title}`
     : "Console";
+  const machine = deviceId && `/devices/${encodeURIComponent(deviceId)}`;
+  const project =
+    machine &&
+    projectId &&
+    `${machine}/projects/${encodeURIComponent(projectId)}`;
+  const draftScope =
+    project && sessionId
+      ? `${project}/sessions/${encodeURIComponent(sessionId)}`
+      : project || machine;
+  const commandActions: CommandActions = {
+    "navigation.home": () => router.push("/"),
+    "navigation.devices": () => router.push("/devices"),
+    "preferences.appearance": () => router.push("/settings/appearance"),
+    "preferences.shortcuts": () => router.push("/settings/shortcuts"),
+    "workspace.navigation": hasContext ? toggleSidebar : undefined,
+    "workspace.details": details
+      ? () => setInspectorOpen(!inspectorOpen)
+      : undefined,
+    "conversation.new":
+      client && draftScope
+        ? () => router.push(`${draftScope}/conversations/new`)
+        : undefined,
+    "machine.providers": machine
+      ? () => router.push(`${machine}/settings/providers`)
+      : undefined,
+    "machine.projects": machine
+      ? () => router.push(`${machine}/settings/projects`)
+      : undefined,
+    "machine.runtime": machine
+      ? () => router.push(`${machine}/settings/runtime`)
+      : undefined,
+    "machine.archives": machine
+      ? () => router.push(`${machine}/settings/archives`)
+      : undefined,
+  };
   const inspector = (
     <ViewTransition default="none" update="workspace-fade">
       <div className="h-full min-h-0">{details?.content}</div>
@@ -201,6 +250,7 @@ function ShellLayout({
           onOpenChange={isMobile ? setOpenMobile : setOpen}
           disabled={!hasContext}
         />
+        <CommandPalette actions={commandActions} />
         <ControlTooltip label={identityLabel}>
           <div className="min-w-0 flex-1 truncate text-xs">
             {active ? (
@@ -239,7 +289,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <WorkspaceChromeProvider>
       <SidebarProvider defaultOpen className="min-h-0! h-svh">
-        <ShellLayout contextKey={contextKey}>{children}</ShellLayout>
+        <ShortcutPreferences>
+          <ShellLayout contextKey={contextKey}>{children}</ShellLayout>
+        </ShortcutPreferences>
       </SidebarProvider>
     </WorkspaceChromeProvider>
   );
