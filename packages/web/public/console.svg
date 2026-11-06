@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>Console</title>
+  <style>
+    svg { color: #18181a; }
+    @media (prefers-color-scheme: dark) {
+      svg { color: #fafafa; }
+    }
+  </style>
+  <defs>
+    <path id="half" fill="currentColor" d="
+      M8 17.05 A3.3 3.3 0 0 1 11.3 13.75
+      L28.633095244 13.75 A3.3 3.3 0 0 1 30.966547622 14.716547622
+      L38.666547622 22.416547622 A3.3 3.3 0 0 1 38.666547622 27.083452378
+      L36.333452378 29.416547622 A3.3 3.3 0 0 1 31.666547622 29.416547622
+      L26.966547622 24.716547622 A3.3 3.3 0 0 0 24.633095244 23.75
+      L20.3 23.75 A3.3 3.3 0 0 0 17 27.05
+      L17 34.45 A3.3 3.3 0 0 1 13.7 37.75
+      L11.3 37.75 A3.3 3.3 0 0 1 8 34.45Z"/>
+  </defs>
+  <use href="#half"/>
+  <use href="#half" transform="rotate(180 32 32)"/>
+</svg>

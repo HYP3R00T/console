@@ -26,16 +26,12 @@ export type InspectorTool = {
 };
 const toolGroups: Record<string, string> = {
   "coding-tools": "Coding",
-  "console.project-inspection": "Project inspection",
 };
 const purposes: Record<string, string> = {
   read: "Read a text file or inspect an image.",
   write: "Create or overwrite a file.",
   edit: "Replace matching text in an existing file.",
   bash: "Run shell commands with the backend user’s permissions.",
-  list_directory: "List files and folders in the project.",
-  read_file: "Read project text with line numbers.",
-  search_text: "Find exact text in project files.",
 };
 
 function ToolParameters({ tool }: { tool: InspectorTool }) {

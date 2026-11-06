@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, MonitorCog, Settings2 } from "lucide-react";
+import { MonitorCog, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { useState } from "react";
@@ -41,10 +41,14 @@ export function DeviceRail() {
           nativeButton={false}
           render={<Link href="/" onClick={navigate} />}
           aria-label="Home"
+          aria-current={pathname === "/" ? "page" : undefined}
           tooltip="Home"
           className={pathname === "/" ? "sidebar-selected" : undefined}
         >
-          <Home />
+          <span
+            aria-hidden="true"
+            className="size-7 shrink-0 bg-current mask-[url(/console.svg)] mask-contain mask-center mask-no-repeat"
+          />
         </SidebarAction>
       </div>
       <nav

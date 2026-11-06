@@ -240,7 +240,7 @@ export function ConversationInspector({
                       <div className="flex min-w-0 flex-col gap-4">
                         {data.guidance?.inspection && (
                           <InstructionEditor
-                            label="Project inspection rules"
+                            label="Project evidence rules"
                             scope="Tell the agent what to inspect and how to cite evidence in this project."
                             value={data.guidance.inspection.text}
                             customized={data.guidance.inspection.customized}

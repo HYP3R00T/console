@@ -79,7 +79,6 @@ export class HarnessService {
         return { id: project.id, name: project.name, directory: project.path };
       },
       undefined,
-      undefined,
       {
         projectInstructions: (sessionId) => {
           const projectId = store.session(sessionId)?.projectId;

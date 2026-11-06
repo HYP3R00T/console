@@ -6,31 +6,53 @@ import { join } from "node:path";
 import test from "node:test";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
-import { conversationView, messages } from "../src/harnesses/view.ts";
+import { messages } from "../src/harnesses/view.ts";
 import { fixture } from "./support/harness-fixture.ts";
 
-test("project tools supply real evidence, publish safe activity and survive reopen; standalone has no project tools", async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "console-project-tools-"));
+test("saved inspection tool selections resolve to their remaining coding tools", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "console-legacy-tools-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const path = join(directory, "project");
   await mkdir(path);
-  await writeFile(
-    join(path, "README.md"),
-    "A task tracker built with Fastify.\n",
-  );
+  await writeFile(join(path, "README.md"), "Project evidence\n");
   let f = await fixture(directory);
   t.after(() => f.app.close());
   const project = await f.projects.register("Task tracker", path);
-  const session = (await f.service.list(project.id)).sessions[0];
-  const { harness } = await f.service.session(session.sessionId);
-  const root = await harness.root(context);
-  const calls = [
-    fauxToolCall("list_directory", {}),
-    fauxToolCall("read_file", { path: "README.md" }),
-    fauxToolCall("search_text", { query: "Fastify" }),
-    fauxToolCall("read_file", { path: "../providers.sqlite" }),
-    fauxToolCall("read_file", { path: "missing.txt" }),
-  ];
+  const { sessionId } = (await f.service.list(project.id)).sessions[0];
+  // Simulate an allowlist saved before the inspection tools were retired.
+  f.projects.store.setAgentSettings(project.id, {
+    tools: ["read_file", "read", "search_text", "list_directory"],
+    instructions: "",
+  });
+  const conversation = await f.service.addConversation(sessionId);
+  const id = String(conversation.id);
+  await f.app.close();
+  f = await fixture(directory);
+
+  const configuration = await f.service.configuration(sessionId, id);
+  assert.deepEqual(
+    configuration.tools.map(({ name, enabled }) => [name, enabled]),
+    [
+      ["read", true],
+      ["write", false],
+      ["edit", false],
+      ["bash", false],
+    ],
+  );
+  const standalone = await f.service.createStandalone();
+  const { conversationId } = await f.service.standalone(standalone.sessionId);
+  assert.deepEqual(
+    (
+      await f.service.configuration(
+        standalone.sessionId,
+        String(conversationId),
+      )
+    ).tools
+      .filter(({ enabled }) => enabled)
+      .map(({ name }) => name),
+    ["read", "write", "edit", "bash"],
+  );
+
   f.faux.setResponses([
     (request) => {
       assert.deepEqual(
@@ -38,106 +60,31 @@ test("project tools supply real evidence, publish safe activity and survive reop
           .flatMap((message) =>
             message.role === "system" ? (message.toolsAdded ?? []) : [],
           )
-          .map((tool) => tool.name),
-        [
-          "read",
-          "write",
-          "edit",
-          "bash",
-          "list_directory",
-          "read_file",
-          "search_text",
-        ],
+          .map(({ name }) => name),
+        ["read"],
       );
       assert.ok(JSON.stringify(request.messages).includes("Task tracker"));
-      assert.ok(JSON.stringify(request.messages).includes(path));
-      return fauxAssistantMessage(calls, { stopReason: "toolUse" });
+      return fauxAssistantMessage(fauxToolCall("read", { path: "README.md" }), {
+        stopReason: "toolUse",
+      });
     },
     (request) => {
-      const results = request.messages.filter(
+      const result = request.messages.find(
         (message) => message.role === "toolResult",
       );
-      assert.equal(results.length, 5);
-      assert.ok(
-        JSON.stringify(results).includes(
-          "1: A task tracker built with Fastify.",
-        ),
-      );
-      assert.ok(JSON.stringify(results).includes("outside_project"));
-      assert.ok(JSON.stringify(results).includes("not_found"));
-      return fauxAssistantMessage(
-        "This project is a task tracker using Fastify (README.md:1).",
-      );
+      assert.equal(result?.isError, false);
+      assert.ok(JSON.stringify(result).includes("Project evidence"));
+      return fauxAssistantMessage("Read the project file.");
     },
   ]);
-  await f.service.submit(
-    session.sessionId,
-    String(root.id),
-    "Explain this project",
-    randomUUID(),
-    { model: { provider: "test", modelId: "test-model" } },
-  );
-  await harness.waitForIdle(context);
-  const history = await f.service.history(session.sessionId, String(root.id));
-  const projected = messages(history.items);
+  await f.service.submit(sessionId, id, "Explain this project", randomUUID(), {
+    model: { provider: "test", modelId: "test-model" },
+  });
+  await (await f.service.session(sessionId)).harness.waitForIdle(context);
   assert.ok(
-    projected.some(
-      (message) =>
-        message.text ===
-          "This project is a task tracker using Fastify (README.md:1)." &&
-        !message.failed,
+    messages((await f.service.history(sessionId, id)).items).some(
+      ({ text }) => text === "Read the project file.",
     ),
-  );
-  assert.equal(projected.filter((m) => m.role === "tool").length, 5);
-  assert.equal(
-    projected.filter((m) => m.role === "tool" && m.failed).length,
-    2,
-  );
-  assert.equal(projected.find((m) => m.toolCalls)?.toolCalls?.length, 5);
-  assert.ok(!JSON.stringify(projected).includes("secret-not-in-responses"));
-  const watch = await root.watch(context);
-  assert.equal(conversationView(watch.value).activeTools.length, 0);
-  await watch.stop();
-  await f.app.close();
-  f = await fixture(directory);
-  const restored = messages(
-    (await f.service.history(session.sessionId, String(root.id))).items,
-  );
-  assert.deepEqual(restored, projected);
-  assert.equal(f.faux.state.callCount, 0);
-  const standalone = await f.service.createStandalone();
-  const standaloneDetails = await f.service.standalone(standalone.sessionId);
-  f.faux.setResponses([
-    (request) => {
-      assert.equal(
-        request.messages.flatMap((message) =>
-          message.role === "system" ? (message.toolsAdded ?? []) : [],
-        ).length,
-        4,
-      );
-      assert.ok(!JSON.stringify(request.messages).includes(path));
-      return fauxAssistantMessage("Ordinary chat.");
-    },
-  ]);
-  await f.service.submit(
-    standalone.sessionId,
-    String(standaloneDetails.conversationId),
-    "Hello",
-    randomUUID(),
-    { model: { provider: "test", modelId: "test-model" } },
-  );
-  await (await f.service.session(standalone.sessionId)).harness.waitForIdle(
-    context,
-  );
-  assert.ok(
-    messages(
-      (
-        await f.service.history(
-          standalone.sessionId,
-          String(standaloneDetails.conversationId),
-        )
-      ).items,
-    ).some((message) => message.text === "Ordinary chat." && !message.failed),
   );
 });
 
@@ -159,7 +106,7 @@ test("crash after a committed tool result recovers without repeating that tool",
     import {fauxAssistantMessage,fauxToolCall} from ${JSON.stringify(aiUrl)};
     let descriptor;
     const f = await fixture(${JSON.stringify(directory)}, faux => faux.setResponses([
-      fauxAssistantMessage(fauxToolCall('read_file',{path:'README.md'}),{stopReason:'toolUse'}),
+      fauxAssistantMessage(fauxToolCall('read',{path:'README.md'}),{stopReason:'toolUse'}),
       async () => { process.send(descriptor); await new Promise(() => {}); }
     ]));
     const project = await f.projects.register('Recovery',${JSON.stringify(path)});

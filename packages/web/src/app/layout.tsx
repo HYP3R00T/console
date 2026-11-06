@@ -18,6 +18,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter-sans" });
 export const metadata: Metadata = {
   title: "Console",
   description: "Your devices. Your work.",
+  icons: [{ url: "/console.svg", type: "image/svg+xml", sizes: "any" }],
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
