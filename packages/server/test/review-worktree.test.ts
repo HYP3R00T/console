@@ -65,6 +65,14 @@ for (const sandbox of [false, true]) {
         url: configurationUrl,
         payload: { revision: configuration.json().revision, sandbox: true },
       });
+      if (
+        enabled.statusCode === 409 &&
+        process.env.CONSOLE_REQUIRE_SANDBOX_TEST !== "1"
+      ) {
+        assert.match(enabled.body, /Linux Bubblewrap/);
+        t.skip("Host does not permit Bubblewrap namespaces");
+        return;
+      }
       assert.equal(enabled.statusCode, 200, enabled.body);
     }
     const payload = {

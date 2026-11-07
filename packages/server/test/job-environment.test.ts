@@ -32,9 +32,24 @@ for (const sandbox of [false, true]) {
       { model: { provider: "test", modelId: "test-model" } },
       context,
     );
-    await root.commit(async (tx) => {
-      (await tx.doc(SandboxDoc, root.id)).enabled = sandbox;
-    }, context);
+    if (sandbox) {
+      const path = `/v1/sessions/${sessionId}/conversations/${root.id}/configuration`;
+      const configuration = await f.app.inject(path);
+      const enabled = await f.app.inject({
+        method: "PATCH",
+        url: path,
+        payload: { revision: configuration.json().revision, sandbox: true },
+      });
+      if (
+        enabled.statusCode === 409 &&
+        process.env.CONSOLE_REQUIRE_SANDBOX_TEST !== "1"
+      ) {
+        assert.match(enabled.body, /Linux Bubblewrap/);
+        t.skip("Host does not permit Bubblewrap namespaces");
+        return;
+      }
+      assert.equal(enabled.statusCode, 200, enabled.body);
+    }
     const job = await f.service.scheduleJob(
       sessionId,
       String(root.id),

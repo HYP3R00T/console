@@ -31,6 +31,8 @@ jobs:
   application-checks:
     name: Application checks
     runs-on: ubuntu-latest
+    env:
+      CONSOLE_REQUIRE_SANDBOX_TEST: "1"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -42,6 +44,12 @@ jobs:
           install_args: node pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Install and verify workspace sandbox
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap
+          bwrap --version
+          bwrap --unshare-all --unshare-user --disable-userns --cap-drop ALL --new-session --die-with-parent --ro-bind / / --proc /proc --dev /dev -- true
       - name: Check types
         run: pnpm typecheck
       - name: Run tests
