@@ -26,7 +26,7 @@ pnpm manages workspace dependencies and application scripts. Root scripts run ch
 **Important:** Application changes require type checks, tests and a production build. Production start commands require a completed build and must not replace the owner's running development processes.
 
 Sandbox integration tests require Linux Bubblewrap and permitted unprivileged namespaces; unsupported local hosts report explicit skips.
-CI installs Bubblewrap, verifies namespace creation and sets `CONSOLE_REQUIRE_SANDBOX_TEST=1`, so unavailable sandbox support fails the job instead of skipping coverage.
+CI installs Bubblewrap, loads an AppArmor user-namespace profile scoped to `/usr/bin/bwrap` on the disposable runner, verifies namespace creation and sets `CONSOLE_REQUIRE_SANDBOX_TEST=1`, so unavailable sandbox support fails the job instead of skipping coverage.
 
 ## Biome
 
