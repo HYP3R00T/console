@@ -1,5 +1,4 @@
-import { constants } from "node:fs";
-import { open } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { isAbsolute, posix } from "node:path";
 import type { Context } from "@earendil-works/chord";
 import { defineDoc } from "@earendil-works/pi-durable";
@@ -11,6 +10,8 @@ import {
   sshArguments,
   sshConnection,
 } from "@earendil-works/pi-env";
+
+import { OwnerConfiguration } from "../storage/owner-configuration.ts";
 
 export const RemoteWorkspaceDoc = defineDoc<{ profile: string | null }>({
   kind: "console.remote-workspace",
@@ -29,7 +30,22 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 function parseProfile(value: unknown): Profile {
-  if (!record(value)) throw new Error("Invalid SSH profile.");
+  if (
+    !record(value) ||
+    Object.keys(value).some(
+      (key) =>
+        ![
+          "host",
+          "hostKeyAlias",
+          "knownHostsFile",
+          "cwd",
+          "user",
+          "port",
+          "identityFile",
+        ].includes(key),
+    )
+  )
+    throw new Error("Invalid SSH profile.");
   const { host, hostKeyAlias, knownHostsFile, cwd, user, port, identityFile } =
     value;
   if (
@@ -58,15 +74,64 @@ function parseProfile(value: unknown): Profile {
   return { cwd, target };
 }
 
+export type SshConfiguration = {
+  profiles: Record<
+    string,
+    {
+      cwd: string;
+      host: string;
+      hostKeyAlias: string;
+      knownHostsFile: string;
+      user?: string;
+      port?: number;
+      identityFile?: string;
+    }
+  >;
+};
+
+export function parseSshConfiguration(value: unknown): SshConfiguration {
+  if (
+    !record(value) ||
+    Object.keys(value).some((key) => key !== "profiles") ||
+    !record(value.profiles) ||
+    Object.keys(value.profiles).length > 16
+  )
+    throw new Error("Invalid SSH configuration.");
+  return {
+    profiles: Object.fromEntries(
+      Object.entries(value.profiles).map(([name, entry]) => {
+        if (!/^[a-z][a-z0-9-]{0,23}$/.test(name))
+          throw new Error("Invalid SSH profile name.");
+        const { cwd, target } = parseProfile(entry);
+        return [name, { cwd, ...target }];
+      }),
+    ),
+  };
+}
+
 export class RemoteWorkspaces {
-  private readonly path: string;
+  private readonly configurationFile: OwnerConfiguration<SshConfiguration>;
   private profiles = new Map<string, Profile>();
   private connections = new Map<string, Connection>();
   private loading?: Promise<void>;
   private invalid = false;
 
   constructor(path: string) {
-    this.path = path;
+    this.configurationFile = new OwnerConfiguration(
+      path,
+      parseSshConfiguration,
+      { profiles: {} },
+    );
+  }
+
+  configuration() {
+    return this.configurationFile.read();
+  }
+
+  updateConfiguration(revision: string, configuration: unknown) {
+    return this.configurationFile.replace(revision, configuration, () =>
+      this.reload(),
+    );
   }
 
   start() {
@@ -74,11 +139,31 @@ export class RemoteWorkspaces {
     return this.loading;
   }
 
+  identity(name: string) {
+    const profile = this.profiles.get(name);
+    return profile
+      ? createHash("sha256").update(JSON.stringify(profile)).digest("hex")
+      : null;
+  }
+
   status() {
     return { profiles: [...this.profiles.keys()], invalid: this.invalid };
   }
 
+  async reload() {
+    const previous = this.start();
+    this.loading = previous.then(async () => {
+      this.close();
+      this.profiles.clear();
+      this.invalid = false;
+      await this.load();
+    });
+    await this.loading;
+    return this.status();
+  }
+
   async environment(name: string, context: Context) {
+    await this.start();
     const profile = this.profiles.get(name);
     if (!profile)
       throw new Error("The remote workspace profile is unavailable.");
@@ -117,38 +202,16 @@ export class RemoteWorkspaces {
 
   private async load() {
     try {
-      const file = await open(
-        this.path,
-        constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+      const snapshot = await this.configurationFile.read();
+      this.invalid = snapshot.invalid;
+      this.profiles = new Map(
+        Object.entries(snapshot.configuration?.profiles ?? {}).map(
+          ([name, value]) => [name, parseProfile(value)],
+        ),
       );
-      try {
-        const info = await file.stat();
-        if (
-          !info.isFile() ||
-          info.size > 64 * 1024 ||
-          (process.getuid &&
-            (info.uid !== process.getuid() || (info.mode & 0o077) !== 0))
-        )
-          throw new Error("Invalid SSH profile file permissions.");
-        const data: unknown = JSON.parse(await file.readFile("utf8"));
-        if (
-          !record(data) ||
-          !record(data.profiles) ||
-          Object.keys(data.profiles).length > 16
-        )
-          throw new Error("Invalid SSH profile configuration.");
-        this.profiles = new Map(
-          Object.entries(data.profiles).map(([name, value]) => {
-            if (!/^[a-z][a-z0-9-]{0,23}$/.test(name))
-              throw new Error("Invalid SSH profile name.");
-            return [name, parseProfile(value)];
-          }),
-        );
-      } finally {
-        await file.close();
-      }
-    } catch (error) {
-      this.invalid = (error as NodeJS.ErrnoException).code !== "ENOENT";
+    } catch {
+      this.invalid = true;
+      this.profiles.clear();
     }
   }
 }

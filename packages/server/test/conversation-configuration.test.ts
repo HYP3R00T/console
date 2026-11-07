@@ -349,7 +349,16 @@ test("native coding tools execute in the project; configuration is isolated, val
   const initial = await f.service.configuration(sessionId, id);
   assert.deepEqual(
     initial.tools.map((tool) => tool.name),
-    ["read", "write", "edit", "bash", "review_workspace"],
+    [
+      "read",
+      "write",
+      "edit",
+      "bash",
+      "review_workspace",
+      "reviewer_profiles",
+      "background_agent",
+      "stop_background_agent",
+    ],
   );
   const readTool = initial.tools.find((tool) => tool.name === "read");
   assert.ok(readTool);

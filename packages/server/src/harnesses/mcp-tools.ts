@@ -1,6 +1,4 @@
 import { createHash } from "node:crypto";
-import { constants } from "node:fs";
-import { open } from "node:fs/promises";
 import { dirname, isAbsolute } from "node:path";
 import { copyJson } from "@earendil-works/chord";
 import {
@@ -16,6 +14,7 @@ import {
   toLlmContent,
 } from "@earendil-works/pi-mcp";
 import { SandboxDoc } from "../execution/sandbox.ts";
+import { OwnerConfiguration } from "../storage/owner-configuration.ts";
 
 export const mcpExtensionName = "console.mcp";
 
@@ -40,6 +39,57 @@ function strings(value: unknown): value is string[] {
   );
 }
 
+export type McpConfiguration = {
+  servers: Record<
+    string,
+    { command: string; args?: string[]; env?: string[]; tools?: string[] }
+  >;
+};
+
+export function parseMcpConfiguration(value: unknown): McpConfiguration {
+  if (
+    !record(value) ||
+    Object.keys(value).some((key) => key !== "servers") ||
+    !record(value.servers) ||
+    Object.keys(value.servers).length > 8
+  )
+    throw new Error("Invalid MCP configuration.");
+  const servers = Object.fromEntries(
+    Object.entries(value.servers).map(([name, entry]) => {
+      if (
+        !/^[a-z][a-z0-9-]{0,23}$/.test(name) ||
+        !record(entry) ||
+        Object.keys(entry).some(
+          (key) => !["command", "args", "env", "tools"].includes(key),
+        ) ||
+        typeof entry.command !== "string" ||
+        !isAbsolute(entry.command) ||
+        entry.command.includes("\0") ||
+        (entry.args !== undefined &&
+          (!strings(entry.args) ||
+            entry.args.some((arg) => arg.includes("\0")))) ||
+        (entry.env !== undefined &&
+          (!strings(entry.env) ||
+            entry.env.some((key) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)))) ||
+        (entry.tools !== undefined &&
+          (!strings(entry.tools) ||
+            entry.tools.some((tool) => !tool || tool.includes("\0"))))
+      )
+        throw new Error("Invalid MCP server definition.");
+      return [
+        name,
+        {
+          command: entry.command,
+          ...(entry.args !== undefined && { args: entry.args }),
+          ...(entry.env !== undefined && { env: entry.env }),
+          ...(entry.tools !== undefined && { tools: entry.tools }),
+        },
+      ];
+    }),
+  );
+  return { servers };
+}
+
 function toolName(server: string, tool: string) {
   const raw = `mcp__${server}__${tool}`;
   if (/^[\w-]{1,64}$/.test(raw)) return raw;
@@ -49,6 +99,7 @@ function toolName(server: string, tool: string) {
 /** One backend-owned connection per configured server, shared by open Harnesses. */
 export class McpTools {
   private readonly path: string;
+  private readonly configurationFile: OwnerConfiguration<McpConfiguration>;
   private servers: Server[] = [];
   private listeners = new Set<() => void>();
   private starting?: Promise<void>;
@@ -57,6 +108,21 @@ export class McpTools {
 
   constructor(path: string) {
     this.path = path;
+    this.configurationFile = new OwnerConfiguration(
+      path,
+      parseMcpConfiguration,
+      { servers: {} },
+    );
+  }
+
+  configuration() {
+    return this.configurationFile.read();
+  }
+
+  updateConfiguration(revision: string, configuration: unknown) {
+    return this.configurationFile.replace(revision, configuration, () =>
+      this.reload(),
+    );
   }
 
   start() {
@@ -96,13 +162,36 @@ export class McpTools {
     return this.status();
   }
 
+  async reload() {
+    const previous = this.start();
+    this.starting = previous.then(async () => {
+      if (this.closed) throw new Error("MCP manager is closed.");
+      await Promise.all(this.servers.map((server) => server.loading));
+      const previousServers = this.servers;
+      this.servers = [];
+      const clients = previousServers.map((server) => {
+        const client = server.client;
+        server.client = undefined;
+        server.tools = [];
+        return client;
+      });
+      this.invalid = false;
+      this.publish();
+      await Promise.allSettled(clients.map((client) => client?.close()));
+      await this.load();
+      this.publish();
+    });
+    await this.starting;
+    return this.status();
+  }
+
   async close() {
     this.closed = true;
     this.listeners.clear();
     await Promise.allSettled(
       this.servers.map((server) => server.client?.close()),
     );
-    await this.starting;
+    await this.starting?.catch(() => undefined);
   }
 
   private publish() {
@@ -111,56 +200,22 @@ export class McpTools {
 
   private async load() {
     try {
-      const file = await open(
-        this.path,
-        constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+      const snapshot = await this.configurationFile.read();
+      this.invalid = snapshot.invalid;
+      this.servers = Object.entries(snapshot.configuration?.servers ?? {}).map(
+        ([name, entry]) => ({
+          name,
+          command: entry.command,
+          args: entry.args ?? [],
+          env: entry.env ?? [],
+          allow: entry.tools,
+          tools: [],
+        }),
       );
-      try {
-        const info = await file.stat();
-        if (
-          !info.isFile() ||
-          info.size > 64 * 1024 ||
-          (process.getuid &&
-            (info.uid !== process.getuid() || (info.mode & 0o077) !== 0))
-        )
-          throw new Error("Invalid MCP configuration file permissions.");
-        const data: unknown = JSON.parse(await file.readFile("utf8"));
-        if (
-          !record(data) ||
-          !record(data.servers) ||
-          Object.keys(data.servers).length > 8
-        )
-          throw new Error("Invalid MCP configuration.");
-        this.servers = Object.entries(data.servers).map(([name, entry]) => {
-          if (
-            !/^[a-z][a-z0-9-]{0,23}$/.test(name) ||
-            !record(entry) ||
-            typeof entry.command !== "string" ||
-            !isAbsolute(entry.command) ||
-            (entry.args !== undefined && !strings(entry.args)) ||
-            (entry.env !== undefined &&
-              (!strings(entry.env) ||
-                entry.env.some(
-                  (key) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key),
-                ))) ||
-            (entry.tools !== undefined && !strings(entry.tools))
-          )
-            throw new Error("Invalid MCP server definition.");
-          return {
-            name,
-            command: entry.command,
-            args: entry.args ?? [],
-            env: entry.env ?? [],
-            allow: entry.tools,
-            tools: [],
-          };
-        });
-      } finally {
-        await file.close();
-      }
       await Promise.all(this.servers.map((server) => this.connect(server)));
-    } catch (error) {
-      this.invalid = (error as NodeJS.ErrnoException).code !== "ENOENT";
+    } catch {
+      this.invalid = true;
+      this.servers = [];
     }
   }
 

@@ -8,6 +8,7 @@ import { useWorkspaceChrome } from "@/components/layout/workspace-chrome";
 import { useMachineProjects } from "@/components/projects/projects-provider";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { standaloneConversationPath } from "@/lib/conversation-path";
 import { type ChatAttachment, wireAttachments } from "./attachments";
 import { ChatComposer } from "./chat-composer";
 import { ConversationInspector } from "./conversation-inspector";
@@ -23,6 +24,7 @@ import {
 } from "./scroll-anchor";
 import { type ModelRef, useChatModels } from "./use-chat-models";
 import { useConversation } from "./use-conversation";
+import type { Conversation } from "./use-project-sessions";
 import { sessionsChanged } from "./use-project-sessions";
 
 type Pending = {
@@ -41,6 +43,7 @@ export function Chat({
   subtitle,
   projectId,
   ancestry,
+  branches,
 }: {
   deviceId: string;
   sessionId: string;
@@ -49,6 +52,7 @@ export function Chat({
   subtitle: string;
   projectId?: string;
   ancestry?: { conversationId: number; at: number; name?: string };
+  branches?: Conversation[];
 }) {
   const route = usePathname();
   const { setConversation, setInspector } = useWorkspaceChrome();
@@ -82,6 +86,22 @@ export function Chat({
   const projectSession = projectId
     ? `/devices/${deviceId}/projects/${projectId}/sessions/${sessionId}/conversations`
     : undefined;
+  const conversationHref = (id: number | string) =>
+    projectSession
+      ? `${projectSession}/${id}`
+      : standaloneConversationPath(
+          `/devices/${deviceId}/conversations`,
+          sessionId,
+          id,
+        );
+  const related = branches?.filter(
+    (branch) =>
+      branch.id !== Number(conversationId) &&
+      (branch.id === ancestry?.conversationId ||
+        branch.parent?.conversationId === Number(conversationId) ||
+        (ancestry &&
+          branch.parent?.conversationId === ancestry.conversationId)),
+  );
   const working = !!stream?.data?.busy || !!stream?.data?.queued;
   const execution = stream?.data?.execution;
   const modelSelection = useChatModels(
@@ -219,7 +239,7 @@ export function Chat({
     }
   }
   async function fork(entryId: number) {
-    if (!projectSession || forking) return;
+    if (forking) return;
     const creationId =
       forkRequest.current?.entryId === entryId
         ? forkRequest.current.creationId
@@ -349,13 +369,13 @@ export function Chat({
           Plan mode · Read-only workspace tools
         </p>
       )}
-      {ancestry && projectSession && (
+      {ancestry && (
         <p className="text-xs text-muted-foreground">
           Forked from{" "}
           {ancestry.name ? (
             <Link
               className="underline underline-offset-2"
-              href={`${projectSession}/${ancestry.conversationId}`}
+              href={conversationHref(ancestry.conversationId)}
             >
               {ancestry.name}
             </Link>
@@ -364,6 +384,23 @@ export function Chat({
           )}
           {" · "}Entry {ancestry.at}
         </p>
+      )}
+      {!!related?.length && (
+        <nav
+          aria-label="Related conversation branches"
+          className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+        >
+          <span>Branches:</span>
+          {related.map((branch) => (
+            <Link
+              key={branch.id}
+              href={conversationHref(branch.id)}
+              className="underline underline-offset-2"
+            >
+              {branch.name}
+            </Link>
+          ))}
+        </nav>
       )}
       {stream?.status && stream.status !== "Live" && (
         <p role="status" className="text-xs text-muted-foreground">
@@ -421,9 +458,7 @@ export function Chat({
                   liveTools={execution?.tools}
                   path={path}
                   request={state.request}
-                  fork={
-                    projectSession ? (entryId) => void fork(entryId) : undefined
-                  }
+                  fork={(entryId) => void fork(entryId)}
                   forkDisabled={forking}
                 />
               )),
@@ -463,12 +498,12 @@ export function Chat({
           {error}
         </p>
       )}
-      {createdFork && projectSession && (
+      {createdFork && (
         <p role="status" className="text-xs text-muted-foreground">
           Fork created.{" "}
           <Link
             className="underline underline-offset-2"
-            href={`${projectSession}/${createdFork.id}`}
+            href={conversationHref(createdFork.id)}
           >
             Open {createdFork.name}
           </Link>

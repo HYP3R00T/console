@@ -1,4 +1,5 @@
 "use client";
+
 import { ChevronRight } from "lucide-react";
 import {
   startTransition,
@@ -27,12 +28,15 @@ import type { useBackendRequest } from "@/hooks/use-backend-request";
 import type { Execution } from "./conversation-state";
 import { executionNeedsAttention } from "./execution-labels";
 import { ExecutionStatus } from "./execution-status";
+import { InspectorAgents } from "./inspector-agents";
 import { type ContextSettings, InspectorContext } from "./inspector-context";
 import {
   type Guidance,
   InstructionEditor,
   RuntimeGuidance,
 } from "./inspector-instructions";
+import { InspectorRuntimePolicy } from "./inspector-runtime-policy";
+import { InspectorTaskHistory } from "./inspector-task-history";
 import {
   InspectorTasks,
   PostRunSettings,
@@ -44,9 +48,13 @@ import {
   type RemoteWorkspace,
 } from "./inspector-workspace";
 import { MessageMarkdown } from "./message-markdown";
+import type { RuntimePolicy } from "./runtime-policy-form";
+import { ScheduleJob } from "./schedule-job";
 import type { ChatModel, ModelRef } from "./use-chat-models";
 
 type Change = {
+  managedExtensions?: string[];
+  runtimePolicy?: RuntimePolicy | null;
   mcp?: boolean;
   codeMode?: boolean;
   sandbox?: boolean;
@@ -63,8 +71,16 @@ type Change = {
   worktree?: string | null;
   planMode?: boolean;
   postRunCommand?: string | null;
+  postRunRepairLimit?: number;
 };
 type Configuration = {
+  managedExtensions?: {
+    installed?: { name: string }[];
+    selected: string[];
+    suspended: boolean;
+    problem?: string;
+  };
+  runtimePolicy?: RuntimePolicy;
   mcpEnabled?: boolean;
   mcpSuspended?: boolean;
   mcp?: {
@@ -81,6 +97,7 @@ type Configuration = {
   context?: ContextSettings;
   plan?: { active: boolean; markdown?: string };
   postRunCommand?: string | null;
+  postRunRepairLimit?: number;
   worktree?: string | null;
   toolSource: "default" | "conversation";
   instructions: string;
@@ -114,6 +131,7 @@ export function ConversationInspector({
   const [tasksOpen, setTasksOpen] = useState(false);
   const [error, setError] = useState<string>();
   const [loadError, setLoadError] = useState<string>();
+  const [reloadNotice, setReloadNotice] = useState<string>();
   const generation = useRef(0);
   const loaded = useRef(false);
   const savingRef = useRef(false);
@@ -199,16 +217,32 @@ export function ConversationInspector({
   const busy = working || compacting;
   const disabled = busy || saving;
   const remote = data?.remote;
-  const showRemote = !!(
-    remote?.profiles.length ||
-    remote?.profile ||
-    remote?.invalid
-  );
+  const showRemote = !!remote;
+  async function reloadConnections(target: "mcp" | "remote") {
+    setReloadNotice(undefined);
+    await mutate(async () => {
+      const status = await request<{ invalid: boolean }>(
+        `${path}/${target}/reload`,
+        { method: "POST", body: "{}" },
+      );
+      setData(await request<Configuration>(`${path}/configuration`));
+      setReloadNotice(
+        status.invalid
+          ? "Configuration could not be loaded. Previous connections were removed."
+          : `${target === "mcp" ? "MCP servers" : "SSH profiles"} reloaded for this backend.`,
+      );
+    });
+  }
   return (
     <div className="flex h-full min-h-0 flex-col p-4">
       {(error || loadError) && (
         <p role="alert" className="pb-2 text-xs text-destructive">
           {error || loadError}
+        </p>
+      )}
+      {reloadNotice && (
+        <p role="status" className="pb-2 text-xs">
+          {reloadNotice}
         </p>
       )}
       {!data && !loadError && <ConversationInspectorLoading />}
@@ -287,6 +321,7 @@ export function ConversationInspector({
                     saveSandbox={(sandbox) => update({ sandbox })}
                     remote={showRemote ? remote : undefined}
                     saveRemote={(remoteProfile) => update({ remoteProfile })}
+                    reloadRemote={() => reloadConnections("remote")}
                     hostMcp={data.mcpEnabled || data.mcpSuspended}
                   />
                 )}
@@ -315,82 +350,167 @@ export function ConversationInspector({
                     </CardFooter>
                   </Card>
                 )}
-                {data.mcp &&
-                  (data.mcp.invalid ||
-                    data.mcp.servers.length > 0 ||
-                    data.mcpEnabled) && (
-                    <Card size="sm">
-                      <CardHeader>
-                        <CardTitle>MCP tools</CardTitle>
-                        <CardDescription>
-                          Tools from servers configured on this backend. Calls
-                          run with each server’s own permissions.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        {data.mcp.invalid && (
-                          <p role="alert">
-                            The backend MCP configuration is invalid or has
-                            unsafe file permissions.
-                          </p>
-                        )}
-                        <ul className="flex flex-col gap-1">
-                          {data.mcp.servers.map((server) => (
-                            <li key={server.name}>
-                              {server.name} ·{" "}
-                              {server.connected
-                                ? `${server.tools} tools`
-                                : "Disconnected"}
-                            </li>
-                          ))}
-                        </ul>
-                      </CardContent>
-                      <CardFooter className="flex-wrap gap-2">
+                {data.mcp && (
+                  <Card size="sm">
+                    <CardHeader>
+                      <CardTitle>MCP tools</CardTitle>
+                      <CardDescription>
+                        Tools from servers configured on this backend. Calls run
+                        with each server’s own permissions.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {data.mcp.invalid && (
+                        <p role="alert">
+                          The backend MCP configuration is invalid or has unsafe
+                          file permissions.
+                        </p>
+                      )}
+                      {data.mcp.servers.length === 0 && !data.mcp.invalid && (
+                        <p>No MCP servers are configured.</p>
+                      )}
+                      <p>
+                        Reload reads the backend configuration file and closes
+                        shared connections. Active calls in any chat may be
+                        interrupted.
+                      </p>
+                      <ul className="flex flex-col gap-1">
+                        {data.mcp.servers.map((server) => (
+                          <li key={server.name}>
+                            {server.name} ·{" "}
+                            {server.connected
+                              ? `${server.tools} tools`
+                              : "Disconnected"}
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                    <CardFooter className="flex-wrap gap-2">
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={disabled}
+                        onClick={() => void reloadConnections("mcp")}
+                      >
+                        Reload MCP configuration
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={
+                          disabled ||
+                          !!data.plan?.active ||
+                          (!data.mcpEnabled &&
+                            (!!data.sandbox ||
+                              !!data.remote?.profile ||
+                              !data.mcp.servers.some(
+                                (server) =>
+                                  server.connected && server.tools > 0,
+                              )))
+                        }
+                        onClick={() => void update({ mcp: !data.mcpEnabled })}
+                      >
+                        {data.mcpEnabled ? "Disable MCP" : "Enable MCP"}
+                      </Button>
+                      {data.mcp.servers.some((server) => !server.connected) && (
                         <Button
                           size="xs"
-                          variant="outline"
-                          disabled={
-                            disabled ||
-                            !!data.plan?.active ||
-                            (!data.mcpEnabled &&
-                              (!!data.sandbox ||
-                                !!data.remote?.profile ||
-                                !data.mcp.servers.some(
-                                  (server) =>
-                                    server.connected && server.tools > 0,
-                                )))
+                          variant="ghost"
+                          disabled={saving}
+                          onClick={() =>
+                            void mutate(async () => {
+                              await request(`${path}/mcp/reconnect`, {
+                                method: "POST",
+                                body: "{}",
+                              });
+                              setData(
+                                await request<Configuration>(
+                                  `${path}/configuration`,
+                                ),
+                              );
+                            })
                           }
-                          onClick={() => void update({ mcp: !data.mcpEnabled })}
                         >
-                          {data.mcpEnabled ? "Disable MCP" : "Enable MCP"}
+                          Reconnect servers
                         </Button>
-                        {data.mcp.servers.some(
-                          (server) => !server.connected,
-                        ) && (
-                          <Button
-                            size="xs"
-                            variant="ghost"
-                            disabled={saving}
-                            onClick={() =>
-                              void mutate(async () => {
-                                await request(`${path}/mcp/reconnect`, {
-                                  method: "POST",
-                                  body: "{}",
-                                });
-                                setData(
-                                  await request<Configuration>(
-                                    `${path}/configuration`,
-                                  ),
-                                );
-                              })
-                            }
+                      )}
+                    </CardFooter>
+                  </Card>
+                )}
+                {data.managedExtensions && (
+                  <Card size="sm">
+                    <CardHeader>
+                      <CardTitle>Managed extensions</CardTitle>
+                      <CardDescription>
+                        Trusted backend code, installed in machine settings.
+                        Selection enables hooks and makes tools available;
+                        existing tool restrictions still apply. Plan mode
+                        suspends these extensions.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-2">
+                      {data.managedExtensions.problem && (
+                        <p role="alert">{data.managedExtensions.problem}</p>
+                      )}
+                      {[
+                        ...new Set([
+                          ...(data.managedExtensions.installed ?? []).map(
+                            (item) => item.name,
+                          ),
+                          ...data.managedExtensions.selected,
+                        ]),
+                      ].map((name) => {
+                        const selected =
+                          data.managedExtensions!.selected.includes(name);
+                        const installed =
+                          data.managedExtensions!.installed?.some(
+                            (item) => item.name === name,
+                          );
+                        return (
+                          <div
+                            key={name}
+                            className="flex flex-wrap items-center gap-2"
                           >
-                            Reconnect servers
-                          </Button>
+                            <span>
+                              {name}
+                              {!installed && " · unavailable"}
+                            </span>
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              disabled={
+                                disabled ||
+                                data.plan?.active ||
+                                (!selected &&
+                                  (!installed ||
+                                    data.sandbox ||
+                                    !!data.remote?.profile))
+                              }
+                              onClick={() =>
+                                void update({
+                                  managedExtensions: selected
+                                    ? data.managedExtensions!.selected.filter(
+                                        (item) => item !== name,
+                                      )
+                                    : [
+                                        ...data.managedExtensions!.selected,
+                                        name,
+                                      ],
+                                })
+                              }
+                            >
+                              {selected ? `Deselect ${name}` : `Select ${name}`}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                      {!data.managedExtensions.installed?.length &&
+                        !data.managedExtensions.selected.length && (
+                          <p>No managed extensions installed.</p>
                         )}
-                      </CardFooter>
-                    </Card>
-                  )}
+                    </CardContent>
+                  </Card>
+                )}
                 <InspectorTools
                   tools={data.tools}
                   custom={data.toolSource === "conversation"}
@@ -484,11 +604,39 @@ export function ConversationInspector({
                     request={request}
                     active={tasksOpen}
                   />
-                  <ScheduleReview path={path} request={request} />
+                  <InspectorAgents
+                    key={`agents:${path}`}
+                    path={path}
+                    request={request}
+                    active={tasksOpen}
+                  />
+                  <InspectorTaskHistory
+                    key={`task-history:${path}`}
+                    path={path}
+                    request={request}
+                    active={tasksOpen}
+                  />
+                  <ScheduleJob
+                    key={`job:${path}`}
+                    path={path}
+                    request={request}
+                  />
+                  <ScheduleReview
+                    key={`review:${path}`}
+                    canChooseWorktree={
+                      data.worktree !== undefined && !data.remote?.profile
+                    }
+                    path={path}
+                    request={request}
+                    savedModel={savedModel}
+                  />
                   <PostRunSettings
                     value={data.postRunCommand}
+                    repairLimit={data.postRunRepairLimit ?? 0}
                     disabled={disabled}
-                    save={(postRunCommand) => update({ postRunCommand })}
+                    save={(postRunCommand, postRunRepairLimit) =>
+                      update({ postRunCommand, postRunRepairLimit })
+                    }
                   />
                 </div>
               </ScrollArea>
@@ -519,6 +667,18 @@ export function ConversationInspector({
                       })
                     }
                   />
+                  {data.runtimePolicy && (
+                    <InspectorRuntimePolicy
+                      value={data.runtimePolicy}
+                      disabled={disabled}
+                      model={
+                        data.context.model
+                          ? `${data.context.model.provider}/${data.context.model.id}`
+                          : undefined
+                      }
+                      save={(runtimePolicy) => update({ runtimePolicy })}
+                    />
+                  )}
                 </div>
               </ScrollArea>
             </TabsContent>

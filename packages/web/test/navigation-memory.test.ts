@@ -58,3 +58,14 @@ test("corrupt preferences are ignored while valid entries survive", () => {
     },
   );
 });
+
+test("standalone branch bookmarks retain the machine scope", () => {
+  assert.equal(workspaceDevice("/devices/a/conversations/s/42"), "a");
+  for (const path of [
+    "/devices/a/conversations/s/0",
+    "/devices/a/conversations/s/42/extra",
+    "/devices/a/conversations/s/42?next=x",
+  ]) {
+    assert.equal(workspaceDevice(path), undefined);
+  }
+});

@@ -8,6 +8,7 @@ import {
 } from "@earendil-works/pi-durable";
 import { err, FileError, getOrThrow } from "@earendil-works/pi-durable/env";
 import { createReadTool } from "@earendil-works/pi-durable/tools";
+import { workspaceImages } from "./images.ts";
 
 export const PlanDoc = defineDoc<{
   markdown?: string;
@@ -22,7 +23,7 @@ export const PlanDoc = defineDoc<{
   checkpointWhen: () => true,
 });
 
-const read = createReadTool();
+const read = createReadTool({ images: workspaceImages });
 export const workspaceRead = {
   ...read,
   description: "Read a file within the current workspace.",

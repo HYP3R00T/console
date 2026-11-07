@@ -1,5 +1,12 @@
 # Web
 
+The Tasks inspector manages persistent background agents: create a named agent, send or steer requests, choose display/context/follow-up delivery, inspect its transcript, and stop active and queued work.
+
+The Background review form and reviewer-profile editor expose 1–5 review passes, with one pass as the default for older profiles; the form previews a selected profile's pass count and per-pass turn limit.
+
+Local project reviews can load and select an existing linked worktree without changing the chat workspace; a selected checkout missing from a refreshed list remains selected and blocks scheduling until the user chooses another workspace.
+Agent state refreshes while the Tasks tab is active; request failures retain their admission IDs for safe retry, and each agent keeps an independent message draft until the inspector unmounts.
+
 The Next.js client runs at `http://127.0.0.1:3001`. It connects directly to selected backends; Next.js does not proxy their APIs. See the [README](../../README.md) for setup and checks.
 
 ## Ownership
@@ -33,13 +40,13 @@ Paths above are relative to `packages/web`. Backend data remains backend-owned. 
 - Each prompt starts a chronological display group. Its tool arguments/results/failures appear in a collapsed Activity sequence before its replies. The latest group shows live work. These are display groups, not independent Durable runs: steering can join an existing run. Partial history without a loaded prompt is labelled as earlier activity. Event counts are real; elapsed durations are not currently recorded or displayed.
 - Ask the assistant to use the workspace reviewer. Show reviewer transcript in the parent call's Activity displays the brief, read results, and reviewer findings. The disclosure refreshes while the reviewer works. The review uses the parent model and workspace, with read-only tools. Disable `review_workspace` in Tools to turn it off for the conversation.
 - The right sidebar has Tools, Instructions, Context and Tasks tabs with independently scrollable cards. Execution notices remain visible for retries, provider waits, compaction, post-run work and failed or stopped runs.
-- Tasks lists active work and lets you save a shell command for checks after successful file edits. Checks run after the answer, hold queued messages until they settle, and report their outcome under Activity. Stop interrupts the check and withdraws waiting input.
-- In Tasks, start a background review immediately or choose a one-time start in local time. The job keeps its scheduled time across backend restarts and uses the saved conversation model. Stop review cancels that job. Findings appear under Activity and include a reviewer transcript.
+- Tasks lists active work and lets you save a shell command for checks after successful file edits. Checks run after the answer, hold queued messages until they settle, and report their outcome under Activity and to the model. Set Automatic repair attempts to 1–5 to let the assistant repair failures and recheck; 0 reports results only. Shell and MCP calls also trigger checks because their file effects are unknown. Stop interrupts the check and withdraws waiting input.
+- In Tasks, start a background review immediately or choose a one-time start in local time. The job keeps its scheduled time across backend restarts and uses the saved conversation model. Stop review cancels that job. Findings appear under Activity and include a reviewer transcript. Result delivery offers Display (UI only), Context (available to the next model request without starting work), or Follow up (start or queue a parent response). Context is the default for new reviews.
 - Tools controls access to Durable's read, write, edit and bash for the current conversation. In an idle chat, Enter Plan mode switches to workspace reads and plan submission. The saved plan appears in Tools. Exit restores the previous tool selection and keeps the plan.
 - Expand a tool for its description, typed parameters and optional scrollable JSON schema.
 - Instructions provides Markdown editors and previews for conversation and project instructions, project evidence rules, and machine-wide workspace guidance. Shared project instructions are stored in Console, separate from repository files such as `AGENTS.md`. Built-in guidance and environment details are behind a disclosure. Guidance overrides can restore their defaults. Unsaved drafts survive tab changes and background refreshes.
 - Continue run is available after eligible failures and uses the saved model without sending the composer draft.
-- In project chats, Fork from here creates a conversation from a saved prompt or completed reply and shows a link to it. The fork links back to its source while that conversation is available and inherits its current SSH profile, if selected.
+- In project and standalone chats, Fork from here creates a conversation from a saved prompt or completed reply and shows a link to it. The fork links back to its source while that conversation is available and inherits its current SSH profile, if selected. Branch links show the parent, siblings and direct children. Standalone forks have independent Recents/pinned destinations; old root bookmarks remain valid. Forks share their session’s workspace and token budget.
 - In Tools, Execution workspace can attach an existing linked Git worktree to an idle project chat. The checkout becomes the working directory for tools, checks and reviewers, and the attachment persists across restarts.
 - On Linux, Workspace sandbox can mount the checkout at `/workspace` with a separate filesystem and network namespace. It applies to file tools, commands and post-run checks. Plan mode and owned reviewers receive a read-only workspace mount.
 - Remote execution in Tools selects a backend-configured SSH workspace for the chat's tools, checks and reviewers. Stop or finish session work before switching destinations. The selector also lets you return to local execution if the saved profile is unavailable.
@@ -94,3 +101,78 @@ Machine settings → Runtime defaults saves the model and optional thinking leve
 - Client preferences → Keyboard shortcuts changes, removes or resets bindings. Shortcuts use Ctrl or Command with a letter or digit and optional Alt or Shift. Duplicate bindings are rejected. Browsers or the OS may reserve some combinations.
 - The command catalog and default bindings live in `src/lib/commands.ts`. Shortcut overrides use `console.shortcuts.v1` in browser local storage. Appearance uses the existing `theme` key. Navigation memory uses `console.navigation.v1`. Sidebar dimensions and visibility last for the open client session.
 - Client preferences work offline and are shared across machines viewed in the same browser. Machine runtime defaults are saved by each backend and shared with its connected clients.
+
+## Session runtime policies
+
+Context → Session runtime policies groups tool/queue behavior, retries/deadlines, compaction thresholds and progress/memory limits; each group expands independently.
+Blank numeric fields and Default selections inherit backend defaults; per-model compaction overrides use the exact provider/model ID and take precedence over basic session compaction controls.
+Saving replaces the session policy for all sibling conversations and reviewers and requires the whole session to be idle; conflicting refreshes preserve the draft and require Reset draft before saving.
+Restore defaults clears the saved policy, and individual model overrides can be removed without changing the rest.
+
+## Background review settings
+
+The Background review form can capture the chat’s saved model and thinking level or select a separate favorite model and its supported thinking level.
+A review can run for 1–50 model rounds (default 6); the choice applies only to that scheduled review, and invalid limits or unavailable custom models prevent scheduling.
+
+## Completed task history
+
+Tasks → Completed tasks lists persisted task outcomes, ownership, start/end times and consecutive interrupted attempts; Refresh history reloads the latest page, and Load older tasks appends earlier receipts.
+Review receipts open their transcript or their owned task history; Back to conversation tasks returns to the parent scope.
+History excludes raw task inputs, results and provider diagnostics and loads only while the Tasks panel is active.
+Failed or cancelled background reviews offer Retry review, which starts a new job with the original settings in the current workspace and retains the original receipt; ambiguous retries reuse their request identity.
+
+## Reviewer profiles
+
+Machine settings → Reviewer profiles creates, edits and removes backend-owned review roles; Save profiles applies the collection, and Discard edits restores its saved version.
+Polling preserves unsaved drafts and blocks stale saves; each profile needs a unique name, eligible model, supported thinking level and 1–50 turn limit.
+Background review → Saved profile captures the selected role’s model, thinking, instructions and turn limit; missing or unavailable profiles prevent scheduling.
+
+Terminal task history includes fixed recovery guidance for cancellations, unavailable definitions, runtime faults and restart-limit exhaustion, without exposing raw errors or task payloads.
+These receipts are terminal; replacement work does not resume them and may repeat side effects.
+
+Active tasks labels backend-created recurring reviews and exposes Stop for their outer schedule; stopping it cancels its active occurrence as well.
+Background review → Total reviews defaults to one; 2–1000 reveals an interval in whole minutes (1–525600), measured after each successful completion.
+The form explains failure, overlap, missed-interval and shared-budget behavior; invalid values block scheduling, and retries retain the same request identity.
+
+Tools shows MCP and remote-execution status even when no servers or profiles are configured, with explicit Reload MCP configuration and Reload SSH profiles actions.
+Reload is disabled while this chat is busy or a settings change is pending; its description explains that shared backend connections close and calls in other chats may be interrupted.
+The result refreshes the configuration and reports success or invalid configuration without exposing backend commands or credentials.
+
+Background jobs appear in Activity, active tasks and completed history; context/follow-up delivery records are hidden to avoid duplicate result display.
+Stop job cancels a pending job or recurring schedule, and Show job transcript displays its worker request, responses, tool output and execution state; open active transcripts follow progress.
+
+Tasks → Background job schedules self-contained instructions with an optional local start time, 1–1000 total runs, a repeat interval and display/context/follow-up delivery.
+The form captures the backend-saved model and tool settings, rejects invalid counts and intervals, and retains its request identity when submission has an ambiguous outcome.
+Its description states that workers start fresh, share the session budget, can modify files through selected tools and capture the parent workspace policy; changed settings stop the job, and sandboxed workers can write inside their workspace.
+
+## Agent profiles
+
+Machine settings include Agent profiles beside Reviewer profiles, with add, edit, remove, model/thinking selection, instructions, turn limits and one enabled tool name per line.
+Edits use revision checks; conflicting changes require discarding the stale draft before saving.
+Background agent creation and job scheduling can select a saved profile or inherit chat configuration; a missing selected profile stays visible as unavailable rather than silently reverting to inheritance.
+Profiles copy their settings at admission and cannot grant tools disabled in the parent chat.
+
+## MCP and SSH settings
+
+Machine settings provide validated JSON editors for MCP servers and SSH profiles, examples, explicit Save and reload actions and Reload and discard edits controls.
+Saving replaces the selected machine configuration and reloads shared connections; errors preserve the draft, and stale revisions require reloading before saving again.
+Malformed owner-only files can be replaced without displaying their contents; unsafe files require correction on the backend host.
+
+## Job recovery
+
+Completed task history offers Retry job for failed or cancelled supported jobs, including failed occurrences of a recurring schedule.
+Users acknowledge that earlier file or tool effects may remain before starting one replacement; the form reports policy conflicts and links the new receipt to its source.
+
+## Check recovery
+
+Completed task history offers Recheck with assistant for failed, interrupted or cancelled post-run checks, with an acknowledgement that earlier effects may remain.
+The action starts a model run and executes the currently configured check after its answer; it reports busy, missing-command, model and budget conflicts without discarding the original receipt.
+
+Post-run check history shows the check result separately from task completion, including failed and interrupted checks eligible for explicit rechecking.
+
+## Managed extensions
+
+Machine settings → Extensions manages owner-provisioned bundles and shows the hashes actually loaded; drafts require Save and activate, and Reload saved definitions revalidates the pinned manifest.
+Tools → Managed extensions selects installed definitions for the current idle conversation, preserves tool restrictions and identifies unavailable saved selections.
+Plan mode suspends managed extensions; sandbox and remote execution require deselecting them first.
+Blocked managed tasks link directly to extension settings for compatible-definition recovery; see the [bundle contract](../extensions.md).

@@ -29,6 +29,7 @@ export function InspectorWorkspace({
   saveSandbox,
   remote,
   saveRemote,
+  reloadRemote,
   hostMcp,
 }: {
   path: string;
@@ -40,6 +41,7 @@ export function InspectorWorkspace({
   saveSandbox: (enabled: boolean) => Promise<boolean>;
   remote?: RemoteWorkspace;
   saveRemote: (profile: string | null) => Promise<boolean>;
+  reloadRemote: () => Promise<void>;
   hostMcp?: boolean;
 }) {
   const [choices, setChoices] = useState<Worktree[]>();
@@ -179,6 +181,13 @@ export function InspectorWorkspace({
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
+            {remote.profiles.length === 0 && !remote.invalid && (
+              <p>No SSH profiles are configured.</p>
+            )}
+            <p>
+              Reload reads the backend configuration file and closes shared SSH
+              connections. Active calls in any chat may be interrupted.
+            </p>
             {remote.invalid && (
               <p role="alert" className="text-destructive">
                 The backend could not read its execution profiles.
@@ -223,8 +232,16 @@ export function InspectorWorkspace({
               </ul>
             )}
           </CardContent>
-          {remote.profile && (
-            <CardFooter>
+          <CardFooter className="flex-wrap gap-2">
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={disabled}
+              onClick={() => void reloadRemote()}
+            >
+              Reload SSH profiles
+            </Button>
+            {remote.profile && (
               <Button
                 variant="outline"
                 size="xs"
@@ -233,8 +250,8 @@ export function InspectorWorkspace({
               >
                 Return to local execution
               </Button>
-            </CardFooter>
-          )}
+            )}
+          </CardFooter>
         </Card>
       )}
     </>

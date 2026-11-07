@@ -6,6 +6,7 @@ import {
 } from "@earendil-works/chord/context";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type {
+  AgentState,
   Conversation,
   ConversationId,
   Cursor,
@@ -29,13 +30,24 @@ import { linkedWorktreePath } from "../projects/git-metadata.ts";
 import { ProjectError, type ProjectService } from "../projects/service.ts";
 import type { ProviderService } from "../providers/service.ts";
 import { selectAdvancedTools, selectExtensionTools } from "./advanced-tools.ts";
+import type { AgentProfile } from "./agent-profiles.ts";
 import {
   AttachmentError,
   type AttachmentInput,
   prepareAttachments,
   readAttachment,
 } from "./attachments.ts";
-import { BackgroundReview, ReviewRequests } from "./background-review.ts";
+import {
+  BackgroundJob,
+  type BackgroundJobInput,
+  captureJobAgent,
+} from "./background-job.ts";
+import {
+  BackgroundReview,
+  type BackgroundReviewInput,
+  type ReviewDelivery,
+  ReviewRequests,
+} from "./background-review.ts";
 import {
   type ConfigurationChange,
   conversationConfiguration,
@@ -46,17 +58,28 @@ import {
   defaultInspectionGuidance,
   defaultWorkspaceGuidance,
 } from "./guidance.ts";
+import { assertJobEnvironment } from "./job-workspace.ts";
 import { mcpExtensionName } from "./mcp-tools.ts";
+import {
+  AgentRequests,
+  admitAgentMessage,
+  createPersistentAgent,
+  PersistentAgents,
+} from "./persistent-agents.ts";
 import { PlanDoc, PlanExtension } from "./plan.ts";
-import { PostRunDoc } from "./post-run.ts";
+import { CheckRequestEntry, CheckTask, PostRunDoc } from "./post-run.ts";
 import { queueView } from "./queue.ts";
+import { type JobRecurrence, RecurringJob } from "./recurring-job.ts";
+import { RecurringReview, type ReviewRecurrence } from "./recurring-review.ts";
 import { ReviewExtension, ReviewerAgent } from "./reviewer.ts";
+import type { ReviewerProfile } from "./reviewer-profiles.ts";
 import { HarnessRuntime } from "./runtime.ts";
 import {
   type HarnessRecord,
   type HarnessStore,
   standaloneOwner,
 } from "./store.ts";
+import { taskDiagnostic } from "./task-diagnostics.ts";
 import { budgetReached, exceedsBudget } from "./token-budget.ts";
 
 export function canContinue(reason: RunFailureReason) {
@@ -108,6 +131,8 @@ export class HarnessService {
       },
       undefined,
       {
+        reviewerProfiles: () => store.reviewerProfiles().profiles,
+        reviewerProfile: (id) => this.reviewerProfileSelection(id),
         projectInstructions: (sessionId) => {
           const projectId = store.session(sessionId)?.projectId;
           return projectId
@@ -124,6 +149,7 @@ export class HarnessService {
             defaultInspectionGuidance
           );
         },
+        runtimePolicy: (sessionId) => store.runtimePolicy(sessionId),
         compaction: (sessionId) => store.compaction(sessionId),
         tokenBudget: (sessionId) => store.tokenBudget(sessionId),
         worktree: (sessionId, id) => store.worktree(sessionId, id),
@@ -209,16 +235,16 @@ export class HarnessService {
   async listStandalone() {
     const records = await Promise.all(
       this.store.listStandalone().map(async (record) => {
-        const { session, conversationId } = await this.standalone(
-          record.sessionId,
-          true,
-        );
-        return this.archives.get(record.sessionId, conversationId)
-          ? undefined
-          : { ...session, conversationId };
+        const { conversations } = await this.conversations(record.sessionId);
+        return conversations.map((conversation) => ({
+          ...record,
+          name: conversation.name,
+          conversationId: conversation.id,
+          parent: conversation.parent,
+        }));
       }),
     );
-    return { sessions: records.filter((record) => record !== undefined) };
+    return { sessions: records.flat() };
   }
   createStandalone(creationId?: string) {
     return this.serial(`standalone:${creationId ?? randomUUID()}`, async () => {
@@ -242,7 +268,7 @@ export class HarnessService {
       return record;
     });
   }
-  async standalone(sessionId: string, includeArchived = false) {
+  async standalone(sessionId: string, includeArchived = false, id?: string) {
     if (this.maintaining.has(sessionId))
       throw new HarnessError(503, "Session maintenance is in progress.");
     const record = this.store.session(sessionId);
@@ -250,12 +276,26 @@ export class HarnessService {
       throw new HarnessError(404, "Standalone conversation not found.");
     const harness = await this.ready(record);
     const root = await harness.root(context);
-    if (!includeArchived && this.archives.get(sessionId, root.id))
+    const conversationId =
+      id === undefined ? root.id : (Number(id) as ConversationId);
+    const selected = await harness.commit(
+      (tx) => tx.conversation(conversationId),
+      context,
+    );
+    if (!selected || selected.owner)
+      throw new HarnessError(404, "Standalone conversation not found.");
+    if (!includeArchived && this.archives.get(sessionId, conversationId))
       throw new HarnessError(404, "Conversation is archived or deleted.");
-    const info = await harness.snapshot(ConversationInfo, root.id, context);
+    const info = await harness.snapshot(
+      ConversationInfo,
+      conversationId,
+      context,
+    );
     return {
       session: { ...record, name: info?.name ?? record.name },
-      conversationId: root.id,
+      conversationId,
+      parent: selected.parent,
+      conversations: (await this.conversations(sessionId)).conversations,
     };
   }
 
@@ -270,6 +310,147 @@ export class HarnessService {
         "Choose an available favorite model from an enabled provider.",
       );
     return selected;
+  }
+
+  async reviewerProfiles() {
+    const { models } = await this.providers.favorites();
+    return { ...this.store.reviewerProfiles(), models };
+  }
+
+  async updateReviewerProfiles(revision: number, profiles: ReviewerProfile[]) {
+    const ids = new Set<string>();
+    const names = new Set<string>();
+    const normalized = profiles.map((profile) => ({
+      ...profile,
+      name: profile.name.trim(),
+      instructions: profile.instructions.trim(),
+    }));
+    for (const profile of normalized) {
+      const name = profile.name.toLowerCase();
+      if (!name || ids.has(profile.id) || names.has(name))
+        throw new HarnessError(
+          400,
+          "Reviewer profiles need unique identities and non-empty unique names.",
+        );
+      ids.add(profile.id);
+      names.add(name);
+      const selected = await this.model(profile.model);
+      if (
+        profile.thinkingLevel !== null &&
+        !selected.thinkingLevels.includes(
+          profile.thinkingLevel as ModelThinkingLevel,
+        )
+      )
+        throw new HarnessError(
+          400,
+          "This thinking level is unavailable for the selected review model.",
+        );
+    }
+    if (!this.store.setReviewerProfiles(revision, normalized))
+      throw new HarnessError(
+        409,
+        "Reviewer profiles changed. Reload and try again.",
+      );
+    return this.store.reviewerProfiles();
+  }
+
+  private async reviewerProfileSelection(id: string) {
+    const profile = this.store
+      .reviewerProfiles()
+      .profiles.find((item) => item.id === id);
+    if (!profile) throw new HarnessError(404, "Reviewer profile not found.");
+    const model = await this.model(profile.model);
+    if (
+      profile.thinkingLevel !== null &&
+      !model.thinkingLevels.includes(
+        profile.thinkingLevel as ModelThinkingLevel,
+      )
+    )
+      throw new HarnessError(
+        409,
+        "The profile thinking level is no longer available.",
+      );
+    return profile;
+  }
+
+  async agentProfiles() {
+    const { models } = await this.providers.favorites();
+    return { ...this.store.agentProfiles(), models };
+  }
+
+  async updateAgentProfiles(revision: number, profiles: AgentProfile[]) {
+    const ids = new Set<string>();
+    const names = new Set<string>();
+    const normalized = profiles.map((profile) => ({
+      ...profile,
+      name: profile.name.trim(),
+      instructions: profile.instructions.trim(),
+    }));
+    for (const profile of normalized) {
+      const name = profile.name.toLowerCase();
+      if (!name || ids.has(profile.id) || names.has(name))
+        throw new HarnessError(
+          400,
+          "Agent profiles need unique identities and non-empty unique names.",
+        );
+      ids.add(profile.id);
+      names.add(name);
+      const selected = await this.model(profile.model);
+      if (
+        profile.thinkingLevel !== null &&
+        !selected.thinkingLevels.includes(
+          profile.thinkingLevel as ModelThinkingLevel,
+        )
+      )
+        throw new HarnessError(
+          400,
+          "This thinking level is unavailable for the selected agent model.",
+        );
+    }
+    if (!this.store.setAgentProfiles(revision, normalized))
+      throw new HarnessError(
+        409,
+        "Agent profiles changed. Reload and try again.",
+      );
+    return this.store.agentProfiles();
+  }
+
+  private async agentProfileSelection(
+    profileId: string,
+    base: AgentState,
+  ): Promise<AgentState> {
+    const profile = this.store
+      .agentProfiles()
+      .profiles.find((item) => item.id === profileId);
+    if (!profile) throw new HarnessError(404, "Agent profile not found.");
+    const model = await this.model(profile.model);
+    if (
+      profile.thinkingLevel !== null &&
+      !model.thinkingLevels.includes(
+        profile.thinkingLevel as ModelThinkingLevel,
+      )
+    )
+      throw new HarnessError(
+        409,
+        "The profile thinking level is no longer available.",
+      );
+    const enabledTools = new Set(Array.isArray(base.tools) ? base.tools : []);
+    if (profile.tools.some((tool) => !enabledTools.has(tool)))
+      throw new HarnessError(
+        409,
+        "Profile tools must be enabled in the parent conversation before use.",
+      );
+    return {
+      ...base,
+      model: { ...profile.model },
+      thinkingLevel: (profile.thinkingLevel ?? "off") as ModelThinkingLevel,
+      instructions: profile.instructions,
+      maxTurns: profile.maxTurns,
+      tools: [...profile.tools],
+      modelTools: Array.isArray(base.modelTools)
+        ? base.modelTools.filter((tool) => profile.tools.includes(tool))
+        : [...profile.tools],
+    };
   }
 
   async runtimeDefaults() {
@@ -504,11 +685,11 @@ export class HarnessService {
   ) {
     return this.serial(sessionId, async () => {
       const { record, conversation } = await this.conversation(sessionId, id);
-      if (record.projectId === standaloneOwner)
-        throw new HarnessError(409, "Forks are available in project sessions.");
+
       const entryId = at as EntryId;
       const key = `fork:${conversation.id}:${entryId}:${creationId}`;
-      this.projects.assertWritable(record.projectId);
+      if (record.projectId !== standaloneOwner)
+        this.projects.assertWritable(record.projectId);
       return conversation.commit(async (tx) => {
         const counter = await tx.doc(SessionInfo);
         const existing = counter.creations?.[key];
@@ -566,6 +747,207 @@ export class HarnessService {
     return { record, harness, conversation };
   }
 
+  async persistentAgent(sessionId: string, id: string, agentId: string) {
+    const scope = await this.conversation(sessionId, id);
+    const state = await scope.harness.snapshot(
+      PersistentAgents,
+      scope.conversation.id,
+      context,
+    );
+    const agent = state?.agents.find((item) => item.id === agentId);
+    const row =
+      agent &&
+      (await scope.harness.commit(
+        (tx) => tx.conversation(agent.conversationId),
+        context,
+      ));
+    if (
+      !agent ||
+      row?.owner?.conversationId !== scope.conversation.id ||
+      row.owner.taskId !== agent.anchorId
+    )
+      throw new HarnessError(404, "Agent not found in this conversation.");
+    const child = await scope.harness.conversation(
+      agent.conversationId,
+      context,
+    );
+    if (!child) throw new HarnessError(404, "Agent conversation not found.");
+    return { ...scope, agent, child };
+  }
+
+  async listAgents(sessionId: string, id: string) {
+    const { harness, conversation } = await this.conversation(sessionId, id);
+    const state = await harness.snapshot(
+      PersistentAgents,
+      conversation.id,
+      context,
+    );
+    const agents = await Promise.all(
+      (state?.agents ?? []).map(async (agent) => {
+        const live = await harness.snapshot(
+          LiveDoc,
+          agent.conversationId,
+          context,
+        );
+        const inbox = await harness.snapshot(
+          InboxDoc,
+          agent.conversationId,
+          context,
+        );
+        return {
+          ...agent,
+          busy: !!live?.run,
+          queue: queueView(inbox?.items ?? []),
+        };
+      }),
+    );
+    return { agents };
+  }
+
+  createAgent(
+    sessionId: string,
+    id: string,
+    agentId: string,
+    name: string,
+    profileId?: string,
+  ) {
+    return this.serial(sessionId, async () => {
+      const { record, harness, conversation } = await this.conversation(
+        sessionId,
+        id,
+      );
+      if (record.projectId !== standaloneOwner)
+        this.projects.assertWritable(record.projectId);
+      const state = await harness.snapshot(
+        PersistentAgents,
+        conversation.id,
+        context,
+      );
+      const existing = state?.agents.find((agent) => agent.id === agentId);
+      if (existing) return existing;
+      if (!name.trim() || name.trim().length > 100)
+        throw new HarnessError(
+          400,
+          "Provide an agent name of at most 100 characters.",
+        );
+      if (
+        state?.agents.some(
+          (agent) => agent.name.toLowerCase() === name.trim().toLowerCase(),
+        )
+      )
+        throw new HarnessError(409, "An agent already uses this name.");
+      if ((state?.agents.length ?? 0) >= 32)
+        throw new HarnessError(409, "This conversation already has 32 agents.");
+      const parentAgent = await conversation.agent(context);
+      const selected = profileId
+        ? await this.agentProfileSelection(
+            profileId,
+            captureJobAgent(parentAgent),
+          )
+        : undefined;
+      const model = selected?.model ?? parentAgent.model;
+      if (!model || !this.availableModel(model))
+        throw new HarnessError(
+          409,
+          "Choose an available conversation model first.",
+        );
+      const result = await conversation.commit(async (tx) => {
+        const result = await createPersistentAgent(
+          tx,
+          conversation.id,
+          agentId,
+          name,
+        );
+        if (selected)
+          Object.assign(
+            await tx.doc(AgentDoc, result.conversationId),
+            selected,
+          );
+        return result;
+      }, context);
+      harness.resume();
+      return result;
+    });
+  }
+
+  messageAgent(
+    sessionId: string,
+    id: string,
+    agentId: string,
+    content: string,
+    requestId: string,
+    whenBusy: "steer" | "followUp" = "followUp",
+    delivery: ReviewDelivery = "context",
+  ) {
+    return this.serial(sessionId, async () => {
+      const { record, harness, conversation, agent, child } =
+        await this.persistentAgent(sessionId, id, agentId);
+      const previous = await harness.snapshot(
+        AgentRequests,
+        conversation.id,
+        `${agent.id}:${requestId}`,
+        context,
+      );
+      if (previous?.taskId !== undefined) return { id: previous.taskId };
+      if (record.projectId !== standaloneOwner)
+        this.projects.assertWritable(record.projectId);
+      if (!content.trim() || content.length > 32000)
+        throw new HarnessError(
+          400,
+          "Provide an agent message of at most 32000 characters.",
+        );
+      const selected = await child.agent(context);
+      if (!selected.model || !this.availableModel(selected.model))
+        throw new HarnessError(409, "The agent model is unavailable.");
+      if (await exceedsBudget(harness, this.store.tokenBudget(sessionId)))
+        throw new HarnessError(409, budgetReached);
+      const taskId = await conversation.commit(
+        (tx) =>
+          admitAgentMessage(
+            tx,
+            conversation.id,
+            agent,
+            child,
+            content,
+            requestId,
+            whenBusy,
+            delivery,
+          ),
+        context,
+      );
+      harness.resume();
+      return { id: taskId };
+    });
+  }
+
+  stopAgent(sessionId: string, id: string, agentId: string) {
+    return this.serial(sessionId, async () => {
+      const { child } = await this.persistentAgent(sessionId, id, agentId);
+      await child.abort(context, { background: true });
+      return { stopped: true };
+    });
+  }
+
+  async jobConversation(sessionId: string, id: string, taskId: string) {
+    const { harness, conversation } = await this.conversation(sessionId, id);
+    const childId = await harness.commit(async (tx) => {
+      const task = await tx.task(Number(taskId) as TaskId);
+      if (
+        task?.conversationId !== conversation.id ||
+        task.kind !== BackgroundJob.definition.name
+      )
+        throw new HarnessError(404, "Job not found in this conversation.");
+      const child = (await tx.scanConversations({ ownerTaskId: task.id }, 1))
+        .items[0];
+      if (!child || child.owner?.conversationId !== conversation.id)
+        throw new HarnessError(404, "The job has no worker conversation yet.");
+      return child.id;
+    }, context);
+    const child = await harness.conversation(childId, context);
+    if (!child) throw new HarnessError(404, "Job conversation not found.");
+    return child;
+  }
+
   async review(sessionId: string, id: string, reviewId: string) {
     const { harness, conversation } = await this.conversation(sessionId, id);
     const childId = Number(reviewId) as ConversationId;
@@ -586,6 +968,130 @@ export class HarnessService {
     return review;
   }
 
+  async activeTasks(sessionId: string, id: string) {
+    const { harness, conversation } = await this.conversation(sessionId, id);
+    const watch = await harness.watchTaskGraph(context);
+    try {
+      const graph = watch.value;
+      const owned = await harness.commit(async (tx) => {
+        const scope = new Set<ConversationId>([conversation.id]);
+        const excluded = new Set<ConversationId>();
+        for (const task of Object.values(graph.tasks)) {
+          const chain = new Set<ConversationId>();
+          let next: ConversationId | undefined = task.conversationId;
+          while (
+            next !== undefined &&
+            !scope.has(next) &&
+            !excluded.has(next) &&
+            !chain.has(next)
+          ) {
+            chain.add(next);
+            next = (await tx.conversation(next))?.owner?.conversationId;
+          }
+          const destination =
+            next !== undefined && scope.has(next) ? scope : excluded;
+          for (const child of chain) destination.add(child);
+        }
+        return [...scope];
+      }, context);
+      return { graph, root: conversation.id, owned };
+    } finally {
+      await watch.stop();
+    }
+  }
+
+  async taskHistory(
+    sessionId: string,
+    id: string,
+    cursor?: Cursor,
+    reviewId?: string,
+  ) {
+    const scope = await this.conversation(sessionId, id);
+    const conversation =
+      reviewId === undefined
+        ? scope.conversation
+        : await this.review(sessionId, id, reviewId);
+    return scope.harness.commit(async (tx) => {
+      const page = await tx.scanTasks(
+        {
+          conversationId: conversation.id,
+          status: "terminal",
+          order: "descending",
+        },
+        50,
+        cursor,
+      );
+      const tasks = await Promise.all(
+        page.items.map(async (task) => {
+          const children = await tx.scanConversations(
+            { ownerTaskId: task.id },
+            1,
+          );
+          const childAgent = children.items[0]
+            ? await tx.doc(AgentDoc, children.items[0].id)
+            : undefined;
+          const isReviewer =
+            Array.isArray(childAgent?.extensions) &&
+            childAgent.extensions.includes(ReviewerAgent.name);
+          const outcome =
+            task.state.status === "terminal" ? task.state.outcome : undefined;
+          return {
+            id: task.id,
+            kind: task.kind,
+            owner: task.owner,
+            background: task.background,
+            status: outcome?.status,
+            diagnostic: taskDiagnostic(outcome),
+            startedAt: task.startedAt,
+            endedAt: task.endedAt,
+            restarts: task.restarts ?? 0,
+            ...(task.kind === BackgroundReview.definition.name &&
+              task.version === BackgroundReview.definition.version && {
+                retryable:
+                  outcome?.status !== "completed" || outcome.result !== true,
+                retryOf: (task.input as BackgroundReviewInput).retryOf,
+                profile: (task.input as BackgroundReviewInput).profile,
+              }),
+            ...(task.kind === BackgroundReview.definition.name &&
+              outcome?.status === "completed" && {
+                reviewSucceeded: outcome.result === true,
+              }),
+            ...(children.items[0] &&
+              isReviewer && { reviewId: children.items[0].id }),
+            ...(task.kind === CheckTask.definition.name &&
+              task.version === CheckTask.definition.version && {
+                checkResult:
+                  outcome?.status === "completed" &&
+                  (outcome.result === "passed" ||
+                    outcome.result === "failed" ||
+                    outcome.result === "cancelled" ||
+                    outcome.result === "interrupted")
+                    ? outcome.result
+                    : undefined,
+                recheckable:
+                  outcome?.status !== "completed" ||
+                  outcome.result !== "passed",
+                retryOf: (task.input as { retryOf?: number }).retryOf,
+              }),
+            ...(task.kind === BackgroundJob.definition.name &&
+              task.version === BackgroundJob.definition.version && {
+                retryable:
+                  outcome?.status !== "completed" || outcome.result !== true,
+                retryOf: (task.input as BackgroundJobInput).retryOf,
+              }),
+            ...(task.kind === BackgroundJob.definition.name &&
+              children.items[0] && { jobTaskId: task.id }),
+            ...(task.kind === BackgroundJob.definition.name &&
+              outcome?.status === "completed" && {
+                jobSucceeded: outcome.result === true,
+              }),
+          };
+        }),
+      );
+      return { tasks, cursor: page.next };
+    }, context);
+  }
+
   async worktrees(sessionId: string, id: string) {
     const { record } = await this.conversation(sessionId, id);
     if (!record.projectId) return { worktrees: [] };
@@ -601,15 +1107,321 @@ export class HarnessService {
     };
   }
 
+  scheduleJob(
+    sessionId: string,
+    id: string,
+    content: string,
+    requestId: string,
+    at = Date.now(),
+    delivery: ReviewDelivery = "context",
+    recurrence?: JobRecurrence,
+    profileId?: string,
+    retry?: BackgroundJobInput & { retryOf: number },
+  ) {
+    return this.serial(sessionId, async () => {
+      const { record, harness, conversation } = await this.conversation(
+        sessionId,
+        id,
+      );
+      if (record.projectId !== standaloneOwner)
+        this.projects.assertWritable(record.projectId);
+      let agent = captureJobAgent(await conversation.agent(context));
+      const taskId = await conversation.commit(async (tx) => {
+        const request = await tx.doc(
+          ReviewRequests,
+          conversation.id,
+          `console.job:${requestId}`,
+          null,
+        );
+        if (request.taskId !== undefined) return request.taskId;
+        if (profileId)
+          agent = await this.agentProfileSelection(profileId, agent);
+        if (retry) {
+          const enabled = new Set(
+            Array.isArray(agent.tools) ? agent.tools : [],
+          );
+          if (
+            !Array.isArray(retry.agent.tools) ||
+            retry.agent.tools.some((tool) => !enabled.has(tool))
+          )
+            throw new HarnessError(
+              409,
+              "The original job tools are no longer enabled. Restore them or schedule a new job explicitly.",
+            );
+          agent = structuredClone(retry.agent);
+          if (!agent.model)
+            throw new HarnessError(
+              409,
+              "The original job model is unavailable.",
+            );
+          const model = await this.model(agent.model);
+          if (
+            agent.thinkingLevel &&
+            agent.thinkingLevel !== "off" &&
+            !model.thinkingLevels.includes(agent.thinkingLevel)
+          )
+            throw new HarnessError(
+              409,
+              "The original thinking level is no longer available.",
+            );
+        }
+        if (!content.trim() || content.length > 32000)
+          throw new HarnessError(
+            400,
+            "Provide job instructions of at most 32000 characters.",
+          );
+        if (!Number.isSafeInteger(at) || at < 0 || at > 8640000000000000)
+          throw new HarnessError(400, "Provide a valid job start time.");
+        if (!["display", "context", "followUp"].includes(delivery))
+          throw new HarnessError(400, "Choose a supported result delivery.");
+        if (!agent.model || !this.availableModel(agent.model))
+          throw new HarnessError(
+            409,
+            "Choose an available conversation model first.",
+          );
+        if (
+          recurrence &&
+          (!Number.isInteger(recurrence.intervalMs) ||
+            recurrence.intervalMs < 60000 ||
+            recurrence.intervalMs > 31536000000 ||
+            !Number.isInteger(recurrence.occurrences) ||
+            recurrence.occurrences < 2 ||
+            recurrence.occurrences > 1000)
+        )
+          throw new HarnessError(
+            400,
+            "Choose 2–1000 occurrences and an interval between one minute and one year.",
+          );
+        const remoteProfile = (
+          await tx.doc(RemoteWorkspaceDoc, conversation.id)
+        ).profile;
+        if (remoteProfile && !this.runtime.remote.identity(remoteProfile))
+          throw new HarnessError(
+            409,
+            "The selected SSH profile is unavailable. Choose a valid workspace before scheduling.",
+          );
+        const environment = {
+          directory:
+            record.projectId === standaloneOwner
+              ? await this.runtime.standaloneWorkspace(sessionId)
+              : (await this.project(record.projectId)).path,
+          worktree:
+            record.projectId === standaloneOwner
+              ? null
+              : this.store.worktree(sessionId, conversation.id),
+          sandbox: (await tx.doc(SandboxDoc, conversation.id)).enabled,
+          remoteProfile,
+          remoteIdentity: remoteProfile
+            ? this.runtime.remote.identity(remoteProfile)
+            : null,
+        };
+        if (retry?.environment) {
+          try {
+            assertJobEnvironment(retry.environment, environment);
+          } catch {
+            throw new HarnessError(
+              409,
+              "The job workspace policy changed. Restore it or schedule a new job explicitly.",
+            );
+          }
+        }
+        const input = {
+          ...(retry && { retryOf: retry.retryOf }),
+          environment,
+          content: content.trim(),
+          at,
+          agent,
+          delivery,
+          postRun: retry
+            ? { ...retry.postRun }
+            : { ...(await tx.doc(PostRunDoc, conversation.id)) },
+        };
+        const options = {
+          ownership: { kind: "conversation" as const },
+          background: true,
+        };
+        const job = recurrence
+          ? await tx.createTask(
+              RecurringJob,
+              { job: input, recurrence },
+              options,
+            )
+          : await tx.createTask(BackgroundJob, input, options);
+        request.taskId = job;
+        return job;
+      }, context);
+      harness.resume();
+      return { id: taskId };
+    });
+  }
+
+  recheck(sessionId: string, id: string, taskId: string, requestId: string) {
+    return this.serial(sessionId, async () => {
+      const { record, harness, conversation } = await this.conversation(
+        sessionId,
+        id,
+      );
+      const admissionId = `console.recheck:${taskId}:${requestId}`;
+      const existing = await harness.commit(
+        (tx) => tx.submissionByRequest(conversation.id, admissionId),
+        context,
+      );
+      if (existing) return { id: existing.id };
+      if (record.projectId !== standaloneOwner)
+        await this.project(record.projectId);
+      await this.assertIdle(harness, conversation.id);
+      const agent = await conversation.agent(context);
+      if (!agent.model || !this.availableModel(agent.model))
+        throw new HarnessError(
+          409,
+          "Choose an available model before requesting a recheck.",
+        );
+      if (
+        !agent.extensions.some(
+          (extension) => extension.name === "console.post-run",
+        )
+      )
+        throw new HarnessError(
+          409,
+          "Post-run checks are not enabled in this conversation.",
+        );
+      if (await exceedsBudget(harness, this.store.tokenBudget(sessionId)))
+        throw new HarnessError(409, budgetReached);
+      const submissionId = await conversation.commit(async (tx) => {
+        const task = await tx.task(Number(taskId) as TaskId);
+        if (
+          task?.conversationId !== conversation.id ||
+          task.kind !== CheckTask.definition.name
+        )
+          throw new HarnessError(
+            404,
+            "Post-run check not found in this conversation.",
+          );
+        if (
+          task.version !== CheckTask.definition.version ||
+          task.state.status !== "terminal" ||
+          (task.state.outcome.status === "completed" &&
+            task.state.outcome.result === "passed")
+        )
+          throw new HarnessError(
+            409,
+            "Only failed, interrupted or cancelled checks can be rechecked.",
+          );
+        if (!(await tx.doc(PostRunDoc, conversation.id)).command)
+          throw new HarnessError(
+            409,
+            "Configure a check command before requesting a recheck.",
+          );
+        const submission = await conversation.submit(tx, {
+          type: "input",
+          requestId: admissionId,
+          whenBusy: "reject",
+          content:
+            "Review the previous post-run check result and briefly assess whether any correction is needed. The currently configured check will run automatically after your final answer. Do not run that check command yourself. Earlier tool or file effects may remain; preserve the user's intended changes.",
+          entry: {
+            kind: CheckRequestEntry.kind,
+            data: { sourceTaskId: task.id },
+          },
+        });
+        (await tx.doc(ConversationInfo, conversation.id)).lastSubmissionId =
+          submission;
+        return submission;
+      }, context);
+      harness.resume();
+      return { id: submissionId };
+    });
+  }
+
+  async retryJob(
+    sessionId: string,
+    id: string,
+    taskId: string,
+    requestId: string,
+  ) {
+    const { harness, conversation } = await this.conversation(sessionId, id);
+    const task = await harness.commit(
+      (tx) => tx.task(Number(taskId) as TaskId),
+      context,
+    );
+    if (
+      task?.conversationId !== conversation.id ||
+      task.kind !== BackgroundJob.definition.name
+    )
+      throw new HarnessError(
+        404,
+        "Background job not found in this conversation.",
+      );
+    if (
+      task.version !== BackgroundJob.definition.version ||
+      task.state.status !== "terminal" ||
+      (task.state.outcome.status === "completed" &&
+        task.state.outcome.result === true)
+    )
+      throw new HarnessError(
+        409,
+        "Only failed or cancelled jobs with a supported task version can be retried.",
+      );
+    const input = task.input as BackgroundJobInput;
+    return this.scheduleJob(
+      sessionId,
+      id,
+      input.content,
+      `retry:${task.id}:${requestId}`,
+      undefined,
+      input.delivery,
+      undefined,
+      undefined,
+      { ...input, retryOf: task.id },
+    );
+  }
+
+  stopJob(sessionId: string, id: string, taskId: string) {
+    return this.serial(sessionId, async () => {
+      const { harness, conversation } = await this.conversation(sessionId, id);
+      const task = await harness.commit(
+        (tx) => tx.task(Number(taskId) as TaskId),
+        context,
+      );
+      if (
+        task?.conversationId !== conversation.id ||
+        ![BackgroundJob.definition.name, RecurringJob.definition.name].includes(
+          task.kind,
+        )
+      )
+        throw new HarnessError(
+          404,
+          "Background job not found in this conversation.",
+        );
+      await harness.abortTask(task.id, context);
+      return { stopped: true };
+    });
+  }
+
   scheduleReview(
     sessionId: string,
     id: string,
     brief: string,
     requestId: string,
     at?: number,
+    delivery: ReviewDelivery = "context",
+    selection?: {
+      model?: ModelRef;
+      thinkingLevel?: string | null;
+      maxTurns?: number;
+      passes?: number;
+      worktree?: string;
+      retryOf?: number;
+      recurrence?: ReviewRecurrence;
+      profileId?: string;
+      instructions?: string;
+      profile?: { id: string; name: string };
+    },
   ) {
     return this.serial(sessionId, async () => {
-      const { harness, conversation } = await this.conversation(sessionId, id);
+      const { record, harness, conversation } = await this.conversation(
+        sessionId,
+        id,
+      );
       const agent = await conversation.agent(context);
       const taskId = await conversation.commit(async (tx) => {
         const request = await tx.doc(
@@ -621,27 +1433,181 @@ export class HarnessService {
         if (request.taskId !== undefined) return request.taskId;
         const trimmed = brief.trim();
         if (!trimmed) throw new HarnessError(400, "Provide a review brief.");
-        if (!agent.model || !this.availableModel(agent.model))
+        const profile =
+          selection?.profileId === undefined
+            ? undefined
+            : this.store
+                .reviewerProfiles()
+                .profiles.find((item) => item.id === selection.profileId);
+        if (selection?.profileId !== undefined && !profile)
+          throw new HarnessError(404, "Reviewer profile not found.");
+        if (
+          profile &&
+          (selection?.model !== undefined ||
+            selection?.thinkingLevel !== undefined ||
+            selection?.maxTurns !== undefined ||
+            selection?.passes !== undefined)
+        )
+          throw new HarnessError(
+            400,
+            "Choose a profile or explicit reviewer settings, not both.",
+          );
+        const model = profile?.model ?? selection?.model ?? agent.model;
+        if (!model || !this.availableModel(model))
           throw new HarnessError(
             409,
             "Choose an available conversation model before scheduling a review.",
           );
-        const id = await tx.createTask(
-          BackgroundReview,
-          {
-            brief: trimmed,
-            at: at ?? Date.now(),
-            model: agent.model,
-            thinkingLevel: agent.thinkingLevel ?? null,
-          },
-          { ownership: { kind: "conversation" }, background: true },
-        );
+        const metadata = await this.model(model);
+        const thinkingLevel = profile
+          ? profile.thinkingLevel
+          : selection?.thinkingLevel !== undefined
+            ? selection.thinkingLevel
+            : selection?.model
+              ? null
+              : (agent.thinkingLevel ?? null);
+        if (
+          thinkingLevel !== null &&
+          !metadata.thinkingLevels.includes(thinkingLevel as ModelThinkingLevel)
+        )
+          throw new HarnessError(
+            400,
+            "This thinking level is unavailable for the selected review model.",
+          );
+        let worktree: string | undefined;
+        let worktreeProject: string | undefined;
+        if (selection?.worktree !== undefined) {
+          if (record.projectId === standaloneOwner)
+            throw new HarnessError(
+              400,
+              "Dedicated review worktrees require a project conversation.",
+            );
+          if ((await tx.doc(RemoteWorkspaceDoc, conversation.id)).profile)
+            throw new HarnessError(
+              409,
+              "Dedicated local reviews are unavailable while the parent uses SSH.",
+            );
+          const project = await this.project(record.projectId);
+          worktreeProject = project.path;
+          worktree = await linkedWorktreePath(project.path, selection.worktree);
+          if (!worktree)
+            throw new HarnessError(
+              400,
+              "Choose an existing linked worktree of this project.",
+            );
+        }
+        const passes = profile?.passes ?? selection?.passes ?? 1;
+        if (!Number.isInteger(passes) || passes < 1 || passes > 5)
+          throw new HarnessError(
+            400,
+            "Review passes must be an integer from 1 to 5.",
+          );
+        const maxTurns = profile?.maxTurns ?? selection?.maxTurns ?? 6;
+        if (!Number.isInteger(maxTurns) || maxTurns < 1 || maxTurns > 50)
+          throw new HarnessError(
+            400,
+            "Review turn limit must be an integer from 1 to 50.",
+          );
+        const input: BackgroundReviewInput = {
+          brief: trimmed,
+          delivery,
+          at: at ?? Date.now(),
+          model,
+          thinkingLevel: thinkingLevel as ModelThinkingLevel | null,
+          maxTurns,
+          passes,
+          ...(worktree && { worktree, worktreeProject }),
+          instructions: profile?.instructions ?? selection?.instructions ?? "",
+          ...(profile
+            ? { profile: { id: profile.id, name: profile.name } }
+            : selection?.profile
+              ? { profile: selection.profile }
+              : {}),
+          ...(selection?.retryOf !== undefined && {
+            retryOf: selection.retryOf,
+          }),
+        };
+        const recurrence = selection?.recurrence;
+        if (
+          recurrence &&
+          (!Number.isInteger(recurrence.intervalMs) ||
+            recurrence.intervalMs < 60000 ||
+            recurrence.intervalMs > 31536000000 ||
+            !Number.isInteger(recurrence.occurrences) ||
+            recurrence.occurrences < 2 ||
+            recurrence.occurrences > 1000)
+        )
+          throw new HarnessError(
+            400,
+            "Choose 2–1000 occurrences and an interval between one minute and one year.",
+          );
+        const options = {
+          ownership: { kind: "conversation" as const },
+          background: true,
+        };
+        const id = recurrence
+          ? await tx.createTask(
+              RecurringReview,
+              { review: input, recurrence },
+              options,
+            )
+          : await tx.createTask(BackgroundReview, input, options);
         request.taskId = id;
         return id;
       }, context);
       harness.resume();
       return { id: taskId };
     });
+  }
+
+  async retryReview(
+    sessionId: string,
+    id: string,
+    taskId: string,
+    requestId: string,
+  ) {
+    const { harness, conversation } = await this.conversation(sessionId, id);
+    const task = await harness.commit(
+      (tx) => tx.task(Number(taskId) as TaskId),
+      context,
+    );
+    if (
+      task?.conversationId !== conversation.id ||
+      task.kind !== BackgroundReview.definition.name
+    )
+      throw new HarnessError(
+        404,
+        "Background review not found in this conversation.",
+      );
+    if (
+      task.version !== BackgroundReview.definition.version ||
+      task.state.status !== "terminal" ||
+      (task.state.outcome.status === "completed" &&
+        task.state.outcome.result === true)
+    )
+      throw new HarnessError(
+        409,
+        "Only failed or cancelled reviews with a supported task version can be retried.",
+      );
+    const input = task.input as BackgroundReviewInput;
+    return this.scheduleReview(
+      sessionId,
+      id,
+      input.brief,
+      `console.review-retry:${task.id}:${requestId}`,
+      undefined,
+      input.delivery ?? "display",
+      {
+        model: input.model,
+        thinkingLevel: input.thinkingLevel,
+        maxTurns: input.maxTurns ?? 6,
+        passes: input.passes ?? 1,
+        worktree: input.worktree,
+        retryOf: task.id,
+        instructions: input.instructions,
+        profile: input.profile,
+      },
+    );
   }
 
   stopReview(sessionId: string, id: string, taskId: string) {
@@ -653,7 +1619,8 @@ export class HarnessService {
       );
       if (
         task?.conversationId !== conversation.id ||
-        task.kind !== BackgroundReview.definition.name
+        (task.kind !== BackgroundReview.definition.name &&
+          task.kind !== RecurringReview.definition.name)
       )
         throw new HarnessError(
           404,
@@ -675,9 +1642,11 @@ export class HarnessService {
         ? this.projects.store.agentSettings(record.projectId)
         : undefined,
       {
+        runtimePolicy: this.store.runtimePolicy(record.sessionId),
         compaction: this.store.compaction(record.sessionId),
         tokenBudget: this.store.tokenBudget(record.sessionId),
         mcp: this.runtime.mcp.status(),
+        managedExtensions: this.runtime.extensions.status(),
         remote: this.runtime.remote.status(),
         worktree: record.projectId
           ? this.store.worktree(record.sessionId, conversation.id)
@@ -737,11 +1706,13 @@ export class HarnessService {
         change.projectInstructions !== undefined ||
         change.inspectionGuidance !== undefined;
       const conversationChange =
+        change.managedExtensions !== undefined ||
         change.tools !== undefined ||
         change.instructions !== undefined ||
         change.maxTurns !== undefined ||
         change.planMode !== undefined ||
         change.postRunCommand !== undefined ||
+        change.postRunRepairLimit !== undefined ||
         change.worktree !== undefined ||
         change.sandbox !== undefined ||
         change.remoteProfile !== undefined ||
@@ -751,7 +1722,9 @@ export class HarnessService {
         change.keepRecentTokens !== undefined ||
         change.automaticCompaction !== undefined;
       const sessionChange =
-        compactionChange || change.tokenBudget !== undefined;
+        compactionChange ||
+        change.runtimePolicy !== undefined ||
+        change.tokenBudget !== undefined;
       const machineChange = change.workspaceGuidance !== undefined;
       if (
         Number(projectChange) +
@@ -764,7 +1737,11 @@ export class HarnessService {
           400,
           "Change one configuration scope at a time.",
         );
-      if (conversationChange || compactionChange)
+      if (
+        conversationChange ||
+        compactionChange ||
+        change.runtimePolicy !== undefined
+      )
         await this.assertIdle(
           harness,
           sessionChange || change.remoteProfile !== undefined
@@ -780,6 +1757,74 @@ export class HarnessService {
         throw new HarnessError(
           409,
           "Configuration changed. Refresh and retry.",
+        );
+      if (change.managedExtensions !== undefined) {
+        if (
+          Object.keys(change).some(
+            (key) => key !== "revision" && key !== "managedExtensions",
+          )
+        )
+          throw new HarnessError(400, "Change managed extensions separately.");
+        if (current.plan.active)
+          throw new HarnessError(
+            409,
+            "Exit Plan mode before changing extensions.",
+          );
+        if (
+          change.managedExtensions.length &&
+          (current.sandbox || current.remote?.profile)
+        )
+          throw new HarnessError(
+            409,
+            "Managed extensions run on the backend. Use local execution without a sandbox before selecting them.",
+          );
+        const available = new Set(
+          this.runtime.extensions
+            .status()
+            .installed.map((extension) => extension.name),
+        );
+        if (
+          change.managedExtensions.some(
+            (name) =>
+              !available.has(name) &&
+              !current.managedExtensions.selected.includes(name),
+          )
+        )
+          throw new HarnessError(
+            409,
+            "Install the extension on this backend before selecting it.",
+          );
+        await conversation.commit(async (tx) => {
+          const agent = await tx.doc(AgentDoc, conversation.id);
+          const selected = change.managedExtensions!;
+          if (Array.isArray(agent.extensions)) {
+            agent.extensions = [
+              ...agent.extensions.filter((name) => !name.startsWith("user.")),
+              ...selected,
+            ];
+          } else {
+            agent.extensions = {
+              add: [
+                ...(agent.extensions?.add ?? []).filter(
+                  (name) => !name.startsWith("user."),
+                ),
+                ...selected,
+              ],
+              remove: (agent.extensions?.remove ?? []).filter(
+                (name) => !name.startsWith("user."),
+              ),
+            };
+          }
+        }, context);
+        return this.readConfiguration(record, harness, conversation);
+      }
+      if (
+        current.managedExtensions.selected.length &&
+        (change.sandbox || change.remoteProfile)
+      )
+        throw new HarnessError(
+          409,
+          "Deselect managed extensions before enabling sandbox or remote execution.",
         );
       if (
         change.tools !== undefined &&
@@ -846,6 +1891,7 @@ export class HarnessService {
           change.maxTurns !== undefined ||
           change.planMode !== undefined ||
           change.postRunCommand !== undefined ||
+          change.postRunRepairLimit !== undefined ||
           change.worktree !== undefined ||
           change.sandbox !== undefined ||
           change.codeMode !== undefined ||
@@ -947,6 +1993,8 @@ export class HarnessService {
             change.automaticCompaction ?? current.context.automatic,
           );
         }
+        if (change.runtimePolicy !== undefined)
+          this.store.setRuntimePolicy(sessionId, change.runtimePolicy);
         if (change.tokenBudget !== undefined)
           this.store.setTokenBudget(sessionId, change.tokenBudget);
       } else {
@@ -964,7 +2012,8 @@ export class HarnessService {
             change.codeMode !== undefined ||
             change.mcp !== undefined ||
             change.maxTurns !== undefined ||
-            change.postRunCommand !== undefined
+            change.postRunCommand !== undefined ||
+            change.postRunRepairLimit !== undefined
           )
             throw new HarnessError(
               400,
@@ -1049,6 +2098,19 @@ export class HarnessService {
           if (change.sandbox !== undefined)
             (await tx.doc(SandboxDoc, conversation.id)).enabled =
               change.sandbox;
+          if (change.postRunRepairLimit !== undefined) {
+            if (
+              !Number.isInteger(change.postRunRepairLimit) ||
+              change.postRunRepairLimit < 0 ||
+              change.postRunRepairLimit > 5
+            )
+              throw new HarnessError(
+                400,
+                "Repair attempts must be between 0 and 5.",
+              );
+            (await tx.doc(PostRunDoc, conversation.id)).repairLimit =
+              change.postRunRepairLimit;
+          }
           if (change.postRunCommand !== undefined) {
             const check = await tx.doc(PostRunDoc, conversation.id);
             const command = change.postRunCommand?.trim();

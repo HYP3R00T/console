@@ -7,6 +7,9 @@ import {
   type ModelRef,
 } from "@earendil-works/pi-durable";
 import { openDatabase } from "../storage/database.ts";
+import type { AgentProfile } from "./agent-profiles.ts";
+import type { ReviewerProfile } from "./reviewer-profiles.ts";
+import type { RuntimePolicy } from "./runtime-policy.ts";
 
 // Project IDs are UUIDs. This reserved owner groups machine-level conversations.
 export const standaloneOwner = "";
@@ -51,6 +54,9 @@ export class HarnessStore {
         "ALTER TABLE session_context_settings ADD COLUMN tokenBudget INTEGER",
       );
     this.db.exec(
+      "CREATE TABLE IF NOT EXISTS session_runtime_policy (sessionId TEXT PRIMARY KEY, policy TEXT NOT NULL)",
+    );
+    this.db.exec(
       "CREATE TABLE IF NOT EXISTS runtime_defaults (id INTEGER PRIMARY KEY CHECK (id=1), revision INTEGER NOT NULL, provider TEXT, modelId TEXT, thinkingLevel TEXT)",
     );
     this.db.exec(
@@ -58,6 +64,18 @@ export class HarnessStore {
     );
     this.db.exec(
       "INSERT OR IGNORE INTO runtime_defaults (id, revision) VALUES (1, 0)",
+    );
+    this.db.exec(
+      "CREATE TABLE IF NOT EXISTS reviewer_profiles (id INTEGER PRIMARY KEY CHECK (id=1), revision INTEGER NOT NULL, profiles TEXT NOT NULL)",
+    );
+    this.db.exec(
+      "INSERT OR IGNORE INTO reviewer_profiles (id, revision, profiles) VALUES (1, 0, '[]')",
+    );
+    this.db.exec(
+      "CREATE TABLE IF NOT EXISTS agent_profiles (id INTEGER PRIMARY KEY CHECK (id=1), revision INTEGER NOT NULL, profiles TEXT NOT NULL)",
+    );
+    this.db.exec(
+      "INSERT OR IGNORE INTO agent_profiles (id, revision, profiles) VALUES (1, 0, '[]')",
     );
     const columns = this.db.prepare("PRAGMA table_info(harnesses)").all();
     if (!columns.some((column) => column.name === "thinkingLevel"))
@@ -81,6 +99,42 @@ export class HarnessStore {
     );
     this.db.exec(
       "CREATE INDEX IF NOT EXISTS harness_project ON harnesses(projectId)",
+    );
+  }
+  reviewerProfiles(): { revision: number; profiles: ReviewerProfile[] } {
+    const row = this.db
+      .prepare("SELECT revision, profiles FROM reviewer_profiles WHERE id=1")
+      .get();
+    return {
+      revision: Number(row?.revision),
+      profiles: JSON.parse(String(row?.profiles)),
+    };
+  }
+  setReviewerProfiles(revision: number, profiles: ReviewerProfile[]) {
+    return (
+      this.db
+        .prepare(
+          "UPDATE reviewer_profiles SET revision=revision+1, profiles=? WHERE id=1 AND revision=?",
+        )
+        .run(JSON.stringify(profiles), revision).changes === 1
+    );
+  }
+  agentProfiles(): { revision: number; profiles: AgentProfile[] } {
+    const row = this.db
+      .prepare("SELECT revision, profiles FROM agent_profiles WHERE id=1")
+      .get();
+    return {
+      revision: Number(row?.revision),
+      profiles: JSON.parse(String(row?.profiles)),
+    };
+  }
+  setAgentProfiles(revision: number, profiles: AgentProfile[]) {
+    return (
+      this.db
+        .prepare(
+          "UPDATE agent_profiles SET revision=revision+1, profiles=? WHERE id=1 AND revision=?",
+        )
+        .run(JSON.stringify(profiles), revision).changes === 1
     );
   }
   list(projectId?: string): HarnessRecord[] {
@@ -188,6 +242,25 @@ export class HarnessStore {
           revision,
         ).changes === 1
     );
+  }
+  runtimePolicy(sessionId: string): RuntimePolicy {
+    const row = this.db
+      .prepare("SELECT policy FROM session_runtime_policy WHERE sessionId=?")
+      .get(sessionId);
+    return row ? JSON.parse(String(row.policy)) : {};
+  }
+  setRuntimePolicy(sessionId: string, policy: RuntimePolicy | null) {
+    if (policy === null) {
+      this.db
+        .prepare("DELETE FROM session_runtime_policy WHERE sessionId=?")
+        .run(sessionId);
+      return;
+    }
+    this.db
+      .prepare(
+        "INSERT INTO session_runtime_policy VALUES (?,?) ON CONFLICT(sessionId) DO UPDATE SET policy=excluded.policy",
+      )
+      .run(sessionId, JSON.stringify(policy));
   }
   compaction(sessionId: string) {
     const row = this.db

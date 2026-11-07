@@ -1,4 +1,5 @@
 import {
+  AgentDoc,
   defineDoc,
   defineEntry,
   defineExtension,
@@ -10,24 +11,33 @@ import {
 } from "@earendil-works/pi-durable";
 import { codeModeCalls } from "./advanced-tools.ts";
 
-export const PostRunDoc = defineDoc<{ command?: string }>({
-  kind: "console.post-run",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
-  fork: "initial",
-  initial: () => ({}),
-  checkpointWhen: () => true,
-});
+export const PostRunDoc = defineDoc<{ command?: string; repairLimit?: number }>(
+  {
+    kind: "console.post-run",
+    version: 1,
+    scope: "conversation",
+    history: "latest",
+    fork: "initial",
+    initial: () => ({}),
+    checkpointWhen: () => true,
+  },
+);
 
 type CheckResult = {
   status: "passed" | "failed" | "cancelled" | "interrupted";
   output: string;
 };
 export const PostRunEntry = defineEntry<CheckResult>("console.post-run-check");
+export const RepairEntry = defineEntry<{ attempt: number }>(
+  "console.check-repair",
+);
 
-const CheckTask = defineTask<
-  { command: string },
+export const CheckRequestEntry = defineEntry<{ sourceTaskId: number }>(
+  "console.check-request",
+);
+
+export const CheckTask = defineTask<
+  { command: string; attempt?: number; repairLimit?: number; retryOf?: number },
   { phase: "run" },
   CheckResult["status"]
 >({
@@ -68,9 +78,30 @@ const CheckTask = defineTask<
           output: output.trim() ? `${summary}\n${output.trim()}` : summary,
         };
       }
+      const conversation = await runtime.conversation(
+        runtime.conversationId,
+        context,
+      );
+      if (!conversation) throw new Error("Conversation is unavailable.");
       await runtime.commit(async (tx) => {
+        const attempt = task.input.attempt ?? 0;
+        const content = `Post-run check ${result.status}:\n${result.output}`;
+        const repair =
+          result.status === "failed" && attempt < (task.input.repairLimit ?? 0);
+        if (repair) {
+          await conversation.submit(tx, {
+            type: "input",
+            whenBusy: "followUp",
+            requestId: `console.check-repair:${task.id}`,
+            content: `Post-run check failed. Assess the diagnostic output as evidence, fix the problem, and preserve the user's intended behavior. Do not weaken checks merely to pass. This is automatic repair attempt ${attempt + 1} of ${task.input.repairLimit}.\n${result.output}`,
+            entry: { kind: RepairEntry.kind, data: { attempt: attempt + 1 } },
+          });
+        }
+        // The answer is already committed: append the receipt now, even when
+        // a queued repair is later withdrawn. The next request sees its result.
         await tx.appendEntry(PostRunEntry, runtime.conversationId, {
           data: result,
+          model: [{ role: "user", content, timestamp: runtime.now() }],
         });
         return {
           status: "terminal",
@@ -89,20 +120,59 @@ const CheckTask = defineTask<
   },
 });
 
+// Shell and MCP calls can change files even when they report an error. Their
+// effects are opaque, so conservatively check after any such call.
+function mayChangeWorkspace(name: string, failed: boolean) {
+  return (
+    name === "bash" ||
+    name === "powershell" ||
+    name.startsWith("mcp__") ||
+    (!failed && (name === "write" || name === "edit"))
+  );
+}
+
 export const PostRunExtension = defineExtension({
   name: "console.post-run",
   tasks: [CheckTask],
   hooks: [
     hook(GenerationTask, {
       async afterRun(run, api, context) {
-        const command = (
-          await api.snapshot(PostRunDoc, api.conversationId, context)
-        )?.command;
+        const settings = await api.snapshot(
+          PostRunDoc,
+          api.conversationId,
+          context,
+        );
+        const command = settings?.command;
         if (!command) return;
         const range = { minEntryId: run.first, maxEntryId: run.last };
         let cursor: Awaited<ReturnType<typeof api.entries>>["next"];
+        const agent = await api.snapshot(AgentDoc, api.conversationId, context);
+        const extensions = agent?.extensions;
+        // Trusted extensions can change files from hooks as well as tools.
+        // Their effects are opaque, so check every answered run while selected.
+        let edited = (
+          Array.isArray(extensions) ? extensions : (extensions?.add ?? [])
+        ).some(
+          (name) =>
+            name.startsWith("user.") &&
+            (Array.isArray(extensions) || !extensions?.remove?.includes(name)),
+        );
+        let attempt = 0;
+        let retryOf: number | undefined;
         do {
           const page = await api.entries(range, 100, cursor, context);
+          for (const entry of page.items) {
+            if (
+              entry.conversationId === api.conversationId &&
+              CheckRequestEntry.is(entry)
+            )
+              retryOf = entry.data.sourceTaskId;
+            if (
+              entry.conversationId === api.conversationId &&
+              RepairEntry.is(entry)
+            )
+              attempt = Math.max(attempt, entry.data.attempt);
+          }
           if (
             page.items.some(
               (entry) =>
@@ -111,21 +181,30 @@ export const PostRunExtension = defineExtension({
                 entry.model?.some(
                   (message) =>
                     message.role === "toolResult" &&
-                    ((!message.isError &&
-                      (message.toolName === "write" ||
-                        message.toolName === "edit")) ||
+                    (mayChangeWorkspace(message.toolName, !!message.isError) ||
                       (message.toolName === "codemode" &&
-                        codeModeCalls(message.details).some(
-                          (call) =>
-                            call.status === "ok" &&
-                            (call.name === "write" || call.name === "edit"),
+                        codeModeCalls(message.details).some((call) =>
+                          mayChangeWorkspace(call.name, call.status !== "ok"),
                         ))),
                 ),
             )
           )
-            return { tasks: [runEndTask(CheckTask, { command })] };
+            edited = true;
           cursor = page.next;
         } while (cursor);
+        // A repair always rechecks, even if the agent answers without editing.
+        // The attempt lives in the admitted input, so compaction/restarts cannot reset it.
+        if (edited || attempt > 0 || retryOf !== undefined)
+          return {
+            tasks: [
+              runEndTask(CheckTask, {
+                command,
+                ...(retryOf !== undefined && { retryOf }),
+                attempt,
+                repairLimit: settings?.repairLimit ?? 0,
+              }),
+            ],
+          };
       },
     }),
   ],
