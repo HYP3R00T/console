@@ -9,29 +9,27 @@ test("task diagnostics explain recovery boundaries without leaking payloads", ()
       status,
       error: { message: secret, detail: { reason: "restart_limit", secret } },
     });
-    assert.match(message!, /restart limit/);
-    assert.match(message!, /does not resume/);
-    assert.ok(!message!.includes(secret));
+    assert.ok(message);
+    assert.match(message, /restart limit/);
+    assert.match(message, /does not resume/);
+    assert.ok(!message.includes(secret));
     for (const detail of [null, secret, [secret], { reason: secret }]) {
       const diagnostic = taskDiagnostic({
         status,
         error: { message: secret, detail },
       });
-      assert.match(diagnostic!, /side effects/);
-      assert.ok(!diagnostic!.includes(secret));
+      assert.ok(diagnostic);
+      assert.match(diagnostic, /side effects/);
+      assert.ok(!diagnostic.includes(secret));
     }
   }
-  assert.match(
-    taskDiagnostic({ status: "orphaned", reason: secret })!,
-    /compatible backend/,
-  );
-  assert.ok(
-    !taskDiagnostic({ status: "orphaned", reason: secret })!.includes(secret),
-  );
-  assert.match(
-    taskDiagnostic({ status: "aborted", reason: secret })!,
-    /cancelled/,
-  );
+  const orphaned = taskDiagnostic({ status: "orphaned", reason: secret });
+  assert.ok(orphaned);
+  assert.match(orphaned, /compatible backend/);
+  assert.ok(!orphaned.includes(secret));
+  const aborted = taskDiagnostic({ status: "aborted", reason: secret });
+  assert.ok(aborted);
+  assert.match(aborted, /cancelled/);
   assert.equal(
     taskDiagnostic({ status: "completed", result: secret }),
     undefined,

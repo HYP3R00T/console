@@ -7,7 +7,7 @@ import test from "node:test";
 import { setTimeout } from "node:timers/promises";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { fauxAssistantMessage } from "@earendil-works/pi-ai";
-import type { SubmissionId, TaskId } from "@earendil-works/pi-durable";
+import type { SubmissionId } from "@earendil-works/pi-durable";
 import {
   CheckTask,
   PostRunDoc,
@@ -218,8 +218,8 @@ for (const interrupted of [true, false]) {
     const rejected = await f.app.inject({
       method: "POST",
       url: url.replace(
-        String(original) + "/recheck",
-        String(replacement.id) + "/recheck",
+        `${String(original)}/recheck`,
+        `${String(replacement.id)}/recheck`,
       ),
       payload: { ...payload, requestId: randomUUID() },
     });

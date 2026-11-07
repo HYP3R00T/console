@@ -460,12 +460,13 @@ export function ConversationInspector({
                           ...data.managedExtensions.selected,
                         ]),
                       ].map((name) => {
+                        const managedExtensions = data.managedExtensions;
+                        if (!managedExtensions) return null;
                         const selected =
-                          data.managedExtensions!.selected.includes(name);
-                        const installed =
-                          data.managedExtensions!.installed?.some(
-                            (item) => item.name === name,
-                          );
+                          managedExtensions.selected.includes(name);
+                        const installed = managedExtensions.installed?.some(
+                          (item) => item.name === name,
+                        );
                         return (
                           <div
                             key={name}
@@ -489,13 +490,10 @@ export function ConversationInspector({
                               onClick={() =>
                                 void update({
                                   managedExtensions: selected
-                                    ? data.managedExtensions!.selected.filter(
+                                    ? managedExtensions.selected.filter(
                                         (item) => item !== name,
                                       )
-                                    : [
-                                        ...data.managedExtensions!.selected,
-                                        name,
-                                      ],
+                                    : [...managedExtensions.selected, name],
                                 })
                               }
                             >

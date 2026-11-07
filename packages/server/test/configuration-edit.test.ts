@@ -51,9 +51,11 @@ test("machine configuration edits persist owner-only files, serialize competing 
       responses.map((response) => response.statusCode).sort(),
       [200, 409],
     );
-    const saved = responses
-      .find((response) => response.statusCode === 200)!
-      .json();
+    const successfulResponse = responses.find(
+      (response) => response.statusCode === 200,
+    );
+    assert.ok(successfulResponse);
+    const saved = successfulResponse.json();
     assert.equal(saved.invalid, false);
     assert.deepEqual(saved.configuration, configuration);
     const path = join(directory, file);

@@ -1794,9 +1794,9 @@ export class HarnessService {
             409,
             "Install the extension on this backend before selecting it.",
           );
+        const selected = change.managedExtensions;
         await conversation.commit(async (tx) => {
           const agent = await tx.doc(AgentDoc, conversation.id);
-          const selected = change.managedExtensions!;
           if (Array.isArray(agent.extensions)) {
             agent.extensions = [
               ...agent.extensions.filter((name) => !name.startsWith("user.")),

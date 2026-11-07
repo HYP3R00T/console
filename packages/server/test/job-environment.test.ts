@@ -25,7 +25,9 @@ for (const sandbox of [false, true]) {
     let f = await fixture(directory);
     t.after(() => f.app.close());
     const project = await f.projects.register("Job workspace", workspace);
-    const { sessionId } = (await f.service.list(project.id)).sessions[0]!;
+    const session = (await f.service.list(project.id)).sessions[0];
+    assert.ok(session);
+    const { sessionId } = session;
     let { harness } = await f.service.session(sessionId);
     const root = await harness.root(context);
     await root.configure(
