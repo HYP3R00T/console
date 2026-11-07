@@ -464,6 +464,9 @@ test("saved inspection tool selections resolve to their remaining coding tools",
       ["edit", false],
       ["bash", false],
       ["review_workspace", false],
+      ["reviewer_profiles", false],
+      ["background_agent", false],
+      ["stop_background_agent", false],
     ],
   );
   const standalone = await f.service.createStandalone();
@@ -477,7 +480,16 @@ test("saved inspection tool selections resolve to their remaining coding tools",
     ).tools
       .filter(({ enabled }) => enabled)
       .map(({ name }) => name),
-    ["read", "write", "edit", "bash", "review_workspace"],
+    [
+      "read",
+      "write",
+      "edit",
+      "bash",
+      "review_workspace",
+      "reviewer_profiles",
+      "background_agent",
+      "stop_background_agent",
+    ],
   );
 
   f.faux.setResponses([

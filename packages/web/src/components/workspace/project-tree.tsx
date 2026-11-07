@@ -16,6 +16,7 @@ import {
 import { useConversationPins } from "@/components/sessions/conversation-preferences";
 import { ConversationRow } from "@/components/sessions/conversation-row";
 import { Button } from "@/components/ui/button";
+import { standaloneConversationPath } from "@/lib/conversation-path";
 import { conversationKey } from "@/lib/conversation-pins";
 import { splitPinnedItems } from "@/lib/navigation-sections";
 import { usePinnedConversations } from "./use-pinned-conversations";
@@ -100,10 +101,14 @@ function ProjectTreeContent({
   ) {
     return (
       <ConversationRow
-        key={session.sessionId}
+        key={`${session.sessionId}:${session.conversationId}`}
         sessionId={session.sessionId}
         conversation={{ id: session.conversationId, name: session.name }}
-        href={`${standalone.base}/${session.sessionId}`}
+        href={standaloneConversationPath(
+          standalone.base,
+          session.sessionId,
+          session.conversationId,
+        )}
         compact={compact}
         closeMobile={closeMobile}
       />
@@ -122,7 +127,11 @@ function ProjectTreeContent({
             href={
               session.projectId
                 ? `${base}/projects/${session.projectId}/sessions/${session.sessionId}/conversations/${conversation.id}`
-                : `${standalone.base}/${session.sessionId}`
+                : standaloneConversationPath(
+                    standalone.base,
+                    session.sessionId,
+                    conversation.id,
+                  )
             }
             compact={compact}
             closeMobile={closeMobile}

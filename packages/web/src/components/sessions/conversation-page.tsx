@@ -76,6 +76,7 @@ function ProjectChat({
       sessionId={sessionId}
       conversationId={conversationId}
       projectId={projectId}
+      branches={session.conversations}
       ancestry={
         matched.parent && {
           ...matched.parent,

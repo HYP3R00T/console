@@ -21,11 +21,17 @@ type Review = {
 
 export function ReviewTranscript({
   reviewId,
+  jobTaskId,
   path,
   request,
   follow = false,
+  agentId,
+  active = true,
 }: {
-  reviewId: number;
+  reviewId?: number;
+  jobTaskId?: number;
+  agentId?: string;
+  active?: boolean;
   path: string;
   request: ReturnType<typeof useBackendRequest>["request"];
   follow?: boolean;
@@ -34,14 +40,21 @@ export function ReviewTranscript({
   const [review, setReview] = useState<Review>();
   const [error, setError] = useState<string>();
   useEffect(() => {
-    if (!open) return;
+    if (!open || !active) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     async function load() {
       try {
-        const next = await request<Review>(`${path}/reviews/${reviewId}`, {
-          signal: controller.signal,
-        });
+        const next = await request<Review>(
+          jobTaskId !== undefined
+            ? `${path}/jobs/${jobTaskId}`
+            : agentId
+              ? `${path}/agents/${agentId}`
+              : `${path}/reviews/${reviewId}`,
+          {
+            signal: controller.signal,
+          },
+        );
         if (controller.signal.aborted) return;
         setReview(next);
         setError(undefined);
@@ -51,7 +64,7 @@ export function ReviewTranscript({
           setError(
             cause instanceof Error
               ? cause.message
-              : "Could not load the review.",
+              : "Could not load the transcript.",
           );
       }
     }
@@ -60,12 +73,18 @@ export function ReviewTranscript({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [follow, open, path, request, reviewId]);
+  }, [active, agentId, follow, jobTaskId, open, path, request, reviewId]);
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger render={<Button variant="ghost" size="xs" />}>
-        {open ? "Hide reviewer transcript" : "Show reviewer transcript"}
+        {open
+          ? "Hide transcript"
+          : jobTaskId !== undefined
+            ? "Show job transcript"
+            : agentId
+              ? "Show agent transcript"
+              : "Show reviewer transcript"}
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="ml-2 flex flex-col gap-2 border-l pl-3">
@@ -74,17 +93,21 @@ export function ReviewTranscript({
               {error}
             </p>
           )}
-          {!review && !error && <p role="status">Loading reviewer…</p>}
+          {!review && !error && <p role="status">Loading transcript…</p>}
           {review?.messages
             .filter(({ text }) => !!text)
             .map((message) => (
               <div key={message.id}>
                 <p className="font-medium">
                   {message.role === "user"
-                    ? "Review brief"
+                    ? "Request"
                     : message.role === "tool"
-                      ? "File read"
-                      : "Reviewer"}
+                      ? "Tool result"
+                      : jobTaskId !== undefined
+                        ? "Worker"
+                        : agentId
+                          ? "Agent"
+                          : "Reviewer"}
                 </p>
                 {message.role === "tool" ? (
                   <pre className="max-h-48 overflow-auto whitespace-pre-wrap">
@@ -96,7 +119,7 @@ export function ReviewTranscript({
               </div>
             ))}
           {review?.partial && <MessageMarkdown compact text={review.partial} />}
-          {review?.busy && <p role="status">Reviewer is working…</p>}
+          {review?.busy && <p role="status">Agent is working…</p>}
           <ExecutionStatus execution={review?.execution} />
         </div>
       </CollapsibleContent>

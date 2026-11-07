@@ -5,12 +5,13 @@ import { useEffect, useState } from "react";
 import { useMachineProjects } from "@/components/projects/projects-provider";
 import { Chat } from "./chat";
 import { usePendingConversationInspector } from "./use-pending-conversation-inspector";
-import type { SessionRecord } from "./use-project-sessions";
+import type { Conversation, SessionRecord } from "./use-project-sessions";
 
 export function StandaloneConversationPage() {
-  const { deviceId, sessionId } = useParams<{
+  const { deviceId, sessionId, conversationId } = useParams<{
     deviceId: string;
     sessionId: string;
+    conversationId?: string;
   }>();
   const { connected, origin } = useMachineProjects(deviceId);
   if (!connected)
@@ -21,9 +22,10 @@ export function StandaloneConversationPage() {
     );
   return (
     <StandaloneChat
-      key={`${origin}:${sessionId}`}
+      key={`${origin}:${sessionId}:${conversationId ?? "1"}`}
       deviceId={deviceId}
       sessionId={sessionId}
+      conversationId={conversationId}
     />
   );
 }
@@ -31,14 +33,18 @@ export function StandaloneConversationPage() {
 function StandaloneChat({
   deviceId,
   sessionId,
+  conversationId,
 }: {
   deviceId: string;
   sessionId: string;
+  conversationId?: string;
 }) {
   const { request, device } = useMachineProjects(deviceId);
   const [data, setData] = useState<{
     session: SessionRecord;
     conversationId: number;
+    parent?: { conversationId: number; at: number };
+    conversations: Conversation[];
   }>();
   const [error, setError] = useState<string>();
   useEffect(() => {
@@ -48,8 +54,8 @@ function StandaloneChat({
       const controller = new AbortController();
       pending = controller;
       setError(undefined);
-      void request<{ session: SessionRecord; conversationId: number }>(
-        `/v1/standalone/${encodeURIComponent(sessionId)}`,
+      void request<NonNullable<typeof data>>(
+        `/v1/standalone/${encodeURIComponent(sessionId)}${conversationId ? `/${encodeURIComponent(conversationId)}` : ""}`,
         { signal: controller.signal },
       )
         .then((value) => {
@@ -70,7 +76,7 @@ function StandaloneChat({
       pending.abort();
       window.removeEventListener("console:sessions-changed", load);
     };
-  }, [request, sessionId]);
+  }, [request, sessionId, conversationId]);
   usePendingConversationInspector(!data && !error);
   if (error)
     return (
@@ -87,6 +93,15 @@ function StandaloneChat({
       deviceId={deviceId}
       sessionId={sessionId}
       conversationId={String(data.conversationId)}
+      branches={data.conversations}
+      ancestry={
+        data.parent && {
+          ...data.parent,
+          name: data.conversations.find(
+            (item) => item.id === data.parent?.conversationId,
+          )?.name,
+        }
+      }
       title={data.session.name}
       subtitle={`${device?.name ?? "Machine"} / Outside projects`}
     />

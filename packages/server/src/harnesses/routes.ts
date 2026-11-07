@@ -7,9 +7,16 @@ import {
 } from "@earendil-works/pi-durable";
 import type { FastifyInstance } from "fastify";
 import { ProjectError } from "../projects/service.ts";
+import { ConfigurationFileError } from "../storage/owner-configuration.ts";
+import { type AgentProfile, agentProfileSchema } from "./agent-profiles.ts";
 import { AttachmentError, type AttachmentInput } from "./attachments.ts";
 import { type ConfigurationChange, contextRetention } from "./configuration.ts";
 import { ConversationInfo } from "./documents.ts";
+import {
+  type ReviewerProfile,
+  reviewerProfileSchema,
+} from "./reviewer-profiles.ts";
+import { runtimePolicySchema } from "./runtime-policy.ts";
 import { HarnessError, type HarnessService } from "./service.ts";
 import {
   conversationView,
@@ -62,7 +69,8 @@ export function registerHarnessRoutes(
       const known =
         error instanceof HarnessError ||
         error instanceof ProjectError ||
-        error instanceof AttachmentError;
+        error instanceof AttachmentError ||
+        error instanceof ConfigurationFileError;
       const invalid =
         error instanceof StorageRequestError ||
         (typeof error === "object" && error !== null && "validation" in error);
@@ -95,6 +103,107 @@ export function registerHarnessRoutes(
         reply
           .code(201)
           .send(await service.operation(() => service.create(req.params.id))),
+    );
+    routes.get("/v1/machine/reviewer-profiles", () =>
+      service.operation(() => service.reviewerProfiles()),
+    );
+    routes.put<{ Body: { revision: number; profiles: ReviewerProfile[] } }>(
+      "/v1/machine/reviewer-profiles",
+      {
+        schema: {
+          body: {
+            type: "object",
+            additionalProperties: false,
+            required: ["revision", "profiles"],
+            properties: {
+              revision: { type: "integer", minimum: 0 },
+              profiles: {
+                type: "array",
+                maxItems: 100,
+                items: reviewerProfileSchema,
+              },
+            },
+          },
+        },
+      },
+      (req) =>
+        service.operation(() =>
+          service.updateReviewerProfiles(req.body.revision, req.body.profiles),
+        ),
+    );
+    routes.get("/v1/machine/extensions/candidates", () =>
+      service.operation(() => service.runtime.extensions.candidates()),
+    );
+    routes.post(
+      "/v1/machine/extensions/reload",
+      { schema: { body: creation } },
+      () => service.operation(() => service.runtime.extensions.reload()),
+    );
+    for (const kind of ["mcp", "ssh", "extensions"] as const) {
+      const manager =
+        kind === "mcp"
+          ? service.runtime.mcp
+          : kind === "ssh"
+            ? service.runtime.remote
+            : service.runtime.extensions;
+      const path = `/v1/machine/configuration/${kind}`;
+      routes.get(path, () =>
+        service.operation(async () => manager.configuration()),
+      );
+      routes.put<{ Body: { revision: string; configuration: unknown } }>(
+        path,
+        {
+          bodyLimit: 80 * 1024,
+          schema: {
+            body: {
+              type: "object",
+              additionalProperties: false,
+              required: ["revision", "configuration"],
+              properties: {
+                revision: {
+                  type: "string",
+                  pattern: "^(missing|[a-f0-9]{64})$",
+                },
+                configuration: { type: "object", additionalProperties: true },
+              },
+            },
+          },
+        },
+        (req) =>
+          service.operation(async () =>
+            manager.updateConfiguration(
+              req.body.revision,
+              req.body.configuration,
+            ),
+          ),
+      );
+    }
+    routes.get("/v1/machine/agent-profiles", () =>
+      service.operation(() => service.agentProfiles()),
+    );
+    routes.put<{ Body: { revision: number; profiles: AgentProfile[] } }>(
+      "/v1/machine/agent-profiles",
+      {
+        schema: {
+          body: {
+            type: "object",
+            additionalProperties: false,
+            required: ["revision", "profiles"],
+            properties: {
+              revision: { type: "integer", minimum: 0 },
+              profiles: {
+                type: "array",
+                maxItems: 100,
+                items: agentProfileSchema,
+              },
+            },
+          },
+        },
+      },
+      (req) =>
+        service.operation(() =>
+          service.updateAgentProfiles(req.body.revision, req.body.profiles),
+        ),
     );
     routes.get("/v1/machine/runtime-defaults", () =>
       service.operation(() => service.runtimeDefaults()),
@@ -165,6 +274,22 @@ export function registerHarnessRoutes(
       (req) =>
         service.operation(() => service.standalone(req.params.sessionId)),
     );
+    routes.get<{ Params: { sessionId: string; conversationId: string } }>(
+      "/v1/standalone/:sessionId/:conversationId",
+      {
+        schema: {
+          params: params({ sessionId: uuid, conversationId: recordId }),
+        },
+      },
+      (req) =>
+        service.operation(() =>
+          service.standalone(
+            req.params.sessionId,
+            false,
+            req.params.conversationId,
+          ),
+        ),
+    );
     routes.get<{ Params: { sessionId: string } }>(
       "/v1/sessions/:sessionId/conversations",
       { schema: { params: params({ sessionId: uuid }) } },
@@ -195,25 +320,298 @@ export function registerHarnessRoutes(
           ),
     );
     routes.get<{ Params: Scope }>(
-      `${base}/tasks`,
+      `${base}/agents`,
       { schema: { params: conversationParams } },
       (req) =>
-        service.operation(async () => {
-          const { harness, conversation } = await service.conversation(
+        service.operation(() =>
+          service.listAgents(req.params.sessionId, req.params.conversationId),
+        ),
+    );
+    routes.post<{
+      Params: Scope;
+      Body: { id: string; name: string; profileId?: string };
+    }>(
+      `${base}/agents`,
+      {
+        schema: {
+          params: conversationParams,
+          body: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "name"],
+            properties: {
+              id: uuid,
+              profileId: uuid,
+              name: { type: "string", minLength: 1, maxLength: 100 },
+            },
+          },
+        },
+      },
+      (req, reply) =>
+        service.operation(async () =>
+          reply
+            .code(201)
+            .send(
+              await service.createAgent(
+                req.params.sessionId,
+                req.params.conversationId,
+                req.body.id,
+                req.body.name,
+                req.body.profileId,
+              ),
+            ),
+        ),
+    );
+    const agentParams = params({
+      sessionId: uuid,
+      conversationId: recordId,
+      agentId: uuid,
+    });
+    routes.post<{
+      Params: Scope & { agentId: string };
+      Body: {
+        content: string;
+        requestId: string;
+        whenBusy?: "steer" | "followUp";
+        delivery?: "display" | "context" | "followUp";
+      };
+    }>(
+      `${base}/agents/:agentId/messages`,
+      {
+        schema: {
+          params: agentParams,
+          body: {
+            type: "object",
+            additionalProperties: false,
+            required: ["content", "requestId"],
+            properties: {
+              content: { type: "string", minLength: 1, maxLength: 32000 },
+              requestId: uuid,
+              whenBusy: { enum: ["steer", "followUp"] },
+              delivery: { enum: ["display", "context", "followUp"] },
+            },
+          },
+        },
+      },
+      (req, reply) =>
+        service.operation(async () =>
+          reply
+            .code(202)
+            .send(
+              await service.messageAgent(
+                req.params.sessionId,
+                req.params.conversationId,
+                req.params.agentId,
+                req.body.content,
+                req.body.requestId,
+                req.body.whenBusy,
+                req.body.delivery,
+              ),
+            ),
+        ),
+    );
+    routes.post<{ Params: Scope & { agentId: string } }>(
+      `${base}/agents/:agentId/stop`,
+      { schema: { params: agentParams, body: creation } },
+      (req) =>
+        service.operation(() =>
+          service.stopAgent(
             req.params.sessionId,
             req.params.conversationId,
+            req.params.agentId,
+          ),
+        ),
+    );
+    routes.get<{ Params: Scope & { agentId: string } }>(
+      `${base}/agents/:agentId`,
+      { schema: { params: agentParams } },
+      (req) =>
+        service.operation(async () => {
+          const { agent, child } = await service.persistentAgent(
+            req.params.sessionId,
+            req.params.conversationId,
+            req.params.agentId,
           );
-          const watch = await harness.watchTaskGraph(context);
+          const watch = await child.watch(context);
           try {
-            return taskGraphView(watch.value, conversation.id);
+            const snapshot = conversationView(watch.value);
+            return {
+              agent,
+              messages: snapshot.messages,
+              partial: snapshot.partial,
+              busy: snapshot.busy,
+              execution: snapshot.execution,
+            };
           } finally {
             await watch.stop();
           }
         }),
     );
+    routes.get<{ Params: Scope }>(
+      `${base}/tasks`,
+      { schema: { params: conversationParams } },
+      (req) =>
+        service.operation(async () => {
+          const { graph, root, owned } = await service.activeTasks(
+            req.params.sessionId,
+            req.params.conversationId,
+          );
+          return taskGraphView(graph, root, owned);
+        }),
+    );
+    routes.get<{
+      Params: Scope;
+      Querystring: { cursor?: string; reviewId?: string };
+    }>(
+      `${base}/tasks/history`,
+      {
+        schema: {
+          params: conversationParams,
+          querystring: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              cursor: { type: "string", maxLength: 4096 },
+              reviewId: recordId,
+            },
+          },
+        },
+      },
+      (req) =>
+        service.operation(async () => {
+          const scope = `${req.params.sessionId}/${req.params.conversationId}/${req.query.reviewId ?? "root"}`;
+          let cursor: Cursor | undefined;
+          if (req.query.cursor) {
+            try {
+              const value = JSON.parse(
+                Buffer.from(req.query.cursor, "base64url").toString(),
+              );
+              if (
+                !value ||
+                value.scope !== scope ||
+                !value.next ||
+                typeof value.next !== "object" ||
+                Array.isArray(value.next)
+              )
+                throw new Error();
+              cursor = value.next;
+            } catch {
+              throw new HarnessError(400, "Invalid task history cursor.");
+            }
+          }
+          const page = await service.taskHistory(
+            req.params.sessionId,
+            req.params.conversationId,
+            cursor,
+            req.query.reviewId,
+          );
+          return {
+            tasks: page.tasks,
+            ...(page.cursor && {
+              cursor: Buffer.from(
+                JSON.stringify({ scope, next: page.cursor }),
+              ).toString("base64url"),
+            }),
+          };
+        }),
+    );
     routes.post<{
       Params: Scope;
-      Body: { brief: string; requestId: string; at?: number };
+      Body: {
+        content: string;
+        profileId?: string;
+        requestId: string;
+        at?: number;
+        delivery?: "display" | "context" | "followUp";
+        recurrence?: { intervalMs: number; occurrences: number };
+      };
+    }>(
+      `${base}/jobs`,
+      {
+        schema: {
+          params: conversationParams,
+          body: {
+            ...creation,
+            required: ["content", "requestId"],
+            properties: {
+              content: { type: "string", minLength: 1, maxLength: 32000 },
+              requestId: uuid,
+              profileId: uuid,
+              at: { type: "integer", minimum: 0, maximum: 8640000000000000 },
+              delivery: {
+                type: "string",
+                enum: ["display", "context", "followUp"],
+              },
+              recurrence: {
+                type: "object",
+                additionalProperties: false,
+                required: ["intervalMs", "occurrences"],
+                properties: {
+                  intervalMs: {
+                    type: "integer",
+                    minimum: 60000,
+                    maximum: 31536000000,
+                  },
+                  occurrences: { type: "integer", minimum: 2, maximum: 1000 },
+                },
+              },
+            },
+          },
+        },
+      },
+      async (req, reply) =>
+        reply
+          .code(202)
+          .send(
+            await service.operation(() =>
+              service.scheduleJob(
+                req.params.sessionId,
+                req.params.conversationId,
+                req.body.content,
+                req.body.requestId,
+                req.body.at,
+                req.body.delivery,
+                req.body.recurrence,
+                req.body.profileId,
+              ),
+            ),
+          ),
+    );
+    routes.delete<{ Params: Scope & { taskId: string } }>(
+      `${base}/jobs/:taskId`,
+      {
+        schema: {
+          params: params({
+            sessionId: uuid,
+            conversationId: recordId,
+            taskId: recordId,
+          }),
+        },
+      },
+      (req) =>
+        service.operation(() =>
+          service.stopJob(
+            req.params.sessionId,
+            req.params.conversationId,
+            req.params.taskId,
+          ),
+        ),
+    );
+    routes.post<{
+      Params: Scope;
+      Body: {
+        brief: string;
+        requestId: string;
+        at?: number;
+        delivery?: "display" | "context" | "followUp";
+        model?: { provider: string; modelId: string };
+        thinkingLevel?: string | null;
+        maxTurns?: number;
+        passes?: number;
+        worktree?: string;
+        profileId?: string;
+        recurrence?: { intervalMs: number; occurrences: number };
+      };
     }>(
       `${base}/reviews`,
       {
@@ -224,8 +622,76 @@ export function registerHarnessRoutes(
             required: ["brief", "requestId"],
             properties: {
               brief: { type: "string", minLength: 1, maxLength: 8000 },
+              model,
+              thinkingLevel: { type: ["string", "null"], maxLength: 40 },
+              maxTurns: { type: "integer", minimum: 1, maximum: 50 },
+              passes: { type: "integer", minimum: 1, maximum: 5 },
+              worktree: { type: "string", minLength: 1, maxLength: 4096 },
+              profileId: uuid,
+              recurrence: {
+                type: "object",
+                additionalProperties: false,
+                required: ["intervalMs", "occurrences"],
+                properties: {
+                  intervalMs: {
+                    type: "integer",
+                    minimum: 60000,
+                    maximum: 31536000000,
+                  },
+                  occurrences: { type: "integer", minimum: 2, maximum: 1000 },
+                },
+              },
+              delivery: {
+                type: "string",
+                enum: ["display", "context", "followUp"],
+              },
               requestId: uuid,
               at: { type: "integer", minimum: 0, maximum: 8640000000000000 },
+            },
+          },
+        },
+      },
+      async (req, reply) =>
+        reply.code(202).send(
+          await service.operation(() =>
+            service.scheduleReview(
+              req.params.sessionId,
+              req.params.conversationId,
+              req.body.brief,
+              req.body.requestId,
+              req.body.at,
+              req.body.delivery,
+              {
+                model: req.body.model,
+                thinkingLevel: req.body.thinkingLevel,
+                maxTurns: req.body.maxTurns,
+                passes: req.body.passes,
+                worktree: req.body.worktree,
+                profileId: req.body.profileId,
+                recurrence: req.body.recurrence,
+              },
+            ),
+          ),
+        ),
+    );
+    routes.post<{
+      Params: Scope & { taskId: string };
+      Body: { requestId: string; acknowledgeEffects: true };
+    }>(
+      `${base}/checks/tasks/:taskId/recheck`,
+      {
+        schema: {
+          params: params({
+            sessionId: uuid,
+            conversationId: recordId,
+            taskId: recordId,
+          }),
+          body: {
+            ...creation,
+            required: ["requestId", "acknowledgeEffects"],
+            properties: {
+              requestId: uuid,
+              acknowledgeEffects: { type: "boolean", const: true },
             },
           },
         },
@@ -235,12 +701,80 @@ export function registerHarnessRoutes(
           .code(202)
           .send(
             await service.operation(() =>
-              service.scheduleReview(
+              service.recheck(
                 req.params.sessionId,
                 req.params.conversationId,
-                req.body.brief,
+                req.params.taskId,
                 req.body.requestId,
-                req.body.at,
+              ),
+            ),
+          ),
+    );
+    routes.post<{
+      Params: Scope & { taskId: string };
+      Body: { requestId: string; acknowledgeEffects: true };
+    }>(
+      `${base}/jobs/tasks/:taskId/retry`,
+      {
+        schema: {
+          params: params({
+            sessionId: uuid,
+            conversationId: recordId,
+            taskId: recordId,
+          }),
+          body: {
+            ...creation,
+            required: ["requestId", "acknowledgeEffects"],
+            properties: {
+              requestId: uuid,
+              acknowledgeEffects: { type: "boolean", const: true },
+            },
+          },
+        },
+      },
+      async (req, reply) =>
+        reply
+          .code(202)
+          .send(
+            await service.operation(() =>
+              service.retryJob(
+                req.params.sessionId,
+                req.params.conversationId,
+                req.params.taskId,
+                req.body.requestId,
+              ),
+            ),
+          ),
+    );
+    routes.post<{
+      Params: Scope & { taskId: string };
+      Body: { requestId: string };
+    }>(
+      `${base}/reviews/tasks/:taskId/retry`,
+      {
+        schema: {
+          params: params({
+            sessionId: uuid,
+            conversationId: recordId,
+            taskId: recordId,
+          }),
+          body: {
+            ...creation,
+            required: ["requestId"],
+            properties: { requestId: uuid },
+          },
+        },
+      },
+      async (req, reply) =>
+        reply
+          .code(202)
+          .send(
+            await service.operation(() =>
+              service.retryReview(
+                req.params.sessionId,
+                req.params.conversationId,
+                req.params.taskId,
+                req.body.requestId,
               ),
             ),
           ),
@@ -264,6 +798,43 @@ export function registerHarnessRoutes(
             req.params.taskId,
           ),
         ),
+    );
+    routes.get<{ Params: Scope & { taskId: string } }>(
+      `${base}/jobs/:taskId`,
+      {
+        schema: {
+          params: params({
+            sessionId: uuid,
+            conversationId: recordId,
+            taskId: recordId,
+          }),
+        },
+      },
+      (req) =>
+        service.operation(async () => {
+          const review = await service.jobConversation(
+            req.params.sessionId,
+            req.params.conversationId,
+            req.params.taskId,
+          );
+          const watch = await review.watch(context);
+          try {
+            const snapshot = conversationView(watch.value);
+            return {
+              messages: snapshot.messages.map(({ id, role, text, failed }) => ({
+                id,
+                role,
+                text: text.slice(0, 16000),
+                failed,
+              })),
+              partial: snapshot.partial.slice(0, 16000),
+              busy: snapshot.busy,
+              execution: snapshot.execution,
+            };
+          } finally {
+            await watch.stop();
+          }
+        }),
     );
     routes.get<{ Params: Scope & { reviewId: string } }>(
       `${base}/reviews/:reviewId`,
@@ -322,6 +893,20 @@ export function registerHarnessRoutes(
           return service.runtime.mcp.reconnect();
         }),
     );
+    for (const target of ["mcp", "remote"] as const) {
+      routes.post<{ Params: Scope }>(
+        `${base}/${target}/reload`,
+        { schema: { params: conversationParams, body: creation } },
+        (req) =>
+          service.operation(async () => {
+            await service.conversation(
+              req.params.sessionId,
+              req.params.conversationId,
+            );
+            return service.runtime[target].reload();
+          }),
+      );
+    }
     routes.get<{ Params: Scope }>(
       `${base}/configuration`,
       { schema: { params: conversationParams } },
@@ -392,11 +977,21 @@ export function registerHarnessRoutes(
             properties: {
               revision: { type: "string", pattern: "^[a-f0-9]{64}$" },
               tools: toolSelection,
+              managedExtensions: {
+                type: "array",
+                maxItems: 32,
+                uniqueItems: true,
+                items: {
+                  type: "string",
+                  pattern: "^user\\.[a-z][a-z0-9-]{0,63}$",
+                },
+              },
               instructions,
               projectTools: toolSelection,
               projectInstructions: instructions,
               workspaceGuidance: instructions,
               inspectionGuidance: instructions,
+              runtimePolicy: { anyOf: [{ type: "null" }, runtimePolicySchema] },
               automaticCompaction: { type: "boolean" },
               planMode: { type: "boolean" },
               sandbox: { type: "boolean" },
@@ -408,6 +1003,7 @@ export function registerHarnessRoutes(
               },
               codeMode: { type: "boolean" },
               mcp: { type: "boolean" },
+              postRunRepairLimit: { type: "integer", minimum: 0, maximum: 5 },
               postRunCommand: {
                 anyOf: [{ type: "null" }, { type: "string", maxLength: 1000 }],
               },

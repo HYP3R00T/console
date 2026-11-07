@@ -1,4 +1,4 @@
-import { chmod, mkdir, open } from "node:fs/promises";
+import { chmod, mkdir, open, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import {
@@ -22,19 +22,43 @@ import { linkedWorktreePath } from "../projects/git-metadata.ts";
 import type { ProviderService } from "../providers/service.ts";
 import { openDatabase } from "../storage/database.ts";
 import { createAdvancedTools } from "./advanced-tools.ts";
+import { AgentControlExtension } from "./agent-tools.ts";
+import { createBackgroundJobExtension } from "./background-job.ts";
 import { BackgroundReviewExtension } from "./background-review.ts";
 import {
   defaultInspectionGuidance,
   defaultWorkspaceGuidance,
 } from "./guidance.ts";
+import { workspaceImages } from "./images.ts";
+import {
+  assertJobEnvironment,
+  type JobEnvironment,
+  JobWorkspace,
+} from "./job-workspace.ts";
+import { ManagedExtensions } from "./managed-extensions.ts";
 import { McpTools } from "./mcp-tools.ts";
+import { PersistentAgentExtension } from "./persistent-agents.ts";
 import { PlanDoc, PlanExtension } from "./plan.ts";
 import { PostRunExtension } from "./post-run.ts";
 import { purgeConversation } from "./purge-conversation.ts";
-import { ReviewExtension, ReviewerAgent } from "./reviewer.ts";
+import { RecurringJobExtension } from "./recurring-job.ts";
+import { RecurringReviewExtension } from "./recurring-review.ts";
+import {
+  createReviewExtension,
+  ReviewExtension,
+  ReviewerAgent,
+  ReviewWorkspace,
+} from "./reviewer.ts";
+import type { ReviewerProfile } from "./reviewer-profiles.ts";
+import { type RuntimePolicy, runtimeSettings } from "./runtime-policy.ts";
 import { budgetedRequests, exceedsBudget } from "./token-budget.ts";
 
 const defaultPreferences = {
+  reviewerProfiles: (): ReviewerProfile[] => [],
+  reviewerProfile: async (_id: string): Promise<ReviewerProfile> => {
+    throw new Error("Reviewer profile not found.");
+  },
+  runtimePolicy: (_sessionId: string): RuntimePolicy => ({}),
   workspaceGuidance: (): string => defaultWorkspaceGuidance,
   inspectionGuidance: (_sessionId: string): string => defaultInspectionGuidance,
   projectInstructions: (_sessionId: string): string => "",
@@ -51,6 +75,7 @@ type ProjectScope = { id: string; name: string; directory: string };
 /** One manager owns every open session in this process. Opening is single-flight. */
 export class HarnessRuntime {
   readonly mcp: McpTools;
+  readonly extensions: ManagedExtensions;
   readonly remote: RemoteWorkspaces;
   private opened = new Map<string, Promise<Harness>>();
   private sandboxes = new Map<string, WorkspaceSandboxes>();
@@ -72,6 +97,7 @@ export class HarnessRuntime {
   ) {
     this.directory = directory;
     this.mcp = new McpTools(join(dirname(directory), "mcp.json"));
+    this.extensions = new ManagedExtensions(dirname(directory));
     this.remote = new RemoteWorkspaces(
       join(dirname(directory), "execution.json"),
     );
@@ -141,6 +167,9 @@ export class HarnessRuntime {
     const sandboxPool = new WorkspaceSandboxes(this.directory);
     const advancedTools = createAdvancedTools();
     let stopMcpUpdates: (() => void) | undefined;
+    let stopExtensions: (() => void) | undefined;
+    const reviewSandboxes = new Set<ConversationId>();
+    let stopReviewWatch: (() => Promise<void>) | undefined;
     // Recheck enabled state on every generation/compaction, including recovery.
     let opened: Harness | undefined;
     const requests = budgetedRequests(
@@ -166,7 +195,7 @@ export class HarnessRuntime {
     });
     try {
       const registry = createRegistry();
-      const coding = createCodingTools();
+      const coding = createCodingTools({ images: workspaceImages });
       registry.install(coding);
       const project = await this.project(sessionId);
       const workspace = defineExtension({
@@ -198,41 +227,126 @@ export class HarnessRuntime {
       });
       registry.install(workspace);
       registry.install(PlanExtension);
-      registry.install(ReviewExtension);
+      registry.install(
+        createReviewExtension(
+          this.preferences.reviewerProfiles,
+          this.preferences.reviewerProfile,
+        ),
+      );
       registry.install(ReviewerAgent);
       registry.install(PostRunExtension);
       registry.install(BackgroundReviewExtension);
+      registry.install(
+        createBackgroundJobExtension(async (input, root, ctx) => {
+          if (!input.environment) return;
+          if (!opened) throw new Error("Session is opening.");
+          const project = await this.project(sessionId);
+          const remote = await opened.snapshot(RemoteWorkspaceDoc, root, ctx);
+          assertJobEnvironment(input.environment, {
+            directory:
+              project?.directory ?? (await this.standaloneWorkspace(sessionId)),
+            worktree: project
+              ? this.preferences.worktree(sessionId, root)
+              : null,
+            sandbox:
+              (await opened.snapshot(SandboxDoc, root, ctx))?.enabled ?? false,
+            remoteProfile: remote?.profile ?? null,
+            remoteIdentity: remote?.profile
+              ? this.remote.identity(remote.profile)
+              : null,
+          });
+          if (
+            !input.environment.remoteProfile &&
+            !(
+              await stat(
+                input.environment.worktree ?? input.environment.directory,
+              )
+            ).isDirectory()
+          )
+            throw new Error("Job directory is unavailable.");
+          if (
+            input.environment.worktree &&
+            (!project ||
+              (await linkedWorktreePath(
+                project.directory,
+                input.environment.worktree,
+              )) !== input.environment.worktree)
+          )
+            throw new Error("Worktree is unavailable.");
+        }),
+      );
+      registry.install(RecurringReviewExtension);
+      registry.install(RecurringJobExtension);
+      registry.install(PersistentAgentExtension);
+      registry.install(AgentControlExtension);
       registry.install(advancedTools.extension);
       await this.remote.start();
       await this.mcp.start();
       const installMcp = () => registry.install(this.mcp.extension());
       installMcp();
       stopMcpUpdates = this.mcp.subscribe(installMcp);
+      await this.extensions.start();
+      const managed = this.extensions.attach(registry);
+      stopExtensions = managed.close;
       const harness = await Harness.open(
         storage,
         {
           models,
           env: async ({ cwd, conversationId, read }, context) => {
             const project = await this.project(sessionId);
-            const root = opened
+            const ancestry = opened
               ? await opened.commit(async (tx) => {
                   let id = conversationId;
+                  let job:
+                    | { policy: JobEnvironment; workerId: ConversationId }
+                    | undefined;
                   while (true) {
+                    const workspace = await tx.doc(JobWorkspace, id);
+                    if (!job && workspace.policy)
+                      job = { policy: { ...workspace.policy }, workerId: id };
                     const owner = (await tx.conversation(id))?.owner;
-                    if (!owner) return id;
+                    if (!owner) return { root: id, job };
                     id = owner.conversationId;
                   }
                 }, context)
-              : conversationId;
+              : { root: conversationId, job: undefined };
+            const { root, job } = ancestry;
             const remote = await read.snapshot(
               RemoteWorkspaceDoc,
               root,
               context,
             );
+            const sandbox =
+              (await read.snapshot(SandboxDoc, root, context))?.enabled ??
+              false;
+            if (job)
+              assertJobEnvironment(job.policy, {
+                directory:
+                  project?.directory ??
+                  (await this.standaloneWorkspace(sessionId)),
+                worktree: project
+                  ? this.preferences.worktree(sessionId, root)
+                  : null,
+                sandbox,
+                remoteProfile: remote?.profile ?? null,
+                remoteIdentity: remote?.profile
+                  ? this.remote.identity(remote.profile)
+                  : null,
+              });
+            const reviewWorkspace = await read.snapshot(
+              ReviewWorkspace,
+              conversationId,
+              context,
+            );
+            if (reviewWorkspace?.worktree && (!project || remote?.profile))
+              throw new Error(
+                "The dedicated review worktree requires local project execution.",
+              );
             if (remote?.profile)
               return this.remote.environment(remote.profile, context);
             const assigned =
-              project && this.preferences.worktree(sessionId, root);
+              reviewWorkspace?.worktree ||
+              (project && this.preferences.worktree(sessionId, root));
             if (
               assigned &&
               project &&
@@ -241,13 +355,15 @@ export class HarnessRuntime {
             )
               throw new Error("The assigned Git worktree is unavailable.");
             const directory = assigned || project?.directory;
-            if ((await read.snapshot(SandboxDoc, root, context))?.enabled) {
+            if (sandbox) {
+              if (reviewWorkspace?.worktree || job)
+                reviewSandboxes.add(conversationId);
               const readOnly =
-                root !== conversationId ||
+                (root !== conversationId && job?.workerId !== conversationId) ||
                 !!(await read.snapshot(PlanDoc, conversationId, context))
                   ?.previous;
               return sandboxPool.open(
-                root,
+                reviewWorkspace?.worktree || job ? conversationId : root,
                 directory ?? (await this.standaloneWorkspace(sessionId)),
                 readOnly,
                 !project,
@@ -266,21 +382,46 @@ export class HarnessRuntime {
               }),
             );
           },
-          registry,
+          registry: managed.reader,
           identity: { attribution: null },
           settings: () => ({
-            extensions: [coding, workspace, ReviewExtension, PostRunExtension],
-            stream: { timeoutMs: 120000, maxRetries: 0 },
-            retry: { maxRetries: 1 },
-            compaction: this.preferences.compaction(sessionId),
+            extensions: [
+              coding,
+              workspace,
+              ReviewExtension,
+              PostRunExtension,
+              AgentControlExtension,
+            ],
+            ...runtimeSettings(this.preferences.runtimePolicy(sessionId)),
+            compaction: {
+              ...this.preferences.compaction(sessionId),
+              ...this.preferences.runtimePolicy(sessionId).compaction,
+            },
           }),
         },
         context,
       );
       opened = harness;
+      const reviewWatch = await harness.watchTaskGraph(context);
+      stopReviewWatch = async () => {
+        await reviewWatch.stop();
+      };
+      reviewWatch.start(async (call) => {
+        if (call.kind !== "value" || reviewSandboxes.size === 0) return;
+        const active = new Set(
+          Object.values(call.value.tasks).map((task) => task.conversationId),
+        );
+        for (const id of reviewSandboxes) {
+          if (active.has(id)) continue;
+          sandboxPool.release(id);
+          reviewSandboxes.delete(id);
+        }
+      });
       this.sandboxes.set(sessionId, sandboxPool);
       void harness.closed.then(() => {
         stopMcpUpdates?.();
+        stopExtensions?.();
+        void stopReviewWatch?.();
         sandboxPool.close();
         void advancedTools.close();
         if (this.sandboxes.get(sessionId) === sandboxPool)
@@ -289,6 +430,8 @@ export class HarnessRuntime {
       return harness;
     } catch (error) {
       stopMcpUpdates?.();
+      stopExtensions?.();
+      await stopReviewWatch?.();
       sandboxPool.close();
       await advancedTools.close();
       await storage.close(context);

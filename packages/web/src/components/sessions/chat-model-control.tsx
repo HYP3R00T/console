@@ -16,9 +16,11 @@ import type { useChatModels } from "./use-chat-models";
 export function ChatModelControl({
   models,
   disabled,
+  label = "Model and thinking",
 }: {
   models: ReturnType<typeof useChatModels>;
   disabled: boolean;
+  label?: string;
 }) {
   const [list, setList] = useState(false);
   const focusControl = useCallback(
@@ -40,7 +42,7 @@ export function ChatModelControl({
             type="button"
             variant="ghost"
             size="sm"
-            aria-label="Model and thinking"
+            aria-label={label}
             disabled={disabled || !models.models.length}
             className="min-w-0 max-w-full shrink gap-1 rounded-full px-2 text-xs"
           />
@@ -59,7 +61,7 @@ export function ChatModelControl({
         align="end"
         className="w-72 max-w-[calc(100vw-2rem)] gap-3 p-2"
       >
-        <PopoverTitle className="sr-only">Model and thinking</PopoverTitle>
+        <PopoverTitle className="sr-only">{label}</PopoverTitle>
         {list ? (
           <>
             <Button

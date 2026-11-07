@@ -19,15 +19,19 @@ import {
   defaultInspectionGuidance,
   defaultWorkspaceGuidance,
 } from "./guidance.ts";
+import type { ManagedExtensions } from "./managed-extensions.ts";
 import { type McpTools, mcpExtensionName } from "./mcp-tools.ts";
 import { PlanDoc } from "./plan.ts";
 import { PostRunDoc } from "./post-run.ts";
+import type { RuntimePolicy } from "./runtime-policy.ts";
 import { usageTokens } from "./token-budget.ts";
 
 export const contextRetention = { min: 1000, max: 32000, step: 1000 };
 
 export type ConfigurationChange = {
   revision: string;
+  managedExtensions?: string[];
+  runtimePolicy?: RuntimePolicy | null;
   tools?: string[] | null;
   instructions?: string | null;
   projectTools?: string[] | null;
@@ -37,6 +41,7 @@ export type ConfigurationChange = {
   maxTurns?: number | null;
   planMode?: boolean;
   postRunCommand?: string | null;
+  postRunRepairLimit?: number;
   tokenBudget?: number | null;
   worktree?: string | null;
   sandbox?: boolean;
@@ -52,6 +57,8 @@ export async function conversationConfiguration(
   conversation: Conversation,
   project?: ProjectAgentSettings,
   options?: {
+    runtimePolicy?: RuntimePolicy;
+    managedExtensions?: ReturnType<ManagedExtensions["status"]>;
     compaction: { keepRecentTokens: number; enabled: boolean };
     workspaceGuidance: string | null;
     projectName?: string;
@@ -76,6 +83,22 @@ export async function conversationConfiguration(
       ?.profile ?? null;
   const plan = await harness.snapshot(PlanDoc, conversation.id, context);
   const previousExtensions = plan?.previous?.extensions;
+  const selection = previousExtensions ?? stored?.extensions;
+  const managedSelection = (
+    Array.isArray(selection) ? selection : (selection?.add ?? [])
+  ).filter(
+    (name) =>
+      name.startsWith("user.") &&
+      (Array.isArray(selection) || !selection?.remove?.includes(name)),
+  );
+  const managedExtensions = {
+    ...options?.managedExtensions,
+    selected: managedSelection,
+    suspended: !!plan?.previous,
+  };
+  const postRunRepairLimit =
+    (await harness.snapshot(PostRunDoc, conversation.id, context))
+      ?.repairLimit ?? 0;
   const postRunCommand =
     (await harness.snapshot(PostRunDoc, conversation.id, context))?.command ??
     null;
@@ -137,19 +160,24 @@ export async function conversationConfiguration(
           maxTurns: stored?.maxTurns,
           planMode: !!plan?.previous,
           postRunCommand,
+          postRunRepairLimit,
           tokenBudget,
           worktree: options?.worktree,
           sandbox,
           remoteProfile,
           extensions: stored?.extensions,
+          managedExtensions,
           project,
           compaction,
+          runtimePolicy: options?.runtimePolicy ?? {},
           workspaceGuidance: options?.workspaceGuidance,
           catalog: tools.map((tool) => tool.name),
         }),
       )
       .digest("hex"),
     tools,
+    managedExtensions,
+    runtimePolicy: options?.runtimePolicy ?? {},
     project,
     guidance: options && {
       workspace: {
@@ -193,6 +221,7 @@ export async function conversationConfiguration(
     toolSource: stored?.tools === undefined ? "default" : "conversation",
     plan: { active: !!plan?.previous, markdown: plan?.markdown },
     postRunCommand,
+    postRunRepairLimit,
     worktree: options?.worktree,
     sandbox: process.platform === "linux" || sandbox ? sandbox : undefined,
     remote: options?.remote && { ...options.remote, profile: remoteProfile },
