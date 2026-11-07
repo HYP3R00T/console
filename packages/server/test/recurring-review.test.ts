@@ -69,7 +69,11 @@ test("recurring reviews survive reopen, create fresh sequential children and sto
       ),
     context,
   );
-  assert.notEqual(owned[0]!.items[0]!.id, owned[1]!.items[0]!.id);
+  const first = owned[0]?.items[0];
+  const second = owned[1]?.items[0];
+  assert.ok(first);
+  assert.ok(second);
+  assert.notEqual(first.id, second.id);
 });
 
 test("recurring review API validates bounds, deduplicates and enforces cancellation ownership", async (t) => {

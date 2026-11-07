@@ -133,11 +133,11 @@ function ExtensionEditor({
     setMessage(undefined);
     try {
       const current =
-        action === "save"
+        action === "save" && snapshot && configuration
           ? await request<Snapshot>(path, {
               method: "PUT",
               body: JSON.stringify({
-                revision: snapshot!.revision,
+                revision: snapshot.revision,
                 configuration,
               }),
             })
@@ -237,10 +237,11 @@ function ExtensionEditor({
                   size="sm"
                   disabled={busy || !configuration}
                   onClick={() => {
+                    if (!configuration) return;
                     setText(
                       JSON.stringify(
                         {
-                          extensions: configuration!.extensions.filter(
+                          extensions: configuration.extensions.filter(
                             (item) => item.name !== extension.name,
                           ),
                         },
@@ -302,9 +303,10 @@ function ExtensionEditor({
                     size="sm"
                     variant="outline"
                     disabled={busy || !configuration}
-                    onClick={() =>
-                      addBundleToDraft(bundle.module, bundle.sha256!)
-                    }
+                    onClick={() => {
+                      if (bundle.sha256)
+                        addBundleToDraft(bundle.module, bundle.sha256);
+                    }}
                   >
                     Use {bundle.module}
                   </Button>

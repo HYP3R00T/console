@@ -145,7 +145,9 @@ for (const delivery of ["display", "context", "followUp"] as const) {
       (tx) => tx.scanConversations({ ownerTaskId: id }, 1),
       context,
     );
-    const child = await harness.conversation(owned.items[0]!.id, context);
+    const ownedConversation = owned.items[0];
+    assert.ok(ownedConversation);
+    const child = await harness.conversation(ownedConversation.id, context);
     assert.ok(child);
     assert.ok(
       (await child.entries({}, 100, undefined, context)).items.some(
@@ -378,12 +380,14 @@ for (const repaired of [true, false]) {
     const entries = (await root.entries({}, 100, undefined, context)).items;
     const reports = entries.filter(BackgroundJobEntry.is);
     assert.equal(reports.length, 1);
+    const report = reports[0];
+    assert.ok(report);
     assert.equal(reports[0]?.data.status, repaired ? "completed" : "failed");
     assert.match(
-      reports[0]!.data.text,
+      report.data.text,
       repaired ? /Final repaired answer/ : /Post-run validation did not pass/,
     );
-    assert.doesNotMatch(reports[0]!.data.text, /Initial answer/);
+    assert.doesNotMatch(report.data.text, /Initial answer/);
     const delivered = entries.filter(
       (entry) => entry.kind === "console.job-context",
     );
@@ -545,6 +549,8 @@ for (const stop of [false, true]) {
     const entries = (await root.entries({}, 100, undefined, context)).items;
     const reports = entries.filter(BackgroundJobEntry.is);
     assert.equal(reports.length, 1);
+    const report = reports[0];
+    assert.ok(report);
     assert.equal(reports[0]?.data.status, stop ? "cancelled" : "failed");
     assert.equal(
       entries.filter((entry) => entry.kind === "console.job-follow-up").length,
