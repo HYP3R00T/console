@@ -1,19 +1,12 @@
 "use client";
 
-import {
-  Archive,
-  ArrowLeft,
-  Bot,
-  Folder,
-  Keyboard,
-  KeyRound,
-  Palette,
-  Settings2,
-} from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
+import { Suspense } from "react";
 import { useDevices } from "@/components/devices/device-provider";
 import { SidebarAction } from "@/components/layout/sidebar-action";
+import { PreferencesNavigation } from "@/components/settings/preferences-navigation";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sidebar,
@@ -23,17 +16,18 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { ProjectTree } from "@/components/workspace/project-tree";
+import {
+  isPreferencesPath,
+  type PreferenceTarget,
+} from "@/lib/preferences-navigation";
 
 export function AppSidebar() {
-  const pathname = usePathname();
-  const params = useParams<{ deviceId?: string }>();
-  const registry = useDevices();
+  const pathname = usePathname(),
+    params = useParams<PreferenceTarget>(),
+    registry = useDevices();
   const { setOpenMobile } = useSidebar();
   const device = registry.devices.find((item) => item.id === params.deviceId);
-  const preferences = pathname.startsWith("/settings");
-  const deviceSettings =
-    !!device &&
-    pathname.startsWith(`/devices/${encodeURIComponent(device.id)}/settings`);
+  const preferences = isPreferencesPath(pathname);
   const closeMobile = () => setOpenMobile(false);
   return (
     <Sidebar collapsible="none" className="w-full!">
@@ -48,74 +42,15 @@ export function AppSidebar() {
           viewportClassName="data-[has-overflow-y]:pr-3"
         >
           {preferences ? (
-            <nav aria-label="Preference categories" className="space-y-1 px-2">
-              {[
-                {
-                  label: "Appearance",
-                  href: "/settings/appearance",
-                  icon: Palette,
-                },
-                {
-                  label: "Keyboard shortcuts",
-                  href: "/settings/shortcuts",
-                  icon: Keyboard,
-                },
-                {
-                  label: "Configuration backup",
-                  href: "/settings/configuration",
-                  icon: Settings2,
-                },
-              ].map(({ label, href, icon: Icon }) => (
-                <SidebarAction
-                  key={href}
-                  nativeButton={false}
-                  render={<Link href={href} onClick={closeMobile} />}
-                  aria-current={pathname.startsWith(href) ? "page" : undefined}
-                  className={
-                    pathname.startsWith(href) ? "sidebar-selected" : undefined
-                  }
-                >
-                  <Icon />
-                  <span>{label}</span>
-                </SidebarAction>
-              ))}
-            </nav>
-          ) : deviceSettings && device ? (
-            <nav
-              aria-label="Machine setting categories"
-              className="space-y-1 px-2"
+            <Suspense
+              fallback={
+                <p className="px-3 text-sm text-muted-foreground">
+                  Loading preferences…
+                </p>
+              }
             >
-              {[
-                { id: "providers", label: "Providers", icon: KeyRound },
-                { id: "runtime", label: "Runtime defaults", icon: Bot },
-                {
-                  id: "guidance",
-                  label: "Workspace guidance",
-                  icon: Settings2,
-                },
-                { id: "reviewers", label: "Reviewer profiles", icon: Bot },
-                { id: "agents", label: "Agent profiles", icon: Bot },
-                { id: "integrations", label: "MCP and SSH", icon: Bot },
-                { id: "extensions", label: "Extensions", icon: Bot },
-                { id: "projects", label: "Projects", icon: Folder },
-                { id: "archives", label: "Archives", icon: Archive },
-              ].map(({ id, label, icon: Icon }) => {
-                const href = `/devices/${encodeURIComponent(device.id)}/settings/${id}`;
-                const active = pathname === href;
-                return (
-                  <SidebarAction
-                    key={id}
-                    nativeButton={false}
-                    render={<Link href={href} onClick={closeMobile} />}
-                    aria-current={active ? "page" : undefined}
-                    className={`h-7 gap-2 px-2 [&_svg]:size-3 ${active ? "sidebar-selected" : ""}`}
-                  >
-                    <Icon />
-                    <span>{label}</span>
-                  </SidebarAction>
-                );
-              })}
-            </nav>
+              <PreferencesNavigation closeMobile={closeMobile} />
+            </Suspense>
           ) : device ? (
             <ProjectTree
               key={device.id}
@@ -129,26 +64,19 @@ export function AppSidebar() {
           )}
         </ScrollArea>
       </SidebarContent>
-      {device && (
+      {device && preferences && (
         <SidebarFooter className="p-2">
           <SidebarAction
-            className="h-7 gap-2 px-2 [&_svg]:size-3"
             nativeButton={false}
             render={
               <Link
-                href={
-                  deviceSettings
-                    ? `/devices/${encodeURIComponent(device.id)}`
-                    : `/devices/${encodeURIComponent(device.id)}/settings/providers`
-                }
+                href={`/devices/${encodeURIComponent(device.id)}`}
                 onClick={closeMobile}
               />
             }
           >
-            {deviceSettings ? <ArrowLeft /> : <Settings2 />}
-            <span>
-              {deviceSettings ? "Back to workspace" : "Machine settings"}
-            </span>
+            <ArrowLeft />
+            <span>Back to workspace</span>
           </SidebarAction>
         </SidebarFooter>
       )}

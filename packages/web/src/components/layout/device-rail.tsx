@@ -18,6 +18,10 @@ import {
 } from "@/components/ui/context-menu";
 import { useSidebar } from "@/components/ui/sidebar";
 import type { Device } from "@/lib/devices";
+import {
+  isPreferencesPath,
+  preferencesHref,
+} from "@/lib/preferences-navigation";
 import { cn } from "@/lib/utils";
 
 export function DeviceRail() {
@@ -143,11 +147,16 @@ export function DeviceRail() {
         <SidebarAction
           compact
           nativeButton={false}
-          render={<Link href="/settings/appearance" onClick={navigate} />}
-          aria-label="Client preferences"
-          tooltip="Client preferences"
+          render={
+            <Link
+              href={preferencesHref({ deviceId: params.deviceId })}
+              onClick={navigate}
+            />
+          }
+          aria-label="Preferences"
+          tooltip="Preferences"
           className={
-            pathname.startsWith("/settings") ? "sidebar-selected" : undefined
+            isPreferencesPath(pathname) ? "sidebar-selected" : undefined
           }
         >
           <Settings2 />

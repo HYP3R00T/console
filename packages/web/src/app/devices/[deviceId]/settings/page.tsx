@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { preferencesHref } from "@/lib/preferences-navigation";
 
 export default async function DeviceSettings({
   params,
@@ -6,5 +7,5 @@ export default async function DeviceSettings({
   params: Promise<{ deviceId: string }>;
 }) {
   const { deviceId } = await params;
-  redirect(`/devices/${encodeURIComponent(deviceId)}/settings/providers`);
+  redirect(preferencesHref({ deviceId }));
 }

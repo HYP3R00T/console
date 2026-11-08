@@ -122,6 +122,7 @@ export function ConversationInspector({
   execution,
   selectedModel,
   savedModel,
+  projectId: owningProjectId,
 }: {
   path: string;
   request: ReturnType<typeof useBackendRequest>["request"];
@@ -129,6 +130,7 @@ export function ConversationInspector({
   execution?: Execution;
   selectedModel?: ChatModel;
   savedModel?: ModelRef;
+  projectId?: string;
 }) {
   const commands = useCommands();
   const discovery = useBackendCommands();
@@ -138,7 +140,7 @@ export function ConversationInspector({
     sessionId: string;
   }>();
   const machineHref = `/devices/${encodeURIComponent(deviceId)}/settings/guidance`;
-  const projectHref = `/devices/${encodeURIComponent(deviceId)}/projects/${encodeURIComponent(projectId ?? "")}/settings`;
+  const projectHref = `/devices/${encodeURIComponent(deviceId)}/projects/${encodeURIComponent(owningProjectId ?? projectId ?? "")}/settings`;
   const sessionHref = `/devices/${encodeURIComponent(deviceId)}/sessions/${encodeURIComponent(sessionId)}/settings`;
   const scoped = discovery.supports("session.runtime-settings.update");
   const [data, setData] = useState<Configuration>();
