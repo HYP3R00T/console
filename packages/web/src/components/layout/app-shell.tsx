@@ -10,16 +10,30 @@ import {
 } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
 import {
+  BackendCommandsProvider,
+  useBackendCommands,
+} from "@/components/commands/backend-commands";
+import {
   type CommandActions,
   CommandPalette,
 } from "@/components/commands/command-palette";
+import {
+  CommandRegistryProvider,
+  useRegisterCommands,
+} from "@/components/commands/command-registry";
 import { ShortcutPreferences } from "@/components/commands/shortcut-preferences";
 import { useConnection } from "@/components/connection-provider";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { DeviceRail } from "@/components/layout/device-rail";
+import { SettingsScopeNav } from "@/components/settings/settings-scope-nav";
+import { Button } from "@/components/ui/button";
 import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
+import {
+  type BackendCommandId,
+  executeBackendCommand,
+} from "@/lib/backend/commands";
 import {
   useWorkspaceChrome,
   WorkspaceChromeProvider,
@@ -45,6 +59,7 @@ function Content({ children }: { children: ReactNode }) {
     <main className="flex h-full min-w-0 flex-col bg-background">
       <ViewTransition default="none" update="workspace-fade">
         <div className="flex min-h-0 flex-1 flex-col overflow-auto p-5 md:p-6">
+          <SettingsScopeNav />
           {children}
         </div>
       </ViewTransition>
@@ -60,10 +75,11 @@ function ShellLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { deviceId, projectId, sessionId } = useParams<{
+  const { deviceId, projectId, sessionId, conversationId } = useParams<{
     deviceId?: string;
     projectId?: string;
     sessionId?: string;
+    conversationId?: string;
   }>();
   const { client } = useConnection(deviceId);
   const { isMobile, open, setOpen, openMobile, setOpenMobile, toggleSidebar } =
@@ -173,6 +189,90 @@ function ShellLayout({
       ? () => router.push(`${machine}/settings/archives`)
       : undefined,
   };
+  const discovery = useBackendCommands();
+  const settingsHref =
+    sessionId && machine
+      ? `${machine}/sessions/${encodeURIComponent(sessionId)}/settings`
+      : project
+        ? `${project}/settings`
+        : machine
+          ? `${machine}/settings/runtime`
+          : "/settings/appearance";
+  const scopeDestinations: Partial<Record<BackendCommandId, string>> = {
+    "machine.workspace-guidance.update": machine
+      ? `${machine}/settings/guidance`
+      : undefined,
+    "machine.runtime-defaults.update": machine
+      ? `${machine}/settings/runtime`
+      : undefined,
+    "project.agent-settings.update": project
+      ? `${project}/settings`
+      : undefined,
+    "session.runtime-settings.update":
+      sessionId && machine
+        ? `${machine}/sessions/${encodeURIComponent(sessionId)}/settings`
+        : undefined,
+  };
+  function commandClient() {
+    if (!client) throw new Error("Connect this machine first.");
+    return client;
+  }
+  useRegisterCommands({
+    ...Object.fromEntries(
+      Object.entries(
+        commandActions as Record<string, (() => void) | undefined>,
+      ).flatMap(([id, run]) => (run ? [[id, { run }]] : [])),
+    ),
+    ...(details
+      ? {
+          "conversation.configure": {
+            run: (input?: unknown) =>
+              input === undefined
+                ? setInspectorOpen(true)
+                : executeBackendCommand(
+                    commandClient(),
+                    "conversation.configure",
+                    {
+                      sessionId: active?.sessionId ?? sessionId,
+                      conversationId: active?.conversationId ?? conversationId,
+                    },
+                    input,
+                  ),
+          },
+        }
+      : {}),
+    "settings.open": { run: () => router.push(settingsHref) },
+    "preferences.configuration": {
+      run: () => router.push("/settings/configuration"),
+    },
+    ...Object.fromEntries(
+      Object.entries(scopeDestinations)
+        .filter(([, href]) => href)
+        .map(([id, href]) => [
+          id,
+          {
+            disabled: !client
+              ? "Connect this machine first."
+              : !(
+                    discovery.supports(id as BackendCommandId) ||
+                    (discovery.status === "legacy" &&
+                      id === "machine.runtime-defaults.update")
+                  )
+                ? "This backend has not advertised this command."
+                : undefined,
+            run: (input?: unknown) =>
+              input === undefined
+                ? router.push(href ?? settingsHref)
+                : executeBackendCommand(
+                    commandClient(),
+                    id as BackendCommandId,
+                    { projectId, sessionId, conversationId },
+                    input,
+                  ),
+          },
+        ]),
+    ),
+  });
   const inspector = (
     <ViewTransition default="none" update="workspace-fade">
       <div className="h-full min-h-0">{details?.content}</div>
@@ -250,7 +350,17 @@ function ShellLayout({
           onOpenChange={isMobile ? setOpenMobile : setOpen}
           disabled={!hasContext}
         />
-        <CommandPalette actions={commandActions} />
+        <CommandPalette />
+        {discovery.status === "error" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={discovery.retry}
+            title={discovery.error}
+          >
+            Retry command discovery
+          </Button>
+        )}
         <ControlTooltip label={identityLabel}>
           <div className="min-w-0 flex-1 truncate text-xs">
             {active ? (
@@ -287,12 +397,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       ? `device:${deviceId}`
       : "home";
   return (
-    <WorkspaceChromeProvider>
-      <SidebarProvider defaultOpen className="min-h-0! h-svh">
-        <ShortcutPreferences>
-          <ShellLayout contextKey={contextKey}>{children}</ShellLayout>
-        </ShortcutPreferences>
-      </SidebarProvider>
-    </WorkspaceChromeProvider>
+    <CommandRegistryProvider>
+      <BackendCommandsProvider>
+        <WorkspaceChromeProvider>
+          <SidebarProvider defaultOpen className="min-h-0! h-svh">
+            <ShortcutPreferences>
+              <ShellLayout contextKey={contextKey}>{children}</ShellLayout>
+            </ShortcutPreferences>
+          </SidebarProvider>
+        </WorkspaceChromeProvider>
+      </BackendCommandsProvider>
+    </CommandRegistryProvider>
   );
 }

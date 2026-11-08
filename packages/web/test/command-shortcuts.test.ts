@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  ariaShortcut,
+  formatShortcut,
   parseShortcuts,
   shortcutConflict,
   shortcutFor,
@@ -55,4 +57,58 @@ test("recording and dispatch normalize modifiers and reject editing or compositi
     shortcutFromEvent({ ...event, shiftKey: false, key: "v" }),
     undefined,
   );
+});
+
+test("punctuation, Alt and shifted physical keys record and survive storage", () => {
+  const event = {
+    key: ",",
+    code: "Comma",
+    ctrlKey: true,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+    isComposing: false,
+    getModifierState: () => false,
+  };
+  assert.equal(shortcutFromEvent(event), "Mod+,");
+  assert.equal(
+    shortcutFromEvent({
+      ...event,
+      ctrlKey: false,
+      altKey: true,
+      shiftKey: true,
+      key: "s",
+      code: "KeyS",
+    }),
+    "Alt+Shift+S",
+  );
+  assert.equal(
+    shortcutFromEvent({ ...event, key: "!", code: "Digit1", shiftKey: true }),
+    "Mod+Shift+1",
+  );
+  assert.equal(
+    shortcutFromEvent({ ...event, key: "Control", code: "ControlLeft" }),
+    undefined,
+  );
+  assert.equal(
+    shortcutFromEvent({ ...event, ctrlKey: false, shiftKey: true }),
+    undefined,
+  );
+  assert.deepEqual(
+    parseShortcuts(
+      '{"settings.open":"Mod+,","conversation.new":"Alt+Shift+N"}',
+    ),
+    { "settings.open": "Mod+,", "conversation.new": "Alt+Shift+N" },
+  );
+});
+
+test("shortcut labels show platform keys without exposing the portable storage token", () => {
+  assert.equal(formatShortcut("Mod+B", "Linux x86_64"), "Ctrl + B");
+  assert.equal(
+    formatShortcut("Mod+Alt+Shift+,", "MacIntel"),
+    "Command + Alt + Shift + ,",
+  );
+  assert.equal(formatShortcut("Alt+Shift+N", "Win32"), "Alt + Shift + N");
+  assert.equal(formatShortcut(null, "Linux"), "Unassigned");
+  assert.equal(ariaShortcut("Alt+Shift+N"), "Alt+Shift+N");
 });

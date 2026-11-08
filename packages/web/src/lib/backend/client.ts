@@ -24,8 +24,10 @@ export interface BackendConnector {
 
 export class BackendRequestError extends Error {
   readonly code?: string;
-  constructor(message: string, code?: string) {
+  readonly status?: number;
+  constructor(message: string, code?: string, status?: number) {
     super(message);
     this.code = code;
+    this.status = status;
   }
 }

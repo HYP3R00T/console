@@ -8,6 +8,7 @@ import {
   Square,
 } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
+import { useCommands } from "@/components/commands/command-registry";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +20,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
+import { slashSuggestions } from "@/lib/command-registry";
+import type { CommandId } from "@/lib/commands";
 import { DraftAttachments } from "./attachment-list";
 import { type ChatAttachment, fileAccept, readFiles } from "./attachments";
 import { ChatModelControl } from "./chat-model-control";
@@ -53,6 +56,9 @@ export function ChatComposer({
   models: ReturnType<typeof useChatModels>;
   context?: ReactNode;
 }) {
+  const commands = useCommands();
+  const [composing, setComposing] = useState(false);
+  const suggestions = slashSuggestions(content, composing);
   const fileInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const reading = useRef(false);
@@ -140,6 +146,44 @@ export function ChatComposer({
             }
           />
         )}
+        {suggestions.length > 0 && (
+          <ul aria-label="Slash commands" className="mb-2 flex flex-wrap gap-2">
+            {suggestions.map(([name, rawId]) => {
+              const id = rawId as CommandId;
+              const handler = commands.get(id);
+              return (
+                <li key={name}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!handler || !!handler.disabled}
+                    title={handler?.disabled}
+                    onClick={() => {
+                      try {
+                        Promise.resolve(commands.invoke(id)).catch((error) =>
+                          setFileError(
+                            error instanceof Error
+                              ? error.message
+                              : "Command failed.",
+                          ),
+                        );
+                      } catch (error) {
+                        setFileError(
+                          error instanceof Error
+                            ? error.message
+                            : "Command unavailable.",
+                        );
+                      }
+                    }}
+                  >
+                    {name}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
         <Textarea
           aria-label="Message"
           placeholder="Ask anything…"
@@ -148,6 +192,8 @@ export function ChatComposer({
           maxLength={32000}
           value={content}
           disabled={sending || pending || loadingFiles}
+          onCompositionStart={() => setComposing(true)}
+          onCompositionEnd={() => setComposing(false)}
           onChange={(event) => onChange(event.target.value)}
           onPaste={(event) => {
             if (event.clipboardData.files.length) {

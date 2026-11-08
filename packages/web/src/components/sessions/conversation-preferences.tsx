@@ -8,6 +8,10 @@ import {
 } from "react";
 import { useConnection } from "@/components/connection-provider";
 import {
+  clientConfiguration,
+  subscribeConfiguration,
+} from "@/lib/configuration/store";
+import {
   conversationPinsKey,
   parseConversationPins,
 } from "@/lib/conversation-pins";
@@ -25,7 +29,11 @@ export function ConversationPreferences({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string>();
   useEffect(() => {
     try {
-      setPins(parseConversationPins(localStorage.getItem(conversationPinsKey)));
+      setPins(
+        parseConversationPins(
+          clientConfiguration().getItem(conversationPinsKey),
+        ),
+      );
     } catch {
       setError(
         "Conversation pins could not be read. Existing storage has not been changed.",
@@ -33,6 +41,22 @@ export function ConversationPreferences({ children }: { children: ReactNode }) {
     }
     setReady(true);
   }, []);
+  useEffect(
+    () =>
+      subscribeConfiguration(() => {
+        try {
+          setPins(
+            parseConversationPins(
+              clientConfiguration().getItem(conversationPinsKey),
+            ),
+          );
+          setError(undefined);
+        } catch {
+          setError("Could not refresh conversation pins.");
+        }
+      }),
+    [],
+  );
   return (
     <Context
       value={{
@@ -43,7 +67,10 @@ export function ConversationPreferences({ children }: { children: ReactNode }) {
           if (!ready || error)
             throw new Error(error ?? "Wait for conversation pins to load.");
           const next = updateProjectPins(pins, origin, key, value);
-          localStorage.setItem(conversationPinsKey, JSON.stringify(next));
+          clientConfiguration().setItem(
+            conversationPinsKey,
+            JSON.stringify(next),
+          );
           setPins(next);
         },
       }}

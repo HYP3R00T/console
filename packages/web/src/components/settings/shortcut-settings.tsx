@@ -1,45 +1,72 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useShortcutPreferences } from "@/components/commands/shortcut-preferences";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
   type CommandId,
   commandIds,
   commands,
+  formatShortcut,
+  type Shortcut,
+  shortcutConflict,
   shortcutFor,
   shortcutFromEvent,
 } from "@/lib/commands";
 
 export function ShortcutSettings() {
-  const { overrides, ready, storageError, update } = useShortcutPreferences();
+  const { overrides, platform, ready, storageError, update } =
+    useShortcutPreferences();
   const [recording, setRecording] = useState<CommandId>();
+  const [candidate, setCandidate] = useState<Shortcut>();
+  const [captureError, setCaptureError] = useState("");
   const [message, setMessage] = useState("");
+  const input = useRef<HTMLInputElement>(null);
   function apply(id: CommandId, value: Parameters<typeof update>[1]) {
     const error = update(id, value);
-    if (!error) setRecording(undefined);
-    setMessage(error ?? `Shortcut updated for ${commands[id].label}.`);
+    if (error) {
+      setCaptureError(error);
+      setMessage(error);
+    } else {
+      setRecording(undefined);
+      setMessage(`Shortcut updated for ${commands[id].label}.`);
+    }
   }
   return (
     <div className="flex max-w-2xl flex-col gap-5">
       <header>
         <h1 className="text-xl font-semibold">Keyboard shortcuts</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Shortcuts apply in this browser. Mod means Ctrl or Command. Use a
-          letter or digit and add Shift or Alt if needed.
+          Shortcuts apply in this browser across all connected machines. Use{" "}
+          {formatShortcut("Mod+K", platform).split(" + ")[0]} or Alt with a key,
+          and optionally Shift. Punctuation such as a comma is supported.
         </p>
       </header>
       {storageError && (
         <p role="alert" className="text-sm text-destructive">
-          Browser storage is unavailable. Shortcut changes apply until you
-          reload.
+          Browser storage is unavailable. Your last saved shortcuts remain
+          active.
         </p>
       )}
       <ul className="divide-y">
         {commandIds.map((id) => {
-          const label = commands[id].label;
-          const shortcut = shortcutFor(id, overrides);
-          const active = recording === id;
+          const label = commands[id].label,
+            shortcut = shortcutFor(id, overrides);
           return (
             <li
               key={id}
@@ -48,48 +75,21 @@ export function ShortcutSettings() {
               <span className="text-sm">{label}</span>
               <div className="flex flex-wrap items-center gap-2">
                 <kbd className="text-xs text-muted-foreground">
-                  {shortcut ?? "Unassigned"}
+                  {formatShortcut(shortcut, platform)}
                 </kbd>
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   disabled={!ready}
-                  aria-label={
-                    active
-                      ? `Recording shortcut for ${label}`
-                      : `Change shortcut for ${label}`
-                  }
+                  aria-label={`Change shortcut for ${label}`}
                   onClick={() => {
-                    setRecording(active ? undefined : id);
-                    setMessage(
-                      active
-                        ? ""
-                        : "Press the new shortcut, or Escape to cancel.",
-                    );
-                  }}
-                  onBlur={() => {
-                    if (active) setRecording(undefined);
-                  }}
-                  onKeyDown={(event) => {
-                    if (!active || event.key === "Tab") return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    if (event.key === "Escape") {
-                      setRecording(undefined);
-                      setMessage("Shortcut recording cancelled.");
-                      return;
-                    }
-                    if (event.repeat) return;
-                    const next = shortcutFromEvent(event.nativeEvent);
-                    if (next) apply(id, next);
-                    else if (event.key.length === 1)
-                      setMessage(
-                        "Choose an available Ctrl or Command shortcut.",
-                      );
+                    setCandidate(undefined);
+                    setCaptureError("");
+                    setRecording(id);
                   }}
                 >
-                  {active ? "Press shortcut…" : "Change"}
+                  Change
                 </Button>
                 <Button
                   type="button"
@@ -119,6 +119,93 @@ export function ShortcutSettings() {
       <p role="status" className="sticky bottom-0 bg-background text-sm">
         {message}
       </p>
+      <Dialog
+        open={!!recording}
+        onOpenChange={(open) => {
+          if (!open) setRecording(undefined);
+        }}
+      >
+        <DialogContent
+          initialFocus={input}
+          onKeyDownCapture={(event) => {
+            if (event.target !== input.current) return;
+            if (
+              event.key === "Tab" ||
+              event.key === "Escape" ||
+              event.nativeEvent.isComposing
+            )
+              return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (
+              event.repeat ||
+              ["Control", "Meta", "Alt", "Shift"].includes(event.key)
+            )
+              return;
+            const next = shortcutFromEvent(event.nativeEvent);
+            setCandidate(next);
+            if (!next) {
+              setCaptureError(
+                "Use Ctrl or Command, or Alt, with a key. Standard editing shortcuts are reserved.",
+              );
+              return;
+            }
+            const conflict =
+              recording && shortcutConflict(recording, next, overrides);
+            setCaptureError(
+              conflict
+                ? `This shortcut is assigned to ${commands[conflict].label}.`
+                : "",
+            );
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Set keyboard shortcut</DialogTitle>
+            <DialogDescription>
+              {recording ? commands[recording].label : ""}. Press a key
+              combination, then save. Escape cancels.
+            </DialogDescription>
+          </DialogHeader>
+          <FieldGroup>
+            <Field data-invalid={!!captureError}>
+              <FieldLabel htmlFor="shortcut-recording">
+                Recorded shortcut
+              </FieldLabel>
+              <Input
+                ref={input}
+                id="shortcut-recording"
+                readOnly
+                value={candidate ? formatShortcut(candidate, platform) : ""}
+                placeholder="Press your shortcut…"
+                aria-invalid={!!captureError}
+                aria-describedby="shortcut-recording-help"
+              />
+              <FieldDescription id="shortcut-recording-help">
+                Some combinations are reserved by your browser or operating
+                system.
+              </FieldDescription>
+            </Field>
+          </FieldGroup>
+          {captureError && (
+            <p role="alert" className="text-sm text-destructive">
+              {captureError}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecording(undefined)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!candidate || !!captureError}
+              onClick={() => {
+                if (recording && candidate) apply(recording, candidate);
+              }}
+            >
+              Save shortcut
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

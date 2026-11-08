@@ -60,6 +60,11 @@ export function AppSidebar() {
                   href: "/settings/shortcuts",
                   icon: Keyboard,
                 },
+                {
+                  label: "Configuration backup",
+                  href: "/settings/configuration",
+                  icon: Settings2,
+                },
               ].map(({ label, href, icon: Icon }) => (
                 <SidebarAction
                   key={href}
@@ -83,6 +88,11 @@ export function AppSidebar() {
               {[
                 { id: "providers", label: "Providers", icon: KeyRound },
                 { id: "runtime", label: "Runtime defaults", icon: Bot },
+                {
+                  id: "guidance",
+                  label: "Workspace guidance",
+                  icon: Settings2,
+                },
                 { id: "reviewers", label: "Reviewer profiles", icon: Bot },
                 { id: "agents", label: "Agent profiles", icon: Bot },
                 { id: "integrations", label: "MCP and SSH", icon: Bot },

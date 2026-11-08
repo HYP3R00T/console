@@ -1,6 +1,8 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import {
   startTransition,
   useCallback,
@@ -8,6 +10,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { useBackendCommands } from "@/components/commands/backend-commands";
+import { useCommands } from "@/components/commands/command-registry";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -126,6 +130,17 @@ export function ConversationInspector({
   selectedModel?: ChatModel;
   savedModel?: ModelRef;
 }) {
+  const commands = useCommands();
+  const discovery = useBackendCommands();
+  const { deviceId, projectId, sessionId } = useParams<{
+    deviceId: string;
+    projectId?: string;
+    sessionId: string;
+  }>();
+  const machineHref = `/devices/${encodeURIComponent(deviceId)}/settings/guidance`;
+  const projectHref = `/devices/${encodeURIComponent(deviceId)}/projects/${encodeURIComponent(projectId ?? "")}/settings`;
+  const sessionHref = `/devices/${encodeURIComponent(deviceId)}/sessions/${encodeURIComponent(sessionId)}/settings`;
+  const scoped = discovery.supports("session.runtime-settings.update");
   const [data, setData] = useState<Configuration>();
   const [saving, setSaving] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
@@ -206,10 +221,10 @@ export function ConversationInspector({
   async function update(change: Change) {
     if (!data) return false;
     return mutate(async () => {
-      const next = await request<Configuration>(`${path}/configuration`, {
-        method: "PATCH",
-        body: JSON.stringify({ revision: data.revision, ...change }),
-      });
+      const next = (await commands.invoke("conversation.configure", {
+        revision: data.revision,
+        ...change,
+      })) as Configuration;
       setData(next);
     });
   }
@@ -531,18 +546,29 @@ export function ConversationInspector({
                   disabled={disabled}
                   save={(instructions) => update({ instructions })}
                 />
-                {data.project && (
-                  <InstructionEditor
-                    label="Shared project instructions"
-                    scope="Saved in Console and applied to model requests across this project. Separate from AGENTS.md, which the agent can read with file tools."
-                    placeholder="Add shared conventions or project goals…"
-                    value={data.project.instructions}
-                    disabled={saving}
-                    save={(projectInstructions) =>
-                      update({ projectInstructions })
-                    }
-                  />
-                )}
+                {data.project &&
+                  (discovery.supports("project.agent-settings.update") ? (
+                    <div className="text-sm">
+                      <p>
+                        Shared project instructions and evidence rules apply
+                        across this project.
+                      </p>
+                      <Link href={projectHref}>
+                        Edit project agent settings
+                      </Link>
+                    </div>
+                  ) : (
+                    <InstructionEditor
+                      label="Shared project instructions"
+                      scope="Saved in Console and applied to model requests across this project. Separate from AGENTS.md, which the agent can read with file tools."
+                      placeholder="Add shared conventions or project goals…"
+                      value={data.project.instructions}
+                      disabled={saving}
+                      save={(projectInstructions) =>
+                        update({ projectInstructions })
+                      }
+                    />
+                  ))}
                 {(data.guidance || data.sections.length > 0) && (
                   <Collapsible className="group/guidance">
                     <CollapsibleTrigger
@@ -558,30 +584,46 @@ export function ConversationInspector({
                     </CollapsibleTrigger>
                     <CollapsibleContent className="pt-3">
                       <div className="flex min-w-0 flex-col gap-4">
-                        {data.guidance?.inspection && (
-                          <InstructionEditor
-                            label="Project evidence rules"
-                            scope="Tell the agent what to inspect and how to cite evidence in this project."
-                            value={data.guidance.inspection.text}
-                            customized={data.guidance.inspection.customized}
-                            disabled={saving}
-                            save={(inspectionGuidance) =>
-                              update({ inspectionGuidance })
-                            }
-                          />
-                        )}
-                        {data.guidance && (
-                          <InstructionEditor
-                            label="Machine-wide evidence rules"
-                            scope="Set how the agent verifies claims across all conversations on this machine."
-                            value={data.guidance.workspace.text}
-                            customized={data.guidance.workspace.customized}
-                            disabled={saving}
-                            save={(workspaceGuidance) =>
-                              update({ workspaceGuidance })
-                            }
-                          />
-                        )}
+                        {data.guidance?.inspection &&
+                          !discovery.supports(
+                            "project.agent-settings.update",
+                          ) && (
+                            <InstructionEditor
+                              label="Project evidence rules"
+                              scope="Tell the agent what to inspect and how to cite evidence in this project."
+                              value={data.guidance.inspection.text}
+                              customized={data.guidance.inspection.customized}
+                              disabled={saving}
+                              save={(inspectionGuidance) =>
+                                update({ inspectionGuidance })
+                              }
+                            />
+                          )}
+                        {data.guidance &&
+                          (discovery.supports(
+                            "machine.workspace-guidance.update",
+                          ) ? (
+                            <div className="text-sm">
+                              <p>
+                                Workspace guidance is shared across this
+                                machine.
+                              </p>
+                              <Link href={machineHref}>
+                                Edit machine workspace guidance
+                              </Link>
+                            </div>
+                          ) : (
+                            <InstructionEditor
+                              label="Machine-wide evidence rules"
+                              scope="Set how the agent verifies claims across all conversations on this machine."
+                              value={data.guidance.workspace.text}
+                              customized={data.guidance.workspace.customized}
+                              disabled={saving}
+                              save={(workspaceGuidance) =>
+                                update({ workspaceGuidance })
+                              }
+                            />
+                          ))}
                         <RuntimeGuidance
                           guidance={data.guidance}
                           sections={data.sections}
@@ -646,6 +688,7 @@ export function ConversationInspector({
                 <div className="flex min-w-0 flex-col gap-4 px-1 py-2 pr-3">
                   <InspectorContext
                     settings={data.context}
+                    sessionSettingsHref={scoped ? sessionHref : undefined}
                     selectedModel={selectedModel}
                     compacting={compacting}
                     disabled={disabled}
@@ -658,14 +701,13 @@ export function ConversationInspector({
                     }
                     compact={(focus) =>
                       mutate(async () => {
-                        await request(`${path}/compact`, {
-                          method: "POST",
-                          body: JSON.stringify({ focus }),
+                        await commands.invoke("conversation.compact", {
+                          focus,
                         });
                       })
                     }
                   />
-                  {data.runtimePolicy && (
+                  {data.runtimePolicy && !scoped && (
                     <InspectorRuntimePolicy
                       value={data.runtimePolicy}
                       disabled={disabled}

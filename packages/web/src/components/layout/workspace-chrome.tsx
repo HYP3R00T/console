@@ -11,6 +11,9 @@ export type WorkspaceConversation = {
   route: string;
   title: string;
   subtitle: string;
+  sessionId?: string;
+  conversationId?: string;
+  projectId?: string;
 };
 export type WorkspaceInspector = {
   route: string;
