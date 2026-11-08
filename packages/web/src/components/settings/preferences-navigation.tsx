@@ -1,8 +1,16 @@
 "use client";
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
+import type { ReactNode } from "react";
 import { useDevices } from "@/components/devices/device-provider";
+import { useNavigationDisclosure } from "@/components/layout/navigation-memory";
 import { SidebarAction } from "@/components/layout/sidebar-action";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   clientPreferencePages,
   machinePreferenceCategory,
@@ -13,6 +21,44 @@ import {
   preferencesHref,
   preferenceTarget,
 } from "@/lib/preferences-navigation";
+import { cn } from "@/lib/utils";
+
+function PreferenceGroup({
+  label,
+  group,
+  children,
+}: {
+  label: string;
+  group: "client" | "machine";
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useNavigationDisclosure(`preferences:${group}`, true);
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      render={<section aria-label={`${label} preferences`} />}
+    >
+      <h3>
+        <CollapsibleTrigger className="sidebar-action flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring">
+          <ChevronRight
+            aria-hidden="true"
+            className={cn(
+              "size-3.5 shrink-0 motion-safe:transition-transform motion-safe:duration-180",
+              open && "rotate-90",
+            )}
+          />
+          <span>{label}</span>
+        </CollapsibleTrigger>
+      </h3>
+      <CollapsibleContent keepMounted className="navigation-disclosure">
+        <div className="ml-6 border-l border-sidebar-border pt-1 pl-4">
+          {children}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 export function PreferencesNavigation({
   closeMobile,
@@ -47,18 +93,12 @@ export function PreferencesNavigation({
       aria-label="Preference categories"
       className="flex flex-col gap-4 px-2"
     >
-      <section aria-label="Client preferences">
-        <h3 className="px-3 pt-2 pb-2 text-sm font-semibold text-foreground">
-          Client
-        </h3>
+      <PreferenceGroup label="Client" group="client">
         {clientPreferencePages.map((page) =>
           link(page.label, preferencesHref(target, page.path)),
         )}
-      </section>
-      <section aria-label="Machine preferences">
-        <h3 className="px-3 pt-2 pb-2 text-sm font-semibold text-foreground">
-          Machine
-        </h3>
+      </PreferenceGroup>
+      <PreferenceGroup label="Machine" group="machine">
         {machinePreferencePages.map((page) =>
           link(
             page.label,
@@ -66,7 +106,7 @@ export function PreferencesNavigation({
             machinePreferenceCategory(pathname) === page.id,
           ),
         )}
-      </section>
+      </PreferenceGroup>
     </nav>
   );
 }

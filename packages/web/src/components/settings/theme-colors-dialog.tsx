@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ImportedTheme } from "@/lib/configuration/store";
 import { themeTokens } from "@/lib/configuration/store";
 import { downloadTheme } from "@/lib/configuration/theme-export";
@@ -37,7 +38,12 @@ export function ThemeColorsDialog({
             colors are listed for each role.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid min-h-0 gap-5 overflow-y-auto sm:grid-cols-2">
+        <ScrollArea
+          className="h-[60svh] min-h-0"
+          viewportClassName="grid gap-5 pr-3 sm:grid-cols-2"
+          role="region"
+          aria-label="Theme color roles"
+        >
           {themeTokenGroups.map((group) => (
             <section
               key={group.name}
@@ -67,7 +73,7 @@ export function ThemeColorsDialog({
               </dl>
             </section>
           ))}
-        </div>
+        </ScrollArea>
         <Button
           variant="outline"
           className="shrink-0 self-start"

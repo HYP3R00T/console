@@ -30,6 +30,7 @@ import { DeviceRail } from "@/components/layout/device-rail";
 import { SettingsScopeNav } from "@/components/settings/settings-scope-nav";
 import { Button } from "@/components/ui/button";
 import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import {
   type BackendCommandId,
@@ -64,12 +65,17 @@ function Content({ children }: { children: ReactNode }) {
   return (
     <main className="flex h-full min-w-0 flex-col bg-background">
       <ViewTransition default="none" update="workspace-fade">
-        <div className="flex min-h-0 flex-1 flex-col overflow-auto p-5 md:p-6">
+        <ScrollArea
+          className="min-h-0 flex-1"
+          viewportClassName="flex min-h-0 flex-col p-5 md:p-6"
+          role="region"
+          aria-label="Workspace content"
+        >
           <Suspense fallback={null}>
             <SettingsScopeNav />
           </Suspense>
           {children}
-        </div>
+        </ScrollArea>
       </ViewTransition>
     </main>
   );
@@ -95,8 +101,11 @@ function ShellLayout({
   const chrome = useWorkspaceChrome();
   const active =
     chrome.conversation?.route === pathname ? chrome.conversation : undefined;
+  const preferences = isPreferencesPath(pathname);
   const details =
-    chrome.inspector?.route === pathname ? chrome.inspector : undefined;
+    !preferences && chrome.inspector?.route === pathname
+      ? chrome.inspector
+      : undefined;
   const [inspectorOverlay, setInspectorOverlay] = useState(false);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 1199px)");
@@ -142,14 +151,14 @@ function ShellLayout({
       group.current.setLayout({
         navigation,
         workspace: 100 - navigation - inspector,
-        inspector,
+        ...(!preferences ? { inspector } : {}),
       });
     });
     return () => {
       cancelAnimationFrame(frame);
       window.clearTimeout(finish);
     };
-  }, [visible, inspectorVisible]);
+  }, [visible, inspectorVisible, preferences]);
   useEffect(() => {
     const stop = () => setResizing(false);
     window.addEventListener("pointerup", stop);
@@ -326,8 +335,8 @@ function ShellLayout({
     </ViewTransition>
   );
   return (
-    <div className="flex h-svh w-full min-w-0 flex-col bg-client-surface">
-      <div className="flex min-h-0 flex-1">
+    <div className="flex h-svh w-full min-w-0 flex-col overflow-hidden bg-client-surface">
+      <div className="flex min-h-0 flex-1 pr-2">
         <DeviceRail />
         <ResizablePanelGroup
           groupRef={group}
@@ -368,24 +377,26 @@ function ShellLayout({
               <Content>{children}</Content>
             </div>
           </ResizablePanel>
-          <WorkspaceSidebar
-            side="right"
-            panelId="inspector"
-            contentId="workspace-inspector"
-            title={details?.title ?? "Workspace details"}
-            resizeLabel="Resize details sidebar"
-            available={!!details}
-            open={inspectorOpen}
-            onOpenChange={setInspectorOpen}
-            overlay={inspectorOverlay}
-            initialWidth={300}
-            minWidth={240}
-            maxWidth="40%"
-            transitioning={panelTransition && !resizing}
-            onResizeStart={() => setResizing(true)}
-          >
-            {inspector}
-          </WorkspaceSidebar>
+          {!preferences && (
+            <WorkspaceSidebar
+              side="right"
+              panelId="inspector"
+              contentId="workspace-inspector"
+              title={details?.title ?? "Workspace details"}
+              resizeLabel="Resize details sidebar"
+              available={!!details}
+              open={inspectorOpen}
+              onOpenChange={setInspectorOpen}
+              overlay={inspectorOverlay}
+              initialWidth={300}
+              minWidth={240}
+              maxWidth="40%"
+              transitioning={panelTransition && !resizing}
+              onResizeStart={() => setResizing(true)}
+            >
+              {inspector}
+            </WorkspaceSidebar>
+          )}
         </ResizablePanelGroup>
       </div>
       <footer className="flex h-9 shrink-0 items-center gap-3 bg-client-surface px-3">

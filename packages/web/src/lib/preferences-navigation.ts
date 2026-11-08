@@ -45,7 +45,7 @@ export function preferenceMachine<T extends { id: string }>(
 }
 export function preferencesHref(
   target: PreferenceTarget = {},
-  path = "/settings",
+  path: string = clientPreferencePages[0].path,
 ) {
   const query = new URLSearchParams();
   if (target.deviceId) {

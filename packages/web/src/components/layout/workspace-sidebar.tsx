@@ -63,10 +63,12 @@ export function WorkspaceSidebar({
       disabled={!visible}
       className={!visible ? "hidden" : undefined}
       style={{ backgroundColor: "transparent" }}
-      onPointerDown={onResizeStart}
+      onPointerDown={(event) => {
+        if (event.button === 0) onResizeStart();
+      }}
     />
   );
-  const overlayOffset = side === "left" ? 56 : 0;
+  const overlayOffset = side === "left" ? "56px" : "0.5rem";
   return (
     <>
       {side === "right" && handle}
@@ -76,8 +78,9 @@ export function WorkspaceSidebar({
         data-workspace-sidebar
         data-side={side}
         defaultSize={initialSize.current}
-        minSize={minWidth}
-        maxSize={maxWidth}
+        minSize={visible ? minWidth : 0}
+        maxSize={visible ? maxWidth : 0}
+        disabled={!visible}
         collapsedSize={0}
         collapsible={!visible}
         groupResizeBehavior="preserve-pixel-size"
@@ -111,7 +114,7 @@ export function WorkspaceSidebar({
             className="max-w-none! gap-0 border-0 bg-context-surface p-0"
             style={{
               [side]: overlayOffset,
-              width: `min(calc(100vw - ${overlayOffset}px), 360px)`,
+              width: `min(calc(100vw - ${overlayOffset}), 360px)`,
             }}
           >
             <SheetHeader className="h-11 shrink-0 justify-center py-0 pr-12">

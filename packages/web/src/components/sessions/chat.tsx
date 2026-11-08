@@ -144,6 +144,7 @@ export function Chat({
       selectScope: inspectorSelection.selectScope,
       content: (
         <WorkspaceInspector
+          sidebar
           key={`${state.client?.backendId ?? deviceId}:${path}`}
           deviceId={deviceId}
           sessionId={sessionId}

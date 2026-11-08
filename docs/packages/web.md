@@ -39,7 +39,7 @@ The regression test covers development, production and profiling filters; remove
 - Primary rail: Home, all saved machines, Manage devices and Client preferences. It stays visible as a fixed 56px rail, without its own expand/collapse toggle.
 - Selecting a machine restores its last conversation and tree disclosures from browser-local navigation memory. Home does not clear that state; connection choices remain independent. This restores navigation, not transcript scroll position. New-conversation drafts are scoped to the backend/project/session and kept in browser session storage until sent.
 - Secondary panel: context for the selected machine or preference category. It is absent on Home/Manage devices, hideable with the bottom-left toggle and resizable while visible. Hidden navigation has no shortcut rail.
-- Workspace: one content region with top and bottom insets; both side edges meet their resize boundaries without padding. The bottom bar shows current conversation identity. User prompts use right-aligned bubbles; assistant replies use unframed Markdown without repeated visible role labels.
+- Workspace: one content region with top and bottom insets; inner panel edges meet their resize boundaries without padding. The shell owns an 8px right-edge gutter outside the resizable group, present with the inspector open, closed or unavailable; sidebar inspectors omit their former outer right padding, and right-side sheets use the same edge inset. The bottom bar shows current conversation identity. User prompts use right-aligned bubbles; assistant replies use unframed Markdown without repeated visible role labels.
 - Each prompt starts a chronological display group. Its tool arguments/results/failures appear in a collapsed Activity sequence before its replies. The latest group shows live work. These are display groups, not independent Durable runs: steering can join an existing run. Partial history without a loaded prompt is labelled as earlier activity. Event counts are real; elapsed durations are not currently recorded or displayed.
 - Ask the assistant to use the workspace reviewer. Show reviewer transcript in the parent call's Activity displays the brief, read results, and reviewer findings. The disclosure refreshes while the reviewer works. The review uses the parent model and workspace, with read-only tools. Disable `review_workspace` in Tools to turn it off for the conversation.
 - The right sidebar has Project, Session and Conversation scope tabs; Conversation contains Tools, Instructions, Context and Tasks with independently scrollable cards. Execution notices remain visible for retries, provider waits, compaction, post-run work and failed or stopped runs.
@@ -224,13 +224,17 @@ Browser storage can be cleared by users or browser policy; downloaded backups ar
 
 ## Central Preferences
 
-`/settings` lists Client and Machine categories without machine dropdowns or browser ownership labels.
+Preferences opens Appearance directly, including the rail entry and Open settings command; older `/settings` links redirect there while preserving valid selected-machine/workspace query context.
+The sidebar presents Client and Machine as collapsible top-level groups, with chevrons, indented child pages and guide lines; groups start expanded and remember disclosure choices in browser configuration.
+The app document is viewport-bound; workspace pages and the All colors dialog use the shared Scroll Area component rather than native overflow containers, keeping scrollbar styling consistent without moving the document or footer.
+Preferences excludes the conversation inspector panel entirely; unavailable or closed sidebar slots are locked at zero width and cannot be resized from their edges.
+Theme import uses a genuinely hidden file input opened by Choose file, so its layout cannot enlarge the document.
 Each machine category shows a row of prominent machine cards above its settings; selecting a card keeps the current category and changes only the viewed machine, without connecting it or starting work.
 Cards show connection status and the selected machine; client pages have no machine cards.
 Category navigation retains a saved selection or uses the first saved machine, and categories remain visible when no machines exist, with a Manage devices link instead of an editor.
 The far-left rail is the single Preferences entry point; device navigation does not duplicate it, and settings pages omit the redundant All preferences row and breadcrumb.
-Preferences navigation lists client and machine categories; older project, session and conversation settings deep links remain valid for compatibility.
-The assigned Open settings shortcut always opens this hub, including from text fields, with the current machine selected and unchanged keybindings.
+Preferences navigation groups client and machine categories; older project, session and conversation settings deep links remain valid for compatibility.
+The assigned Open settings shortcut always opens Appearance, including from text fields, with the current machine selected and unchanged keybindings.
 
 ## Workspace configuration sidebar
 
