@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useShortcutPreferences } from "@/components/commands/shortcut-preferences";
+import { ShortcutTableRow } from "@/components/settings/shortcut-row";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,42 +20,78 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   type CommandId,
-  commandIds,
   commands,
   formatShortcut,
   type Shortcut,
   shortcutConflict,
-  shortcutFor,
   shortcutFromEvent,
+  shortcutsFor,
 } from "@/lib/commands";
+import {
+  filterShortcutRows,
+  type ShortcutEdit,
+  type ShortcutRow,
+  shortcutRows,
+} from "@/lib/shortcut-editor";
 
 export function ShortcutSettings() {
   const { overrides, platform, ready, storageError, update } =
     useShortcutPreferences();
-  const [recording, setRecording] = useState<CommandId>();
+  const [recording, setRecording] = useState<{
+    id: CommandId;
+    kind: "add" | "replace";
+    previous: Shortcut | null;
+  }>();
+  const [query, setQuery] = useState("");
+  const [pageError, setPageError] = useState("");
   const [candidate, setCandidate] = useState<Shortcut>();
   const [captureError, setCaptureError] = useState("");
   const [message, setMessage] = useState("");
   const input = useRef<HTMLInputElement>(null);
-  function apply(id: CommandId, value: Parameters<typeof update>[1]) {
+  const rows = filterShortcutRows(shortcutRows(overrides), query, platform);
+  function begin(row: ShortcutRow, kind: "add" | "replace") {
+    setCandidate(undefined);
+    setCaptureError("");
+    setRecording({ id: row.id, kind, previous: row.binding });
+  }
+  async function copy(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setPageError("");
+      setMessage("Copied to clipboard.");
+    } catch {
+      setPageError(
+        "Could not copy to the clipboard. Check your browser permissions.",
+      );
+    }
+  }
+  function apply(id: CommandId, value: ShortcutEdit) {
     const error = update(id, value);
     if (error) {
       setCaptureError(error);
-      setMessage(error);
+      setPageError(error);
     } else {
+      setPageError("");
       setRecording(undefined);
       setMessage(`Shortcut updated for ${commands[id].label}.`);
     }
   }
   return (
-    <div className="flex max-w-2xl flex-col gap-5">
+    <div className="flex w-full min-w-0 flex-col gap-5">
       <header>
         <h1 className="text-xl font-semibold">Keyboard shortcuts</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Shortcuts apply in this browser across all connected machines. Use{" "}
-          {formatShortcut("Mod+K", platform).split(" + ")[0]} or Alt with a key,
-          and optionally Shift. Punctuation such as a comma is supported.
+          Shortcuts apply across connected machines. Enter or double-click a row
+          to edit; right-click for more actions.
         </p>
       </header>
       {storageError && (
@@ -63,60 +100,65 @@ export function ShortcutSettings() {
           active.
         </p>
       )}
-      <ul className="divide-y">
-        {commandIds.map((id) => {
-          const label = commands[id].label,
-            shortcut = shortcutFor(id, overrides);
-          return (
-            <li
-              key={id}
-              className="flex flex-wrap items-center justify-between gap-2 py-2"
-            >
-              <span className="text-sm">{label}</span>
-              <div className="flex flex-wrap items-center gap-2">
-                <kbd className="text-xs text-muted-foreground">
-                  {formatShortcut(shortcut, platform)}
-                </kbd>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={!ready}
-                  aria-label={`Change shortcut for ${label}`}
-                  onClick={() => {
-                    setCandidate(undefined);
-                    setCaptureError("");
-                    setRecording(id);
-                  }}
-                >
-                  Change
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  disabled={!ready || !shortcut}
-                  aria-label={`Remove shortcut for ${label}`}
-                  onClick={() => apply(id, null)}
-                >
-                  Remove
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  disabled={!ready || overrides[id] === undefined}
-                  aria-label={`Reset shortcut for ${label}`}
-                  onClick={() => apply(id, undefined)}
-                >
-                  Reset
-                </Button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-      <p role="status" className="sticky bottom-0 bg-background text-sm">
+      <Input
+        aria-label="Search keyboard shortcuts"
+        placeholder="Search commands, IDs or keybindings…"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+      />
+      <Table className="min-w-[38rem]">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-20">
+              <span className="sr-only">Actions</span>
+            </TableHead>
+            <TableHead>Command</TableHead>
+            <TableHead>Keybinding</TableHead>
+            <TableHead title="Default: built-in configuration. User: browser overrides.">
+              Source
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <ShortcutTableRow
+              key={`${row.id}:${row.binding ?? "unassigned"}`}
+              row={row}
+              platform={platform}
+              ready={ready}
+              customized={overrides[row.id] !== undefined}
+              onEdit={() => begin(row, "replace")}
+              onAdd={() => begin(row, "add")}
+              onRemove={() => {
+                if (row.binding)
+                  apply(row.id, { kind: "remove", shortcut: row.binding });
+              }}
+              onReset={() => apply(row.id, { kind: "reset" })}
+              onCopy={copy}
+            />
+          ))}
+          {!rows.length && (
+            <TableRow>
+              <TableCell
+                colSpan={4}
+                className="py-10 text-center text-muted-foreground"
+              >
+                No matching commands.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+      <p className="text-xs text-muted-foreground">
+        Source shows built-in defaults or your browser overrides. Each binding
+        has its own row.
+      </p>
+      {pageError && (
+        <p role="alert" className="text-sm text-destructive">
+          {pageError}
+        </p>
+      )}
+      <p role="status" className="text-sm">
         {message}
       </p>
       <Dialog
@@ -151,18 +193,22 @@ export function ShortcutSettings() {
               return;
             }
             const conflict =
-              recording && shortcutConflict(recording, next, overrides);
+              recording && shortcutConflict(recording.id, next, overrides);
             setCaptureError(
               conflict
                 ? `This shortcut is assigned to ${commands[conflict].label}.`
-                : "",
+                : recording &&
+                    shortcutsFor(recording.id, overrides).includes(next) &&
+                    (recording.kind === "add" || recording.previous !== next)
+                  ? "This command already has that keybinding."
+                  : "",
             );
           }}
         >
           <DialogHeader>
             <DialogTitle>Set keyboard shortcut</DialogTitle>
             <DialogDescription>
-              {recording ? commands[recording].label : ""}. Press a key
+              {recording ? commands[recording.id].label : ""}. Press a key
               combination, then save. Escape cancels.
             </DialogDescription>
           </DialogHeader>
@@ -198,7 +244,17 @@ export function ShortcutSettings() {
             <Button
               disabled={!candidate || !!captureError}
               onClick={() => {
-                if (recording && candidate) apply(recording, candidate);
+                if (recording && candidate)
+                  apply(
+                    recording.id,
+                    recording.kind === "add"
+                      ? { kind: "add", shortcut: candidate }
+                      : {
+                          kind: "replace",
+                          previous: recording.previous,
+                          shortcut: candidate,
+                        },
+                  );
               }}
             >
               Save shortcut

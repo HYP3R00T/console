@@ -27,6 +27,7 @@ import {
   formatShortcut,
   shortcutFor,
   shortcutFromEvent,
+  shortcutsFor,
 } from "@/lib/commands";
 import { useCommands } from "./command-registry";
 import { useShortcutPreferences } from "./shortcut-preferences";
@@ -81,8 +82,8 @@ export function CommandPalette() {
         )
       )
         return;
-      const id = commandIds.find(
-        (key) => shortcutFor(key, overrides) === shortcut,
+      const id = commandIds.find((key) =>
+        shortcutsFor(key, overrides).includes(shortcut),
       );
       if (!id) return;
       if (
@@ -149,7 +150,12 @@ export function CommandPalette() {
                 variant="ghost"
                 size={shortcutLabel ? "sm" : "icon-sm"}
                 aria-label="Open command palette"
-                aria-keyshortcuts={ariaShortcut(openingShortcut)}
+                aria-keyshortcuts={
+                  shortcutsFor("palette.open", overrides)
+                    .map(ariaShortcut)
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
               />
             }
           >

@@ -34,7 +34,9 @@ export const commands = {
 
 export type CommandId = keyof typeof commands;
 export const commandIds = Object.keys(commands) as CommandId[];
-export type ShortcutOverrides = Partial<Record<CommandId, Shortcut | null>>;
+export type ShortcutOverrides = Partial<
+  Record<CommandId, Shortcut | Shortcut[] | null>
+>;
 export const shortcutStorageKey = "console.shortcuts.v1";
 
 export function defaultShortcut(id: CommandId): Shortcut | null {
@@ -42,8 +44,19 @@ export function defaultShortcut(id: CommandId): Shortcut | null {
   return "shortcut" in command ? command.shortcut : null;
 }
 
-export function shortcutFor(id: CommandId, overrides: ShortcutOverrides) {
-  return overrides[id] === undefined ? defaultShortcut(id) : overrides[id];
+export function shortcutsFor(
+  id: CommandId,
+  overrides: ShortcutOverrides,
+): Shortcut[] {
+  const value =
+    overrides[id] === undefined ? defaultShortcut(id) : overrides[id];
+  return Array.isArray(value) ? [...value] : value ? [value] : [];
+}
+export function shortcutFor(
+  id: CommandId,
+  overrides: ShortcutOverrides,
+): Shortcut | null {
+  return shortcutsFor(id, overrides)[0] ?? null;
 }
 
 export function shortcutConflict(
@@ -52,7 +65,8 @@ export function shortcutConflict(
   overrides: ShortcutOverrides,
 ) {
   return commandIds.find(
-    (other) => other !== id && shortcutFor(other, overrides) === shortcut,
+    (other) =>
+      other !== id && shortcutsFor(other, overrides).includes(shortcut),
   );
 }
 
@@ -65,11 +79,14 @@ export function parseShortcuts(raw: string | null): ShortcutOverrides {
     for (const id of commandIds) {
       if (!Object.hasOwn(parsed, id)) continue;
       const value: unknown = (parsed as Record<string, unknown>)[id];
-      if (value === null || isShortcut(value)) overrides[id] = value;
+      if (
+        value === null ||
+        isShortcut(value) ||
+        (Array.isArray(value) && value.length > 0 && value.every(isShortcut))
+      )
+        overrides[id] = value;
     }
-    const active = commandIds
-      .map((id) => shortcutFor(id, overrides))
-      .filter(Boolean);
+    const active = commandIds.flatMap((id) => shortcutsFor(id, overrides));
     return active.length === new Set(active).size ? overrides : {};
   } catch {
     return {};
@@ -90,7 +107,7 @@ const namedShortcutKeys = new Set([
   "PageUp",
   "PageDown",
 ]);
-function isShortcut(value: unknown): value is Shortcut {
+export function isShortcut(value: unknown): value is Shortcut {
   if (typeof value !== "string") return false;
   const match = /^(?:Mod\+(?:Alt\+)?|Alt\+)(?:Shift\+)?(.+)$/.exec(value);
   if (!match || /^Mod\+[ACVXYZ]$/.test(value) || value === "Mod+Shift+Z")
