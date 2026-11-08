@@ -1,4 +1,5 @@
 "use client";
+import { Users } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useBackendRequest } from "@/hooks/use-backend-request";
 import { modelKey } from "../sessions/use-chat-models";
@@ -24,6 +26,7 @@ import {
   type ReviewerProfile,
   useReviewerProfiles,
 } from "../sessions/use-reviewer-profiles";
+import { SettingsHeading } from "./settings-presentation";
 
 type Edit = { revision: number; profiles: ReviewerProfile[] };
 export function ReviewerProfileSettings({
@@ -34,18 +37,18 @@ export function ReviewerProfileSettings({
   const { deviceId } = useParams<{ deviceId: string }>();
   const { client, request } = useBackendRequest();
   return (
-    <div className="flex max-w-2xl flex-col gap-6">
-      <header>
-        <h1 className="text-xl font-semibold">
-          {kind === "agent" ? "Agent profiles" : "Reviewer profiles"}
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {kind === "agent"
-            ? "Reusable model, instructions and tool choices for background agents and jobs."
-            : "Reusable read-only review roles on this machine."}{" "}
-          Scheduled work keeps the settings captured when it was created.
-        </p>
-      </header>
+    <div className="flex w-full min-w-0 flex-col gap-6">
+      <SettingsHeading
+        title={kind === "agent" ? "Agent profiles" : "Reviewer profiles"}
+        icon={Users}
+        description={
+          kind === "agent"
+            ? "Reusable model, instructions and tools for background work."
+            : "Reusable read-only review roles."
+        }
+        help="Scheduled work keeps the settings captured when it was created. Editing a profile changes future work."
+      />
+      <Separator />
       {client ? (
         <ProfilesForm
           key={`${deviceId}-${kind}`}
@@ -213,7 +216,7 @@ function ProfilesForm({
         <p>No profiles. Add one to reuse a role across conversations.</p>
       )}
       {profile && (
-        <FieldGroup>
+        <FieldGroup className="grid items-start gap-6 lg:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="reviewer-profile">Profile</FieldLabel>
             <Select
@@ -223,7 +226,7 @@ function ProfilesForm({
                 if (id) setSelectedId(id);
               }}
             >
-              <SelectTrigger id="reviewer-profile">
+              <SelectTrigger className="w-full" id="reviewer-profile">
                 <SelectValue>{profile.name || "Unnamed profile"}</SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -267,7 +270,11 @@ function ProfilesForm({
                   });
               }}
             >
-              <SelectTrigger id="reviewer-model" aria-invalid={!selectedModel}>
+              <SelectTrigger
+                className="w-full"
+                id="reviewer-model"
+                aria-invalid={!selectedModel}
+              >
                 <SelectValue>
                   {selectedModel
                     ? `${selectedModel.name} (${selectedModel.provider})`
@@ -300,7 +307,7 @@ function ProfilesForm({
                     });
                 }}
               >
-                <SelectTrigger id="reviewer-thinking">
+                <SelectTrigger className="w-full" id="reviewer-thinking">
                   <SelectValue>
                     {profile.thinkingLevel ?? "Model default"}
                   </SelectValue>

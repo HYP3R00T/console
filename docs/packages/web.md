@@ -164,7 +164,10 @@ Profiles copy their settings at admission and cannot grant tools disabled in the
 
 ## MCP and SSH settings
 
-Machine settings provide validated JSON editors for MCP servers and SSH profiles, examples, explicit Save and reload actions and Reload and discard edits controls.
+Machine settings separate MCP servers and SSH workspaces, with add/edit/remove forms, explicit installation drafts and Save and reload actions.
+MCP forms preserve argument boundaries, environment-variable names and the distinction between all tools and an explicit allowlist; SSH forms capture host, user, port, remote directory and backend key-file paths.
+Advanced JSON remains available for repair; setup guides use Collapsible and highlighted Code Block examples.
+The legacy integrations route redirects to MCP servers.
 Saving replaces the selected machine configuration and reloads shared connections; errors preserve the draft, and stale revisions require reloading before saving again.
 Malformed owner-only files can be replaced without displaying their contents; unsafe files require correction on the backend host.
 
@@ -207,7 +210,7 @@ Backend setting controls display confirmed responses and pending/error states, w
 
 `src/lib/configuration/store.ts` centralizes persistent preferences behind a versioned, single-key browser-storage envelope and reads legacy keys until the first successful write.
 Appearance, shortcuts, bookmarks, pins, navigation and imported themes use this service, with notifications across mounted clients and browser tabs.
-Client preferences → Configuration backup exports versioned JSON and previews a complete replacement before importing; unsupported versions, invalid shortcuts, conflicts and invalid themes leave saved preferences unchanged.
+Client preferences → Backup/Restore exports versioned JSON and previews a complete replacement before importing; unsupported versions, invalid shortcuts, conflicts and invalid themes leave saved preferences unchanged.
 Undo import restores the previous configuration during the current page lifetime; imports and undo disconnect machines and require explicit reconnection, without trusting imported backend identities.
 Exports omit backend settings, credentials, transcripts, drafts and remembered/active connections.
 
@@ -242,6 +245,9 @@ Category navigation retains a saved selection or uses the first saved machine, a
 The far-left rail is the single Preferences entry point; device navigation does not duplicate it, and settings pages omit the redundant All preferences row and breadcrumb.
 Preferences navigation groups client and machine categories; older project, session and conversation settings deep links remain valid for compatibility.
 The assigned Open settings shortcut always opens Appearance, including from text fields, with the current machine selected and unchanged keybindings.
+
+Settings pages use shared icon headings, focusable information tooltips and Separator components; responsive forms use the available width without stretching every control.
+Extensions expose available bundles and an editable exported name beside an installation draft; the setup guide explains backend provisioning, and Advanced JSON is optional.
 
 ## Workspace configuration sidebar
 

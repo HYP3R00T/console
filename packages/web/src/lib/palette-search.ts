@@ -17,6 +17,7 @@ const aliases: Partial<Record<CommandId, string[]>> = {
   "preferences.shortcuts": ["keyboard shortcuts", "keybindings", "hotkeys"],
   "preferences.configuration": [
     "configuration backup",
+    "backup restore",
     "export",
     "import",
     "preferences",

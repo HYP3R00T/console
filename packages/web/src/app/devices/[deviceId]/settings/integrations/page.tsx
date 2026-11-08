@@ -1,4 +1,9 @@
-import { IntegrationSettings } from "@/components/settings/integration-settings";
-export default function Page() {
-  return <IntegrationSettings />;
+import { redirect } from "next/navigation";
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ deviceId: string }>;
+}) {
+  const { deviceId } = await params;
+  redirect(`/devices/${encodeURIComponent(deviceId)}/settings/mcp`);
 }

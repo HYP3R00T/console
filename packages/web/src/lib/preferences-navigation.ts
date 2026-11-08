@@ -7,7 +7,7 @@ export type PreferenceTarget = {
 export const clientPreferencePages = [
   { label: "Appearance", path: "/settings/appearance" },
   { label: "Keyboard shortcuts", path: "/settings/shortcuts" },
-  { label: "Configuration backup", path: "/settings/configuration" },
+  { label: "Backup/Restore", path: "/settings/configuration" },
 ] as const;
 export const machinePreferencePages = [
   { id: "providers", label: "Providers" },
@@ -15,7 +15,8 @@ export const machinePreferencePages = [
   { id: "guidance", label: "Workspace guidance" },
   { id: "reviewers", label: "Reviewer profiles" },
   { id: "agents", label: "Agent profiles" },
-  { id: "integrations", label: "MCP and SSH" },
+  { id: "mcp", label: "MCP servers" },
+  { id: "ssh", label: "SSH workspaces" },
   { id: "extensions", label: "Extensions" },
   { id: "projects", label: "Projects folder" },
   { id: "archives", label: "Archives" },
@@ -27,7 +28,9 @@ export function machinePreferenceCategory(
 ): MachinePreferenceCategory | undefined {
   const match =
     /^(?:\/devices\/[^/]+\/settings|\/settings\/machines)\/([^/]+)$/.exec(path);
-  return machinePreferencePages.find((page) => page.id === match?.[1])?.id;
+  return match?.[1] === "integrations"
+    ? "mcp"
+    : machinePreferencePages.find((page) => page.id === match?.[1])?.id;
 }
 export function machinePreferenceHref(
   category: MachinePreferenceCategory,

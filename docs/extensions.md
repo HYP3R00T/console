@@ -3,7 +3,8 @@
 Managed extensions are trusted application code with the backend user's full privileges, not sandboxed plugins.
 Provision code on the backend; project files and model tool calls cannot install bundles through this workflow.
 Machine settings → Extensions lists owner-provisioned bundles, edits the pinned manifest, installs/replaces/removes definitions, and reloads saved definitions for recovery.
-Use bundle copies its current hash into a draft; confirm the exported name, then Save and activate.
+Enter the bundle’s exported name beside its filename, then Add to draft pins its current hash; Save and activate applies the draft.
+The setup guide explains provisioning, and Advanced JSON remains available for manifest repair.
 The active catalog shows hashes, tools and task versions separately from the saved manifest.
 
 ## Bundle contract
