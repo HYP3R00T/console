@@ -1,12 +1,13 @@
 "use client";
 
-import { ChevronRight, Star } from "lucide-react";
+import { ChevronRight, KeyRound, Star } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useDevices } from "@/components/devices/device-provider";
 import { ModelDetails } from "@/components/providers/model-details";
 import { ProviderLogin } from "@/components/providers/provider-login";
 import { useProviders } from "@/components/providers/providers-provider";
+import { SettingsHeading } from "@/components/settings/settings-presentation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import {
   type LoginView,
   type ProviderModel,
@@ -115,20 +117,20 @@ function ProviderSettingsContent() {
     )
     .sort((a, b) => Number(b.favorite) - Number(a.favorite));
   return (
-    <div className="flex flex-col gap-6 xl:min-h-0 xl:flex-1">
-      <header className="shrink-0">
-        <h1 className="text-xl font-semibold">Providers</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {overview?.activeCount ?? 0} enabled · Credentials and model favorites
-          are stored on this backend.
-        </p>
-      </header>
+    <div className="flex w-full min-w-0 flex-col gap-6 xl:min-h-0 xl:flex-1">
+      <SettingsHeading
+        title="Providers"
+        icon={KeyRound}
+        description={`${overview?.activeCount ?? 0} enabled · Choose a provider to manage access and models.`}
+        help="Credentials and model favorites are stored on this backend machine. Enable a provider and favorite models to make them available in new-chat defaults."
+      />
+      <Separator />
       {(error || loadError) && (
         <p role="alert" className="text-sm text-destructive">
           {error ?? loadError}
         </p>
       )}
-      <div className="grid min-h-0 gap-6 xl:flex-1 xl:grid-cols-[320px_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)]">
+      <div className="grid min-h-0 gap-6 xl:flex-1 xl:grid-cols-[minmax(240px,0.7fr)_minmax(0,2fr)] xl:grid-rows-[minmax(0,1fr)]">
         <section
           aria-label="Provider catalog"
           className="flex min-h-0 min-w-0 flex-col gap-3"
@@ -204,7 +206,7 @@ function ProviderSettingsContent() {
             aria-label={`${selected.name} provider`}
             className="flex min-h-0 min-w-0 flex-col gap-6"
           >
-            <div className="shrink-0 space-y-4 bg-muted/20 p-5">
+            <div className="flex shrink-0 flex-col gap-4 rounded-xl bg-muted/20 p-5">
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-lg font-medium">{selected.name}</h2>
                 <Badge variant="outline">

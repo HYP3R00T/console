@@ -152,7 +152,7 @@ test("palette settings destinations explicitly select existing editors without a
     }),
     "/devices/m/sessions/s/conversations/2/settings",
   );
-  assert.equal(scopedSettingsDestinations({ deviceId: "m" }).length, 9);
+  assert.equal(scopedSettingsDestinations({ deviceId: "m" }).length, 10);
   for (const value of [
     null,
     { destination: "https://example.com", target: { deviceId: "m" } },
@@ -160,4 +160,16 @@ test("palette settings destinations explicitly select existing editors without a
     { destination: "machine:providers", target: { deviceId: 42 } },
   ])
     assert.throws(() => settingsDestinationHref(value));
+});
+
+test("legacy integration category resolves to MCP without hiding SSH navigation", () => {
+  assert.equal(
+    machinePreferenceCategory("/devices/m/settings/integrations"),
+    "mcp",
+  );
+  assert.equal(
+    machinePreferenceCategory("/settings/machines/integrations"),
+    "mcp",
+  );
+  assert.equal(machinePreferenceHref("ssh", "m"), "/devices/m/settings/ssh");
 });

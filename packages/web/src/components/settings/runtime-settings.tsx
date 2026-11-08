@@ -1,5 +1,6 @@
 "use client";
 
+import { SlidersHorizontal } from "lucide-react";
 import { useParams } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 import { useCommands } from "@/components/commands/command-registry";
@@ -18,12 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { useBackendRequest } from "@/hooks/use-backend-request";
 import {
   modelKey,
   type RuntimeDefaults,
   type RuntimeDefaultsSnapshot,
 } from "../sessions/use-chat-models";
+import { SettingsHeading } from "./settings-presentation";
 
 const path = "/v1/machine/runtime-defaults";
 const none = "none";
@@ -35,13 +38,14 @@ export function RuntimeSettings() {
   const { client, request } = useBackendRequest();
 
   return (
-    <div className="flex max-w-2xl flex-col gap-6">
-      <header>
-        <h1 className="text-xl font-semibold">Runtime defaults</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Model and thinking level for new conversations on this machine.
-        </p>
-      </header>
+    <div className="flex w-full min-w-0 flex-col gap-6">
+      <SettingsHeading
+        title="Runtime defaults"
+        icon={SlidersHorizontal}
+        description="Choose the starting model for new conversations."
+        help="Applies only to new conversations on this machine. Existing conversations keep their saved model. Models come from your enabled providers and favorites."
+      />
+      <Separator />
       {client ? (
         <DefaultsForm key={deviceId} request={request} />
       ) : (
@@ -143,7 +147,7 @@ function DefaultsForm({
   }
   return (
     <form onSubmit={save} className="flex flex-col gap-4">
-      <FieldGroup>
+      <FieldGroup className="grid items-start gap-6 lg:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="runtime-model">Default model</FieldLabel>
           <Select
@@ -160,7 +164,7 @@ function DefaultsForm({
                 });
             }}
           >
-            <SelectTrigger id="runtime-model">
+            <SelectTrigger id="runtime-model" className="w-full">
               <SelectValue>
                 {selected
                   ? `${selected.name} (${selected.provider})`
@@ -203,7 +207,7 @@ function DefaultsForm({
                     });
                 }}
               >
-                <SelectTrigger id="runtime-thinking">
+                <SelectTrigger id="runtime-thinking" className="w-full">
                   <SelectValue>
                     {defaults.thinkingLevel ?? "Model default"}
                   </SelectValue>

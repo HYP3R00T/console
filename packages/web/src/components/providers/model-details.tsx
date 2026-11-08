@@ -2,8 +2,8 @@ import type { ProviderModel } from "@/lib/providers";
 
 export function ModelDetails({ model }: { model: ProviderModel }) {
   return (
-    <div className="space-y-5 pb-6 pl-11 pr-4 pt-2">
-      <section aria-label="Model limits" className="max-w-2xl">
+    <div className="flex min-w-0 flex-col gap-5 pb-6 pl-11 pr-4 pt-2">
+      <section aria-label="Model limits" className="w-full">
         <h3 className="mb-2 text-xs font-medium text-muted-foreground">
           Limits
         </h3>
@@ -26,7 +26,7 @@ export function ModelDetails({ model }: { model: ProviderModel }) {
           ))}
         </dl>
       </section>
-      <section aria-label="Model capabilities" className="max-w-2xl">
+      <section aria-label="Model capabilities" className="w-full">
         <h3 className="mb-2 text-xs font-medium text-muted-foreground">
           Capabilities
         </h3>
@@ -45,7 +45,7 @@ export function ModelDetails({ model }: { model: ProviderModel }) {
           </div>
         </dl>
       </section>
-      <section aria-label="Model catalog pricing" className="max-w-2xl">
+      <section aria-label="Model catalog pricing" className="w-full">
         <h3 className="mb-2 text-xs font-medium text-muted-foreground">
           Catalog pricing · USD per 1M tokens
         </h3>

@@ -6,7 +6,7 @@ export const commands = {
   "appearance.dark-theme": { label: "Appearance: Set dark theme…" },
   "appearance.mode": { label: "Appearance: Change display mode…" },
   "settings.open": { label: "Open settings" },
-  "preferences.configuration": { label: "Open client configuration backup" },
+  "preferences.configuration": { label: "Open Backup/Restore" },
   "machine.workspace-guidance.update": {
     label: "Edit machine workspace guidance",
   },
