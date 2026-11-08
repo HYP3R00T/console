@@ -1,39 +1,43 @@
 "use client";
-
 import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes";
 import { type ComponentProps, useEffect, useState } from "react";
 import {
   clientConfiguration,
   type ImportedTheme,
-  parseTheme,
   subscribeConfiguration,
   themeTokens,
 } from "@/lib/configuration/store";
+import {
+  type Appearance,
+  activeTheme,
+  defaultAppearance,
+  themeCatalog,
+} from "@/lib/configuration/themes";
 
 function ThemeConfiguration() {
-  const { setTheme } = useTheme();
+  const { setTheme, systemTheme } = useTheme();
   useEffect(() => {
     function apply() {
       try {
-        const store = clientConfiguration();
-        const selected = store.getItem("theme") ?? "system";
-        const themes = (
-          JSON.parse(store.getItem("console.themes.v1") ?? "[]") as unknown[]
-        ).map(parseTheme);
-        const custom = themes.find((theme) => theme.id === selected);
-        setTheme(custom?.mode ?? selected);
+        const store = clientConfiguration(),
+          appearance = store.appearance();
+        const theme = activeTheme(
+          appearance,
+          systemTheme === "dark" ? "dark" : "light",
+          store.themes(),
+        );
+        setTheme(appearance.mode);
         const style = document.documentElement.style;
         for (const token of themeTokens) style.removeProperty(`--${token}`);
-        if (custom)
-          for (const [token, value] of Object.entries(custom.tokens))
-            style.setProperty(`--${token}`, value);
+        for (const [token, value] of Object.entries(theme.tokens))
+          style.setProperty(`--${token}`, value);
       } catch {
-        /* Preserve the last applied theme when configuration cannot be read. */
+        /* Keep the last applied theme when storage is unavailable. */
       }
     }
     apply();
     return subscribeConfiguration(apply);
-  }, [setTheme]);
+  }, [setTheme, systemTheme]);
   return null;
 }
 export function ThemeProvider(
@@ -47,51 +51,54 @@ export function ThemeProvider(
   );
 }
 export function useClientAppearance() {
-  const [selected, setSelected] = useState("system");
+  const [appearance, setAppearance] = useState<Appearance>(defaultAppearance);
   const [themes, setThemes] = useState<ImportedTheme[]>([]);
   const [error, setError] = useState<string>();
+  const [ready, setReady] = useState(false);
+  const { systemTheme } = useTheme();
   useEffect(() => {
     function load() {
       try {
         const store = clientConfiguration();
-        setSelected(store.getItem("theme") ?? "system");
-        setThemes(
-          (
-            JSON.parse(store.getItem("console.themes.v1") ?? "[]") as unknown[]
-          ).map(parseTheme),
-        );
+        setAppearance(store.appearance());
+        setThemes(store.themes());
         setError(undefined);
       } catch {
         setError("Could not read client appearance.");
       }
+      setReady(true);
     }
     load();
     return subscribeConfiguration(load);
   }, []);
-  function select(theme: string) {
+  function save(next: Appearance) {
     try {
-      clientConfiguration().setItem("theme", theme);
+      clientConfiguration().saveAppearance(next);
       setError(undefined);
     } catch {
-      setError("Could not save theme in this browser.");
+      setError(
+        "Could not save appearance. Your saved preferences are unchanged.",
+      );
     }
   }
-  function importTheme(value: unknown) {
-    const theme = parseTheme(value);
-    const current = (
-      JSON.parse(
-        clientConfiguration().getItem("console.themes.v1") ?? "[]",
-      ) as unknown[]
-    ).map(parseTheme);
-    if (current.length >= 100 && !current.some((item) => item.id === theme.id))
-      throw new Error("At most 100 imported themes are supported.");
-    clientConfiguration().setItem(
-      "console.themes.v1",
-      JSON.stringify([
-        ...current.filter((item) => item.id !== theme.id),
-        theme,
-      ]),
-    );
-  }
-  return { selected, themes, error, select, importTheme };
+  return {
+    appearance,
+    themes: themeCatalog(themes),
+    error,
+    ready,
+    activeMode: !ready
+      ? undefined
+      : appearance.mode === "system"
+        ? systemTheme === "dark"
+          ? "dark"
+          : "light"
+        : appearance.mode,
+    setMode: (mode: Appearance["mode"]) => save({ ...appearance, mode }),
+    select: (mode: "light" | "dark", id: string) =>
+      save({
+        ...appearance,
+        [mode === "dark" ? "darkTheme" : "lightTheme"]: id,
+      }),
+    importTheme: (value: unknown) => clientConfiguration().importTheme(value),
+  };
 }

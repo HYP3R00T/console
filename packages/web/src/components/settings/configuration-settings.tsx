@@ -13,6 +13,7 @@ import {
   clientConfiguration,
   parseBackup,
 } from "@/lib/configuration/store";
+import { themeCatalog } from "@/lib/configuration/themes";
 
 export function ConfigurationSettings() {
   const [preview, setPreview] = useState<ConfigurationBackup>();
@@ -104,8 +105,19 @@ export function ConfigurationSettings() {
         <section aria-label="Import preview" className="flex flex-col gap-3">
           <h2 className="font-medium">Replace client configuration?</h2>
           <p className="text-sm text-muted-foreground">
-            Theme: {preview.settings.theme}.{" "}
-            {Object.keys(preview.keybindings).length} shortcut overrides,{" "}
+            Appearance: {preview.settings.appearance.mode}. Light:{" "}
+            {
+              themeCatalog(preview.themes).find(
+                (theme) => theme.id === preview.settings.appearance.lightTheme,
+              )?.name
+            }
+            ; dark:{" "}
+            {
+              themeCatalog(preview.themes).find(
+                (theme) => theme.id === preview.settings.appearance.darkTheme,
+              )?.name
+            }
+            . {Object.keys(preview.keybindings).length} shortcut overrides,{" "}
             {preview.themes.length} themes, {preview.settings.bookmarks.length}{" "}
             bookmarks. Project pins, conversation pins and navigation will also
             be replaced.
