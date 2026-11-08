@@ -1,6 +1,20 @@
-type Shortcut = `Mod+${string}`;
+export type Shortcut = `Mod+${string}` | `Alt+${string}`;
 
 export const commands = {
+  "settings.open": { label: "Open settings" },
+  "preferences.configuration": { label: "Open client configuration backup" },
+  "machine.workspace-guidance.update": {
+    label: "Edit machine workspace guidance",
+  },
+  "machine.runtime-defaults.update": {
+    label: "Edit new-chat runtime defaults",
+  },
+  "project.agent-settings.update": { label: "Edit project agent settings" },
+  "session.runtime-settings.update": { label: "Edit session runtime settings" },
+  "conversation.configure": { label: "Edit conversation settings" },
+  "conversation.stop": { label: "Stop conversation" },
+  "conversation.continue": { label: "Continue conversation run" },
+  "conversation.compact": { label: "Compact conversation context" },
   "palette.open": { label: "Open command palette", shortcut: "Mod+K" },
   "navigation.home": { label: "Go to Home" },
   "navigation.devices": { label: "Manage devices" },
@@ -62,15 +76,45 @@ export function parseShortcuts(raw: string | null): ShortcutOverrides {
   }
 }
 
+const namedShortcutKeys = new Set([
+  "Space",
+  "Enter",
+  "Backspace",
+  "Delete",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown",
+]);
 function isShortcut(value: unknown): value is Shortcut {
+  if (typeof value !== "string") return false;
+  const match = /^(?:Mod\+(?:Alt\+)?|Alt\+)(?:Shift\+)?(.+)$/.exec(value);
+  if (!match || /^Mod\+[ACVXYZ]$/.test(value) || value === "Mod+Shift+Z")
+    return false;
+  const key = match[1];
   return (
-    typeof value === "string" &&
-    /^Mod\+(?:Alt\+)?(?:Shift\+)?[A-Z0-9]$/.test(value) &&
-    !/^Mod\+[ACVXYZ]$/.test(value) &&
-    value !== "Mod+Shift+Z"
+    /^[A-Z0-9]$/.test(key) ||
+    [",", ".", "/", ";", "'", "[", "]", "\\", "-", "="].includes(key) ||
+    /^F(?:[1-9]|1[0-2])$/.test(key) ||
+    namedShortcutKeys.has(key)
   );
 }
-
+const punctuationCodes: Record<string, string> = {
+  Comma: ",",
+  Period: ".",
+  Slash: "/",
+  Semicolon: ";",
+  Quote: "'",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Backslash: "\\",
+  Minus: "-",
+  Equal: "=",
+};
 export function shortcutFromEvent(
   event: Pick<
     KeyboardEvent,
@@ -81,20 +125,43 @@ export function shortcutFromEvent(
     | "key"
     | "isComposing"
     | "getModifierState"
-  >,
+  > &
+    Partial<Pick<KeyboardEvent, "code">>,
 ) {
   if (
     event.isComposing ||
-    event.ctrlKey === event.metaKey ||
+    (event.ctrlKey && event.metaKey) ||
+    !(event.ctrlKey || event.metaKey || event.altKey) ||
     event.getModifierState("AltGraph")
   )
     return;
-  const candidate = `Mod+${event.altKey ? "Alt+" : ""}${event.shiftKey ? "Shift+" : ""}${event.key.toUpperCase()}`;
+  const code = event.code ?? "";
+  let key = /^Key[A-Z]$/.test(code)
+    ? code.slice(3)
+    : /^Digit[0-9]$/.test(code)
+      ? code.slice(5)
+      : (punctuationCodes[code] ?? event.key);
+  if (key.length === 1) key = key === " " ? "Space" : key.toUpperCase();
+  const candidate = `${event.ctrlKey || event.metaKey ? "Mod+" : ""}${event.altKey ? "Alt+" : ""}${event.shiftKey ? "Shift+" : ""}${key}`;
   return isShortcut(candidate) ? candidate : undefined;
+}
+export function formatShortcut(
+  shortcut: Shortcut | null | undefined,
+  platform: string,
+): string {
+  if (!shortcut) return "Unassigned";
+  const modifier = /Mac|iPhone|iPad|iPod/.test(platform) ? "Command" : "Ctrl";
+  return shortcut
+    .split("+")
+    .map((key) =>
+      key === "Mod" ? modifier : key.startsWith("Arrow") ? key.slice(5) : key,
+    )
+    .join(" + ");
 }
 
 export function ariaShortcut(shortcut: Shortcut | null) {
-  return shortcut
+  if (!shortcut) return undefined;
+  return shortcut.startsWith("Mod+")
     ? `${shortcut.replace("Mod", "Control")} ${shortcut.replace("Mod", "Meta")}`
-    : undefined;
+    : shortcut;
 }

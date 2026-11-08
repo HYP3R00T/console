@@ -11,6 +11,10 @@ import {
 import { useDevices } from "@/components/devices/device-provider";
 import { useBackendRequest } from "@/hooks/use-backend-request";
 import {
+  clientConfiguration,
+  subscribeConfiguration,
+} from "@/lib/configuration/store";
+import {
   type ProjectPins,
   parseProjectPins,
   projectPinsStorageKey,
@@ -49,7 +53,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const [pinError, setPinError] = useState<string>();
   useEffect(() => {
     try {
-      setPins(parseProjectPins(localStorage.getItem(projectPinsStorageKey)));
+      setPins(
+        parseProjectPins(clientConfiguration().getItem(projectPinsStorageKey)),
+      );
     } catch {
       setPinError(
         "Project pins could not be read. Existing browser data has not been changed.",
@@ -57,12 +63,28 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
     setPinsReady(true);
   }, []);
+  useEffect(
+    () =>
+      subscribeConfiguration(() => {
+        try {
+          setPins(
+            parseProjectPins(
+              clientConfiguration().getItem(projectPinsStorageKey),
+            ),
+          );
+          setPinError(undefined);
+        } catch {
+          setPinError("Could not refresh project pins.");
+        }
+      }),
+    [],
+  );
   function setPinned(id: string, pinned: boolean) {
     if (!origin || !pinsReady)
       throw new Error("Connect this machine before pinning projects.");
     if (pinError) throw new Error(pinError);
     const next = updateProjectPins(pins, origin, id, pinned);
-    localStorage.setItem(projectPinsStorageKey, JSON.stringify(next));
+    clientConfiguration().setItem(projectPinsStorageKey, JSON.stringify(next));
     setPins(next);
   }
   const latest = useRef(client);

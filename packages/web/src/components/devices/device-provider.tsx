@@ -10,6 +10,10 @@ import {
 } from "react";
 import { useConnections } from "@/components/connection-provider";
 import {
+  clientConfiguration,
+  subscribeConfiguration,
+} from "@/lib/configuration/store";
+import {
   connectedDevicesKey,
   type Device,
   type DeviceAppearance,
@@ -44,12 +48,14 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   const remembered = useRef(new Set<string>());
   useEffect(() => {
     try {
-      const saved = parseDevices(localStorage.getItem(devicesStorageKey));
+      const saved = parseDevices(
+        clientConfiguration().getItem(devicesStorageKey),
+      );
       setDevices(saved);
       remembered.current = new Set(
         parseConnectedDevices(
-          localStorage.getItem(connectedDevicesKey),
-          localStorage.getItem(legacyConnectedDeviceKey),
+          clientConfiguration().getItem(connectedDevicesKey),
+          clientConfiguration().getItem(legacyConnectedDeviceKey),
           saved,
         ),
       );
@@ -73,7 +79,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     });
     if (next.some((device, index) => device !== devices[index])) {
       try {
-        localStorage.setItem(devicesStorageKey, JSON.stringify(next));
+        clientConfiguration().setItem(devicesStorageKey, JSON.stringify(next));
         setDevices(next);
       } catch {
         setError("Backend identity could not be saved in this browser.");
@@ -82,11 +88,11 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   }, [states, devices, ready, error]);
   function remember() {
     try {
-      localStorage.setItem(
+      clientConfiguration().setItem(
         connectedDevicesKey,
         JSON.stringify([...remembered.current]),
       );
-      localStorage.removeItem(legacyConnectedDeviceKey);
+      clientConfiguration().removeItem(legacyConnectedDeviceKey);
     } catch {
       setError("Connection choices could not be saved in this browser.");
     }
@@ -101,9 +107,28 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       throw new Error(
         "Resolve saved-device storage access before editing the list.",
       );
-    localStorage.setItem(devicesStorageKey, JSON.stringify(next));
+    clientConfiguration().setItem(devicesStorageKey, JSON.stringify(next));
     setDevices(next);
   }
+  useEffect(
+    () =>
+      subscribeConfiguration((imported) => {
+        try {
+          if (imported) {
+            for (const id of Object.keys(manager.snapshot()))
+              manager.disconnect(id);
+            remembered.current.clear();
+          }
+          setDevices(
+            parseDevices(clientConfiguration().getItem(devicesStorageKey)),
+          );
+          setError(undefined);
+        } catch {
+          setError("Could not refresh saved devices.");
+        }
+      }),
+    [manager],
+  );
   return (
     <Context
       value={{

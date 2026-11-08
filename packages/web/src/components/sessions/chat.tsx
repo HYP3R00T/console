@@ -3,11 +3,14 @@ import { ArrowDown } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCommands } from "@/components/commands/command-registry";
+import { ConversationCommands } from "@/components/commands/conversation-commands";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { useWorkspaceChrome } from "@/components/layout/workspace-chrome";
 import { useMachineProjects } from "@/components/projects/projects-provider";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { executeBackendCommand } from "@/lib/backend/commands";
 import { standaloneConversationPath } from "@/lib/conversation-path";
 import { type ChatAttachment, wireAttachments } from "./attachments";
 import { ChatComposer } from "./chat-composer";
@@ -55,14 +58,30 @@ export function Chat({
   branches?: Conversation[];
 }) {
   const route = usePathname();
+  const commands = useCommands();
   const { setConversation, setInspector } = useWorkspaceChrome();
   useEffect(() => {
-    setConversation({ route, title, subtitle });
+    setConversation({
+      route,
+      title,
+      subtitle,
+      sessionId,
+      conversationId,
+      projectId,
+    });
     return () =>
       setConversation((current) =>
         current?.route === route ? undefined : current,
       );
-  }, [route, title, subtitle, setConversation]);
+  }, [
+    route,
+    title,
+    subtitle,
+    sessionId,
+    conversationId,
+    projectId,
+    setConversation,
+  ]);
   const state = useMachineProjects(deviceId);
   const path = `/v1/sessions/${sessionId}/conversations/${conversationId}`;
   const stream = useConversation(
@@ -213,7 +232,12 @@ export function Chat({
     setStopping(true);
     setError(undefined);
     try {
-      await state.request(`${path}/stop`, { method: "POST", body: "{}" });
+      await executeBackendCommand(
+        { request: state.request },
+        "conversation.stop",
+        { sessionId, conversationId },
+        {},
+      );
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not stop conversation.",
@@ -226,10 +250,12 @@ export function Chat({
     setContinuing(true);
     setError(undefined);
     try {
-      await state.request(`${path}/continue`, {
-        method: "POST",
-        body: JSON.stringify({ failedTaskId }),
-      });
+      await executeBackendCommand(
+        { request: state.request },
+        "conversation.continue",
+        { sessionId, conversationId },
+        { failedTaskId },
+      );
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not continue the run.",
@@ -363,6 +389,22 @@ export function Chat({
     );
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
+      <ConversationCommands
+        key={`${deviceId}:${path}`}
+        request={state.request}
+        sessionId={sessionId}
+        conversationId={conversationId}
+        working={working || !!execution?.compactions.length}
+        pending={busy || stopping || continuing || !!pending}
+        canContinue={
+          !!execution?.failure?.canContinue && execution.state === "idle"
+        }
+        modelAvailable={!!savedModel}
+        stop={stop}
+        continueRun={() =>
+          execution?.failure && continueRun(execution.failure.taskId)
+        }
+      />
       <h1 className="sr-only">{title}</h1>
       {stream.data.planMode && (
         <p className="text-xs text-muted-foreground">
@@ -517,7 +559,15 @@ export function Chat({
           size="sm"
           disabled={busy || stopping || continuing || !!pending}
           onClick={() => {
-            if (execution.failure) void continueRun(execution.failure.taskId);
+            try {
+              void commands.invoke("conversation.continue");
+            } catch (error) {
+              setError(
+                error instanceof Error
+                  ? error.message
+                  : "Continue unavailable.",
+              );
+            }
           }}
         >
           {continuing ? "Continuing…" : "Continue run"}
@@ -549,7 +599,15 @@ export function Chat({
         content={pending?.content ?? content}
         onChange={setContent}
         onSend={(mode) => void send(mode)}
-        onStop={() => void stop()}
+        onStop={() => {
+          try {
+            void commands.invoke("conversation.stop");
+          } catch (error) {
+            setError(
+              error instanceof Error ? error.message : "Stop unavailable.",
+            );
+          }
+        }}
         stopping={stopping}
         sending={busy || stopping}
         pending={!!pending}

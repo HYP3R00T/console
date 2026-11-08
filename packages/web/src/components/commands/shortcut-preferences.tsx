@@ -17,9 +17,14 @@ import {
   shortcutConflict,
   shortcutStorageKey,
 } from "@/lib/commands";
+import {
+  clientConfiguration,
+  subscribeConfiguration,
+} from "@/lib/configuration/store";
 
 const Context = createContext<{
   overrides: ShortcutOverrides;
+  platform: string;
   ready: boolean;
   storageError: boolean;
   update: (
@@ -29,34 +34,39 @@ const Context = createContext<{
 } | null>(null);
 
 export function ShortcutPreferences({ children }: { children: ReactNode }) {
+  const [platform, setPlatform] = useState("");
   const [overrides, setOverrides] = useState<ShortcutOverrides>({});
   const [ready, setReady] = useState(false);
   const [storageError, setStorageError] = useState(false);
   const unsaved = useRef(false);
   useEffect(() => {
+    setPlatform(navigator.platform);
     try {
-      setOverrides(parseShortcuts(localStorage.getItem(shortcutStorageKey)));
+      setOverrides(
+        parseShortcuts(clientConfiguration().getItem(shortcutStorageKey)),
+      );
     } catch {
       setStorageError(true);
     }
     setReady(true);
-    function sync(event: StorageEvent) {
-      if (
-        event.storageArea === localStorage &&
-        !unsaved.current &&
-        (event.key === shortcutStorageKey || event.key === null)
-      ) {
-        setOverrides(parseShortcuts(event.newValue));
+    return subscribeConfiguration(() => {
+      try {
+        setOverrides(
+          parseShortcuts(clientConfiguration().getItem(shortcutStorageKey)),
+        );
+        setStorageError(false);
+      } catch {
+        setStorageError(true);
       }
-    }
-    window.addEventListener("storage", sync);
-    return () => window.removeEventListener("storage", sync);
+    });
   }, []);
   function update(id: CommandId, value: ShortcutOverrides[CommandId]) {
     let next = { ...overrides };
     try {
       if (!unsaved.current)
-        next = parseShortcuts(localStorage.getItem(shortcutStorageKey));
+        next = parseShortcuts(
+          clientConfiguration().getItem(shortcutStorageKey),
+        );
     } catch {
       setStorageError(true);
     }
@@ -67,17 +77,18 @@ export function ShortcutPreferences({ children }: { children: ReactNode }) {
     if (value === undefined) delete next[id];
     else next[id] = value;
     try {
-      localStorage.setItem(shortcutStorageKey, JSON.stringify(next));
+      clientConfiguration().setItem(shortcutStorageKey, JSON.stringify(next));
       unsaved.current = false;
       setStorageError(false);
     } catch {
       unsaved.current = true;
       setStorageError(true);
+      return "Could not save shortcuts in this browser.";
     }
     setOverrides(next);
   }
   return (
-    <Context value={{ overrides, ready, storageError, update }}>
+    <Context value={{ overrides, platform, ready, storageError, update }}>
       {children}
     </Context>
   );

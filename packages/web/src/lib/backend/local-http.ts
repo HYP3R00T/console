@@ -83,6 +83,7 @@ function createLocalClient(origin: string): BackendClient {
             ? data.error
             : `Backend returned HTTP ${response.status}.`,
           typeof data?.code === "string" ? data.code : undefined,
+          response.status,
         );
       return data as T;
     },

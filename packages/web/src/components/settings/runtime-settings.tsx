@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
+import { useCommands } from "@/components/commands/command-registry";
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -57,6 +58,7 @@ function DefaultsForm({
 }: {
   request: ReturnType<typeof useBackendRequest>["request"];
 }) {
+  const commands = useCommands();
   const [snapshot, setSnapshot] = useState<RuntimeDefaultsSnapshot>();
   const [edit, setEdit] = useState<Edit>();
   const [loadError, setLoadError] = useState<string>();
@@ -121,10 +123,10 @@ function DefaultsForm({
     setBusy(true);
     setError(undefined);
     try {
-      const saved = await request<Edit>(path, {
-        method: "PUT",
-        body: JSON.stringify(edit),
-      });
+      const saved = (await commands.invoke(
+        "machine.runtime-defaults.update",
+        edit,
+      )) as Edit;
       setSnapshot((current) =>
         current && saved.revision >= current.revision
           ? { ...current, ...saved }

@@ -8,6 +8,10 @@ import {
   useState,
 } from "react";
 import {
+  clientConfiguration,
+  subscribeConfiguration,
+} from "@/lib/configuration/store";
+import {
   emptyNavigationMemory,
   type NavigationMemory,
   navigationMemoryKey,
@@ -31,7 +35,9 @@ export function NavigationMemoryProvider({
   useEffect(() => {
     try {
       setMemory(
-        parseNavigationMemory(localStorage.getItem(navigationMemoryKey)),
+        parseNavigationMemory(
+          clientConfiguration().getItem(navigationMemoryKey),
+        ),
       );
     } catch {
       /* In-memory navigation still works when storage is unavailable. */
@@ -51,11 +57,30 @@ export function NavigationMemoryProvider({
   useEffect(() => {
     if (ready)
       try {
-        localStorage.setItem(navigationMemoryKey, JSON.stringify(memory));
+        clientConfiguration().setItem(
+          navigationMemoryKey,
+          JSON.stringify(memory),
+        );
       } catch {
         /* Keep the current browser session usable without persistence. */
       }
   }, [memory, ready]);
+  useEffect(
+    () =>
+      subscribeConfiguration((imported) => {
+        if (imported)
+          try {
+            setMemory(
+              parseNavigationMemory(
+                clientConfiguration().getItem(navigationMemoryKey),
+              ),
+            );
+          } catch {
+            /* Keep last confirmed navigation. */
+          }
+      }),
+    [],
+  );
   return (
     <Context
       value={{

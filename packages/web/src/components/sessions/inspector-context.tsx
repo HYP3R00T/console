@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useId, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ const formatCost = new Intl.NumberFormat("en-US", {
 
 export function InspectorContext({
   settings,
+  sessionSettingsHref,
   selectedModel,
   disabled,
   compacting,
@@ -60,6 +62,7 @@ export function InspectorContext({
   compact,
 }: {
   settings: ContextSettings;
+  sessionSettingsHref?: string;
   selectedModel?: ChatModel;
   disabled: boolean;
   compacting: boolean;
@@ -162,7 +165,7 @@ export function InspectorContext({
           save={saveTurnLimit}
         />
       )}
-      {settings.tokenBudget !== undefined && (
+      {!sessionSettingsHref && settings.tokenBudget !== undefined && (
         <IntegerLimit
           title="Session token budget"
           description={
@@ -176,98 +179,111 @@ export function InspectorContext({
           save={saveBudget}
         />
       )}
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle>Compaction settings</CardTitle>
-          <CardDescription>
-            Shared by every conversation in this session.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FieldGroup className="gap-3">
-            {settings.automatic !== undefined && (
-              <Field orientation="horizontal" data-disabled={disabled}>
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <FieldLabel htmlFor={`${id}-automatic`}>
-                    Automatic compaction
-                  </FieldLabel>
-                  <FieldDescription id={`${id}-automatic-help`}>
-                    Summarize older messages when the model nears its context
-                    limit.
-                  </FieldDescription>
-                </div>
-                <Switch
-                  id={`${id}-automatic`}
-                  aria-describedby={`${id}-automatic-help`}
-                  size="sm"
-                  checked={settings.automatic}
-                  disabled={disabled}
-                  onCheckedChange={setAutomatic}
-                />
-              </Field>
-            )}
-            <Field data-disabled={disabled} data-invalid={changed}>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-                <span className="font-medium">Recent messages to keep</span>
-                <Badge variant="secondary" className="tabular-nums">
-                  {formatTokens(tokens)}
-                </Badge>
-              </div>
-              <Slider
-                className="my-1"
-                value={[tokens]}
-                min={settings.min}
-                max={settings.max}
-                step={settings.step}
-                disabled={disabled}
-                aria-invalid={changed}
-                aria-describedby={`${id}-retention-help`}
-                thumbProps={{
-                  getAriaLabel: () => "Recent messages to keep",
-                  getAriaValueText: () => formatTokens(tokens),
-                }}
-                onValueChange={(value) => {
-                  if (Array.isArray(value))
-                    setDraft({
-                      tokens: value[0],
-                      original: draft?.original ?? settings.keepRecentTokens,
-                    });
-                }}
-              />
-              <FieldDescription id={`${id}-retention-help`}>
-                Keep this much recent text in full when older messages are
-                summarized.
-              </FieldDescription>
-              {changed && (
-                <FieldError>
-                  The saved size changed elsewhere. Reset the draft to review
-                  it.
-                </FieldError>
+      {sessionSettingsHref ? (
+        <div className="text-sm">
+          <p>
+            Session budget: {settings.tokenBudget ?? "Unlimited"}. Automatic
+            compaction: {settings.automatic ? "Enabled" : "Disabled"}. Recent
+            tokens: {settings.keepRecentTokens}.
+          </p>
+          <Link href={sessionSettingsHref}>
+            Edit shared session runtime settings
+          </Link>
+        </div>
+      ) : (
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle>Compaction settings</CardTitle>
+            <CardDescription>
+              Shared by every conversation in this session.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FieldGroup className="gap-3">
+              {settings.automatic !== undefined && (
+                <Field orientation="horizontal" data-disabled={disabled}>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <FieldLabel htmlFor={`${id}-automatic`}>
+                      Automatic compaction
+                    </FieldLabel>
+                    <FieldDescription id={`${id}-automatic-help`}>
+                      Summarize older messages when the model nears its context
+                      limit.
+                    </FieldDescription>
+                  </div>
+                  <Switch
+                    id={`${id}-automatic`}
+                    aria-describedby={`${id}-automatic-help`}
+                    size="sm"
+                    checked={settings.automatic}
+                    disabled={disabled}
+                    onCheckedChange={setAutomatic}
+                  />
+                </Field>
               )}
-            </Field>
-          </FieldGroup>
-        </CardContent>
-        {draft && (tokens !== settings.keepRecentTokens || changed) && (
-          <CardFooter className="justify-end gap-2">
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() => setDraft(undefined)}
-            >
-              Reset draft
-            </Button>
-            <Button
-              size="xs"
-              disabled={disabled || changed}
-              onClick={async () => {
-                if (await save(tokens)) setDraft(undefined);
-              }}
-            >
-              Save size
-            </Button>
-          </CardFooter>
-        )}
-      </Card>
+              <Field data-disabled={disabled} data-invalid={changed}>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+                  <span className="font-medium">Recent messages to keep</span>
+                  <Badge variant="secondary" className="tabular-nums">
+                    {formatTokens(tokens)}
+                  </Badge>
+                </div>
+                <Slider
+                  className="my-1"
+                  value={[tokens]}
+                  min={settings.min}
+                  max={settings.max}
+                  step={settings.step}
+                  disabled={disabled}
+                  aria-invalid={changed}
+                  aria-describedby={`${id}-retention-help`}
+                  thumbProps={{
+                    getAriaLabel: () => "Recent messages to keep",
+                    getAriaValueText: () => formatTokens(tokens),
+                  }}
+                  onValueChange={(value) => {
+                    if (Array.isArray(value))
+                      setDraft({
+                        tokens: value[0],
+                        original: draft?.original ?? settings.keepRecentTokens,
+                      });
+                  }}
+                />
+                <FieldDescription id={`${id}-retention-help`}>
+                  Keep this much recent text in full when older messages are
+                  summarized.
+                </FieldDescription>
+                {changed && (
+                  <FieldError>
+                    The saved size changed elsewhere. Reset the draft to review
+                    it.
+                  </FieldError>
+                )}
+              </Field>
+            </FieldGroup>
+          </CardContent>
+          {draft && (tokens !== settings.keepRecentTokens || changed) && (
+            <CardFooter className="justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => setDraft(undefined)}
+              >
+                Reset draft
+              </Button>
+              <Button
+                size="xs"
+                disabled={disabled || changed}
+                onClick={async () => {
+                  if (await save(tokens)) setDraft(undefined);
+                }}
+              >
+                Save size
+              </Button>
+            </CardFooter>
+          )}
+        </Card>
+      )}
       <Card size="sm">
         <CardHeader>
           <CardTitle>Summarize older messages</CardTitle>

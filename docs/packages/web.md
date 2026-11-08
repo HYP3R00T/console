@@ -47,7 +47,7 @@ The regression test covers development, production and profiling filters; remove
 - In Tasks, start a background review immediately or choose a one-time start in local time. The job keeps its scheduled time across backend restarts and uses the saved conversation model. Stop review cancels that job. Findings appear under Activity and include a reviewer transcript. Result delivery offers Display (UI only), Context (available to the next model request without starting work), or Follow up (start or queue a parent response). Context is the default for new reviews.
 - Tools controls access to Durable's read, write, edit and bash for the current conversation. In an idle chat, Enter Plan mode switches to workspace reads and plan submission. The saved plan appears in Tools. Exit restores the previous tool selection and keeps the plan.
 - Expand a tool for its description, typed parameters and optional scrollable JSON schema.
-- Instructions provides Markdown editors and previews for conversation and project instructions, project evidence rules, and machine-wide workspace guidance. Shared project instructions are stored in Console, separate from repository files such as `AGENTS.md`. Built-in guidance and environment details are behind a disclosure. Guidance overrides can restore their defaults. Unsaved drafts survive tab changes and background refreshes.
+- Instructions edits conversation guidance and links shared project and machine guidance to their owning settings pages; older backends retain the shared inspector editors. Shared project instructions are stored in Console, separate from repository files such as `AGENTS.md`. Built-in guidance and environment details are behind a disclosure. Guidance overrides can restore their defaults. Unsaved drafts survive tab changes and background refreshes.
 - Continue run is available after eligible failures and uses the saved model without sending the composer draft.
 - In project and standalone chats, Fork from here creates a conversation from a saved prompt or completed reply and shows a link to it. The fork links back to its source while that conversation is available and inherits its current SSH profile, if selected. Branch links show the parent, siblings and direct children. Standalone forks have independent Recents/pinned destinations; old root bookmarks remain valid. Forks share their session’s workspace and token budget.
 - In Tools, Execution workspace can attach an existing linked Git worktree to an idle project chat. The checkout becomes the working directory for tools, checks and reviewers, and the attachment persists across restarts.
@@ -56,7 +56,7 @@ The regression test covers development, production and profiling filters; remove
 - Enable Code Mode in Tools to let the assistant compose permitted tools in sandboxed JavaScript. Tool Search reveals deferred tools for later model requests. Completed scripts list nested calls under Activity. Nested tools use the selected execution workspace.
 - When the backend has configured MCP servers, Tools shows their connection status and an Enable MCP action for the current chat. Discover enabled MCP tools through Tool Search or Code Mode. Reconnect servers retries disconnected connections.
 - Context shows recorded usage and cost separately from estimated active context. An idle conversation can set a tool-round limit for each run.
-- Context also offers a session token budget. It stops new model requests once recorded usage reaches the threshold. Raise or clear it to continue work.
+- Context shows the shared session token budget and links to Session runtime settings; older backends retain the inspector editor. The budget stops new model requests once recorded usage reaches the threshold. Raise or clear it to continue work.
 - Context identifies the saved conversation model and its catalog window. A different composer selection appears with its own limit under Selected for next send. Manual compaction uses the saved model. Automatic compaction and the recent-token retention target apply to the session. Manual compaction targets one conversation with optional summary guidance and preserves its transcript.
 - New-chat drafts have no inspector until first send. Conversation switches retain the open panel and its width, with an accessible busy status on the solid panel surface during loading. Empty slots and their toggles stay hidden. Views register route-scoped content through `WorkspaceChromeProvider`. The last resized width is retained within the current app lifetime.
 - Transcripts accumulate immutable messages by ID while mounted, retaining entries as the backend window advances. Reconnects preserve loaded history and show explicit Load missing messages boundaries when entries were missed; Load earlier fills the oldest boundary. Gap detection uses raw entry ancestry, including invisible records, rather than numeric ID adjacency. History requests are scoped to the client/conversation lifetime and merge without replacing newer streaming state. Loading history and incoming updates preserve a manually scrolled message anchor; Latest resumes following. Loaded transcript history is not cached across route remounts.
@@ -101,13 +101,13 @@ Machine settings → Runtime defaults saves the model and optional thinking leve
 
 - The bottom bar opens the command palette and shows its current shortcut, which defaults to Ctrl/Command+K. Search commands and saved machines. Available commands follow the current route and connection. New conversation opens a draft on the current machine and preserves the project and session scope when present.
 - Selected commands run after the palette finishes closing, so popup cleanup can finish before route transitions begin.
-- Client preferences → Keyboard shortcuts changes, removes or resets bindings. Shortcuts use Ctrl or Command with a letter or digit and optional Alt or Shift. Duplicate bindings are rejected. Browsers or the OS may reserve some combinations.
-- The command catalog and default bindings live in `src/lib/commands.ts`. Shortcut overrides use `console.shortcuts.v1` in browser local storage. Appearance uses the existing `theme` key. Navigation memory uses `console.navigation.v1`. Sidebar dimensions and visibility last for the open client session.
+- Client preferences → Keyboard shortcuts records bindings in a focused dialog with explicit Save and Cancel, and can remove or reset them. Labels show Ctrl or Command for the current platform, with Alt and Shift displayed explicitly. Bindings support punctuation, function/navigation keys and Alt combinations; plain typing and standard editing shortcuts remain reserved. Duplicate bindings are rejected beside the recorder. Browsers or the OS may reserve some combinations.
+- The frontend command catalog and default bindings live in `src/lib/commands.ts`. Shortcut, appearance and navigation preferences use the client configuration service, which preserves the legacy `console.shortcuts.v1`, `theme` and `console.navigation.v1` values when migrating to its browser-storage envelope. Sidebar dimensions and visibility last for the open client session.
 - Client preferences work offline and are shared across machines viewed in the same browser. Machine runtime defaults are saved by each backend and shared with its connected clients.
 
 ## Session runtime policies
 
-Context → Session runtime policies groups tool/queue behavior, retries/deadlines, compaction thresholds and progress/memory limits; each group expands independently.
+Session runtime settings groups tool/queue behavior, retries/deadlines, compaction thresholds and progress/memory limits; each group expands independently, and older backends retain these controls in Context.
 Blank numeric fields and Default selections inherit backend defaults; per-model compaction overrides use the exact provider/model ID and take precedence over basic session compaction controls.
 Saving replaces the session policy for all sibling conversations and reviewers and requires the whole session to be idle; conflicting refreshes preserve the draft and require Reset draft before saving.
 Restore defaults clears the saved policy, and individual model overrides can be removed without changing the rest.
@@ -179,3 +179,34 @@ Machine settings → Extensions manages owner-provisioned bundles and shows the 
 Tools → Managed extensions selects installed definitions for the current idle conversation, preserves tool restrictions and identifies unavailable saved selections.
 Plan mode suspends managed extensions; sandbox and remote execution require deselecting them first.
 Blocked managed tasks link directly to extension settings for compatible-definition recovery; see the [bundle contract](../extensions.md).
+
+## Unified commands and settings
+
+The route-scoped command registry serves palette actions, shortcuts, core conversation buttons and selected slash commands through shared handlers.
+Bindings belong to this browser across all connected backends; invocation resolves the current target, while pending operations retain their captured target.
+New conversation continues to open a draft and creates backend state only on first send.
+
+The client discovers supported backend commands on connection, uses explicit adapters for known operations and ignores unknown IDs.
+A catalog 404 retains legacy controls; discovery failures show a retry action rather than implying an older backend.
+Stop and Continue use the current conversation state; compaction opens a focus dialog unless invoked with form input.
+Leading-slash suggestions expose `/stop`, `/continue`, `/compact` and `/settings` outside IME composition; only explicit suggestion selection executes a command, and ordinary text submission is preserved.
+Skills are not part of this command milestone.
+
+Settings share the application shell and show ownership links; machine guidance, project agent settings and session runtime settings have dedicated destinations.
+Supported backends replace shared inspector editors with summaries and links; older backends retain their inspector editors.
+Backend setting controls display confirmed responses and pending/error states, with dirty drafts preserved during refresh and stale edits requiring reset.
+
+## Browser configuration and backup
+
+`src/lib/configuration/store.ts` centralizes persistent preferences behind a versioned, single-key browser-storage envelope and reads legacy keys until the first successful write.
+Appearance, shortcuts, bookmarks, pins, navigation and imported themes use this service, with notifications across mounted clients and browser tabs.
+Client preferences → Configuration backup exports versioned JSON and previews a complete replacement before importing; unsupported versions, invalid shortcuts, conflicts and invalid themes leave saved preferences unchanged.
+Undo import restores the previous configuration during the current page lifetime; imports and undo disconnect machines and require explicit reconnection, without trusting imported backend identities.
+Exports omit backend settings, credentials, transcripts, drafts and remembered/active connections.
+
+Appearance imports token-based JSON themes with a `custom-` ID, name, light/dark mode and a nonempty map of supported semantic tokens to six-digit hex colors.
+Theme import does not execute code or accept arbitrary CSS, and built-in System, Light and Dark options remain available.
+Browser storage can be cleared by users or browser policy; downloaded backups are user-managed, and no native companion or configuration directory is used.
+
+Appearance provides a downloadable complete sample theme, an inline JSON structure example and Export current theme, which captures effective semantic colors as importable hex tokens.
+The appearance selector uses rounded corners consistent with the current interface.

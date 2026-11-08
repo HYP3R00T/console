@@ -1,7 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useDevices } from "@/components/devices/device-provider";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
@@ -23,27 +23,49 @@ import {
   type CommandId,
   commandIds,
   commands,
+  formatShortcut,
   shortcutFor,
   shortcutFromEvent,
 } from "@/lib/commands";
+import { useCommands } from "./command-registry";
 import { useShortcutPreferences } from "./shortcut-preferences";
 
 export type CommandActions = Partial<Record<CommandId, () => void>>;
 
-export function CommandPalette({ actions }: { actions: CommandActions }) {
-  const { overrides, ready } = useShortcutPreferences();
+export function CommandPalette() {
+  const registry = useCommands();
+  const route = usePathname();
+  const [commandError, setCommandError] = useState<string>();
+  function invoke(id: CommandId) {
+    try {
+      Promise.resolve(registry.invoke(id)).catch((error) =>
+        setCommandError(
+          error instanceof Error ? error.message : "Command failed.",
+        ),
+      );
+    } catch (error) {
+      setCommandError(
+        error instanceof Error ? error.message : "Command unavailable.",
+      );
+    }
+  }
+  const { overrides, ready, platform } = useShortcutPreferences();
   const { devices } = useDevices();
   const { memory } = useNavigationMemory();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const pendingAction = useRef<() => void>(undefined);
+  const routeRef = useRef(route);
+  routeRef.current = route;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: route changes cancel pending palette actions.
+  useEffect(() => {
+    setOpen(false);
+    pendingAction.current = undefined;
+  }, [route]);
   const openingShortcut = shortcutFor("palette.open", overrides);
   const shortcutLabel =
     ready && openingShortcut
-      ? openingShortcut.replace(
-          "Mod",
-          /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? "⌘" : "Ctrl",
-        )
+      ? formatShortcut(openingShortcut, platform)
       : undefined;
 
   useEffect(() => {
@@ -74,17 +96,26 @@ export function CommandPalette({ actions }: { actions: CommandActions }) {
           )
       )
         return;
-      const run = id === "palette.open" ? () => setOpen(true) : actions[id];
+      const handler = registry.get(id);
+      const run =
+        id === "palette.open"
+          ? () => setOpen(true)
+          : handler && !handler.disabled
+            ? () => invoke(id)
+            : undefined;
       if (!run) return;
       event.preventDefault();
       if (!event.repeat) run();
     }
     window.addEventListener("keydown", keyDown);
     return () => window.removeEventListener("keydown", keyDown);
-  }, [actions, open, overrides, ready]);
+  });
 
   function select(run: () => void) {
-    pendingAction.current = run;
+    const selectedRoute = route;
+    pendingAction.current = () => {
+      if (routeRef.current === selectedRoute) run();
+    };
     setOpen(false);
   }
 
@@ -136,22 +167,30 @@ export function CommandPalette({ actions }: { actions: CommandActions }) {
           aria-label="Search commands"
           placeholder="Search commands…"
         />
+        {commandError && <p role="alert">{commandError}</p>}
         <CommandList>
           <CommandEmpty>No matching commands.</CommandEmpty>
           <CommandGroup heading="Commands">
             {commandIds.map((id) => {
-              const run = actions[id];
-              if (!run) return null;
+              const handler = registry.get(id);
+              if (!handler) return null;
+              const run = () => invoke(id);
               const shortcut = shortcutFor(id, overrides);
               return (
                 <CommandItem
                   key={id}
+                  disabled={!!handler.disabled}
+                  title={handler.disabled}
                   value={id}
                   keywords={[commands[id].label]}
                   onSelect={() => select(run)}
                 >
                   {commands[id].label}
-                  {shortcut && <CommandShortcut>{shortcut}</CommandShortcut>}
+                  {shortcut && (
+                    <CommandShortcut>
+                      {formatShortcut(shortcut, platform)}
+                    </CommandShortcut>
+                  )}
                 </CommandItem>
               );
             })}
