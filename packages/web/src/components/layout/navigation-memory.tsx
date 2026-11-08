@@ -18,7 +18,7 @@ import {
   type NavigationMemory,
   navigationMemoryKey,
   parseNavigationMemory,
-  workspaceDevice,
+  rememberWorkspaceRoute,
 } from "@/lib/navigation-memory";
 
 const Context = createContext<{
@@ -51,13 +51,7 @@ export function NavigationMemoryProvider({
   }, []);
   useEffect(() => {
     if (!ready) return;
-    const id = workspaceDevice(pathname);
-    if (id)
-      setMemory((current) =>
-        current.routes[id] === pathname
-          ? current
-          : { ...current, routes: { ...current.routes, [id]: pathname } },
-      );
+    setMemory((current) => rememberWorkspaceRoute(current, pathname));
   }, [pathname, ready]);
   useEffect(() => {
     if (ready)
