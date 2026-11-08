@@ -12,15 +12,15 @@ import {
   preferenceTarget,
 } from "../src/lib/preferences-navigation.ts";
 
-test("every context opens the same Preferences hub and retains only valid target ancestry", () => {
-  assert.equal(preferencesHref(), "/settings");
+test("every context opens Appearance by default and retains only valid target ancestry", () => {
+  assert.equal(preferencesHref(), "/settings/appearance");
   assert.equal(
     preferencesHref({
       projectId: "orphan",
       sessionId: "orphan",
       conversationId: "1",
     }),
-    "/settings",
+    "/settings/appearance",
   );
   const target = {
     deviceId: "machine",
@@ -29,11 +29,11 @@ test("every context opens the same Preferences hub and retains only valid target
     conversationId: "1",
   };
   const url = new URL(preferencesHref(target), "http://localhost");
-  assert.equal(url.pathname, "/settings");
+  assert.equal(url.pathname, "/settings/appearance");
   assert.deepEqual(preferenceTarget({}, url.searchParams), target);
   assert.equal(
     preferencesHref({ deviceId: "machine", conversationId: "orphan" }),
-    "/settings?machine=machine",
+    "/settings/appearance?machine=machine",
   );
 });
 test("client categories preserve the selected machine and route parameters override query targets", () => {

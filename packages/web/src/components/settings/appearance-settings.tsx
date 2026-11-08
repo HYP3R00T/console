@@ -173,8 +173,7 @@ export function AppearanceSettings() {
           type="file"
           accept=".json,application/json"
           aria-label="Theme JSON file"
-          className="sr-only"
-          tabIndex={-1}
+          hidden
           disabled={!ready || reading}
           onChange={(event) => {
             const files = Array.from(event.target.files ?? []);

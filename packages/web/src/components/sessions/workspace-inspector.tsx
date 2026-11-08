@@ -9,6 +9,7 @@ import {
   type InspectorSelection,
   inspectorScopes,
 } from "@/lib/inspector-preferences";
+import { cn } from "@/lib/utils";
 import {
   ConversationInspector,
   type ConversationInspectorProps,
@@ -23,6 +24,7 @@ export function WorkspaceInspector({
   onScopeChange,
   onSectionChange,
   storageError,
+  sidebar = false,
   ...conversation
 }: Omit<
   ConversationInspectorProps,
@@ -35,10 +37,16 @@ export function WorkspaceInspector({
   onScopeChange: (scope: InspectorScope) => void;
   onSectionChange: (section: InspectorSection) => void;
   storageError?: boolean;
+  sidebar?: boolean;
 }) {
   const target = { deviceId, sessionId, projectId };
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 p-2">
+    <div
+      className={cn(
+        "flex h-full min-h-0 flex-col gap-2",
+        sidebar ? "py-2 pl-2" : "p-2",
+      )}
+    >
       <Tabs
         value={selection.scope}
         onValueChange={(value) => {
