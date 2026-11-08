@@ -1,26 +1,15 @@
 "use client";
 import Link from "next/link";
-import {
-  useParams,
-  usePathname,
-  useRouter,
-  useSearchParams,
-} from "next/navigation";
+import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { useDevices } from "@/components/devices/device-provider";
 import { SidebarAction } from "@/components/layout/sidebar-action";
-import { Field, FieldLabel } from "@/components/ui/field";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   clientPreferencePages,
+  machinePreferenceCategory,
+  machinePreferenceHref,
   machinePreferencePages,
   type PreferenceTarget,
+  preferenceMachine,
   preferencesHref,
   preferenceTarget,
 } from "@/lib/preferences-navigation";
@@ -32,11 +21,10 @@ export function PreferencesNavigation({
 }) {
   const params = useParams<PreferenceTarget>(),
     search = useSearchParams(),
-    pathname = usePathname(),
-    router = useRouter();
+    pathname = usePathname();
   const target = preferenceTarget(params, search),
     { devices } = useDevices();
-  const device = devices.find((device) => device.id === target.deviceId);
+  const device = preferenceMachine(devices, target.deviceId);
   function link(
     label: string,
     href: string,
@@ -54,9 +42,6 @@ export function PreferencesNavigation({
       </SidebarAction>
     );
   }
-  const machine = device
-    ? `/devices/${encodeURIComponent(device.id)}`
-    : undefined;
   return (
     <nav
       aria-label="Preference categories"
@@ -69,53 +54,22 @@ export function PreferencesNavigation({
       )}
       <section aria-label="Client preferences">
         <h3 className="px-3 pb-1 text-xs font-medium text-muted-foreground">
-          Client · this browser
+          Client
         </h3>
         {clientPreferencePages.map((page) =>
           link(page.label, preferencesHref(target, page.path)),
         )}
       </section>
-      <section aria-label="Machine preferences" className="flex flex-col gap-2">
-        <Field className="px-3">
-          <FieldLabel htmlFor="preferences-machine-nav">Machine</FieldLabel>
-          <Select
-            value={device?.id ?? null}
-            onValueChange={(value) => {
-              if (value) {
-                router.push(preferencesHref({ deviceId: value }));
-                closeMobile();
-              }
-            }}
-          >
-            <SelectTrigger id="preferences-machine-nav" className="w-full">
-              <SelectValue placeholder="Choose a machine">
-                {device?.name}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {devices.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </Field>
-        {machine ? (
-          <div>
-            {machinePreferencePages.map((page) =>
-              link(
-                page.label,
-                preferencesHref(target, `${machine}/settings/${page.id}`),
-              ),
-            )}
-          </div>
-        ) : (
-          <p className="px-3 text-xs text-muted-foreground">
-            Choose a machine to browse its settings.
-          </p>
+      <section aria-label="Machine preferences">
+        <h3 className="px-3 pb-1 text-xs font-medium text-muted-foreground">
+          Machine
+        </h3>
+        {machinePreferencePages.map((page) =>
+          link(
+            page.label,
+            machinePreferenceHref(page.id, device?.id),
+            machinePreferenceCategory(pathname) === page.id,
+          ),
         )}
       </section>
     </nav>

@@ -213,8 +213,10 @@ The appearance selector uses rounded corners consistent with the current interfa
 
 ## Central Preferences
 
-`/settings` contains browser preferences and a saved-machine selector for machine settings.
-Selecting a machine only changes the viewed configuration; it does not connect machines, create chats or start work.
+`/settings` lists Client and Machine categories without machine dropdowns or browser ownership labels.
+Each machine category shows a row of prominent machine cards above its settings; selecting a card keeps the current category and changes only the viewed machine, without connecting it or starting work.
+Cards show connection status and the selected machine; client pages have no machine cards.
+Category navigation retains a saved selection or uses the first saved machine, and categories remain visible when no machines exist, with a Manage devices link instead of an editor.
 The far-left rail is the single Preferences entry point; device navigation does not duplicate it.
 Preferences navigation lists client and machine categories; older project, session and conversation settings deep links remain valid for compatibility.
 The assigned Open settings shortcut always opens this hub, including from text fields, with the current machine selected and unchanged keybindings.

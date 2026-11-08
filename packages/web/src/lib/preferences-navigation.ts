@@ -20,6 +20,29 @@ export const machinePreferencePages = [
   { id: "projects", label: "Projects folder" },
   { id: "archives", label: "Archives" },
 ] as const;
+export type MachinePreferenceCategory =
+  (typeof machinePreferencePages)[number]["id"];
+export function machinePreferenceCategory(
+  path: string,
+): MachinePreferenceCategory | undefined {
+  const match =
+    /^(?:\/devices\/[^/]+\/settings|\/settings\/machines)\/([^/]+)$/.exec(path);
+  return machinePreferencePages.find((page) => page.id === match?.[1])?.id;
+}
+export function machinePreferenceHref(
+  category: MachinePreferenceCategory,
+  deviceId?: string,
+) {
+  return deviceId
+    ? `/devices/${encodeURIComponent(deviceId)}/settings/${category}`
+    : `/settings/machines/${category}`;
+}
+export function preferenceMachine<T extends { id: string }>(
+  devices: T[],
+  preferredId?: string,
+) {
+  return devices.find((device) => device.id === preferredId) ?? devices[0];
+}
 export function preferencesHref(
   target: PreferenceTarget = {},
   path = "/settings",
