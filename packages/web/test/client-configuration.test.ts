@@ -177,3 +177,31 @@ test("navigation backups preserve per-conversation inspector choices and reject 
   );
   assert.equal(other.values.get(configurationKey), before);
 });
+
+test("multiple bindings round-trip backups and malformed arrays leave storage unchanged", () => {
+  const f = fixture();
+  f.store.setItem(
+    "console.shortcuts.v1",
+    JSON.stringify({ "palette.open": ["Mod+K", "Alt+P"] }),
+  );
+  const backup = f.store.export();
+  const other = fixture();
+  other.store.import(JSON.parse(JSON.stringify(backup)));
+  assert.deepEqual(other.store.export(), backup);
+  const before = other.values.get(configurationKey);
+  for (const bindings of [
+    [],
+    ["Alt+P", "Alt+P"],
+    ["Mod+B", "Alt+P"],
+    ["Alt+P", 42],
+    ["Alt+P", "Mod+V"],
+  ]) {
+    assert.throws(() =>
+      other.store.import({
+        ...backup,
+        keybindings: { "palette.open": bindings },
+      }),
+    );
+    assert.equal(other.values.get(configurationKey), before);
+  }
+});

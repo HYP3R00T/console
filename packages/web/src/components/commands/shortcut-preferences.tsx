@@ -5,32 +5,26 @@ import {
   type ReactNode,
   useContext,
   useEffect,
-  useRef,
   useState,
 } from "react";
 import {
   type CommandId,
-  commands,
-  defaultShortcut,
   parseShortcuts,
   type ShortcutOverrides,
-  shortcutConflict,
   shortcutStorageKey,
 } from "@/lib/commands";
 import {
   clientConfiguration,
   subscribeConfiguration,
 } from "@/lib/configuration/store";
+import { editShortcut, type ShortcutEdit } from "@/lib/shortcut-editor";
 
 const Context = createContext<{
   overrides: ShortcutOverrides;
   platform: string;
   ready: boolean;
   storageError: boolean;
-  update: (
-    id: CommandId,
-    value: ShortcutOverrides[CommandId],
-  ) => string | undefined;
+  update: (id: CommandId, edit: ShortcutEdit) => string | undefined;
 } | null>(null);
 
 export function ShortcutPreferences({ children }: { children: ReactNode }) {
@@ -38,7 +32,6 @@ export function ShortcutPreferences({ children }: { children: ReactNode }) {
   const [overrides, setOverrides] = useState<ShortcutOverrides>({});
   const [ready, setReady] = useState(false);
   const [storageError, setStorageError] = useState(false);
-  const unsaved = useRef(false);
   useEffect(() => {
     setPlatform(navigator.platform);
     try {
@@ -60,33 +53,32 @@ export function ShortcutPreferences({ children }: { children: ReactNode }) {
       }
     });
   }, []);
-  function update(id: CommandId, value: ShortcutOverrides[CommandId]) {
-    let next = { ...overrides };
+  function update(id: CommandId, edit: ShortcutEdit) {
+    let latest: ShortcutOverrides;
     try {
-      if (!unsaved.current)
-        next = parseShortcuts(
-          clientConfiguration().getItem(shortcutStorageKey),
-        );
+      latest = parseShortcuts(
+        clientConfiguration().getItem(shortcutStorageKey),
+      );
     } catch {
       setStorageError(true);
+      return "Could not read shortcuts from browser storage.";
     }
-    const shortcut = value === undefined ? defaultShortcut(id) : value;
-    const conflict = shortcut && shortcutConflict(id, shortcut, next);
-    if (conflict)
-      return `This shortcut is assigned to ${commands[conflict].label}.`;
-    if (value === undefined) delete next[id];
-    else next[id] = value;
+    let next: ShortcutOverrides;
+    try {
+      next = editShortcut(id, edit, latest);
+    } catch (error) {
+      return error instanceof Error ? error.message : "Invalid shortcut.";
+    }
     try {
       clientConfiguration().setItem(shortcutStorageKey, JSON.stringify(next));
-      unsaved.current = false;
-      setStorageError(false);
     } catch {
-      unsaved.current = true;
       setStorageError(true);
-      return "Could not save shortcuts in this browser.";
+      return "Could not save shortcuts in this browser. Saved bindings are unchanged.";
     }
     setOverrides(next);
+    setStorageError(false);
   }
+
   return (
     <Context value={{ overrides, platform, ready, storageError, update }}>
       {children}
