@@ -6,6 +6,7 @@ settings:
 
 patchedDependencies:
   '@earendil-works/pi-ai@1.5.0': c2d8416292c08abaf446b1e685cb297b6e3208a99b6600f30fb3fb929f1625d7
+  next@16.4.3: 249dfcb63360ae5ca13363eb437bcc0b207135360c5bb472824ed710d2af18dc
 
 importers:
 
@@ -70,7 +71,7 @@ importers:
         version: 1.66.0(@types/react@19.3.0)(react@19.3.1)
       next:
         specifier: ^16.4.3
-        version: 16.4.3(@babel/core@7.29.7)(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        version: 16.4.3(patch_hash=249dfcb63360ae5ca13363eb437bcc0b207135360c5bb472824ed710d2af18dc)(@babel/core@7.29.7)(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -5668,7 +5669,7 @@ snapshots:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
 
-  next@16.4.3(@babel/core@7.29.7)(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+  next@16.4.3(patch_hash=249dfcb63360ae5ca13363eb437bcc0b207135360c5bb472824ed710d2af18dc)(@babel/core@7.29.7)(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       '@next/env': 16.4.3
       '@swc/helpers': 0.5.23
