@@ -165,3 +165,8 @@ export function ariaShortcut(shortcut: Shortcut | null) {
     ? `${shortcut.replace("Mod", "Control")} ${shortcut.replace("Mod", "Meta")}`
     : shortcut;
 }
+
+/** Global preference navigation remains available while editing text. */
+export function commandWorksInEditor(id: CommandId) {
+  return id === "palette.open" || id === "settings.open";
+}

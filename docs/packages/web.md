@@ -63,7 +63,7 @@ The regression test covers development, production and profiling filters; remove
 - Markdown supports lists, tables, links and fenced code blocks; embedded HTML is not executed, and Markdown images appear as links. Display modes and split panes are not implemented.
 - Mobile: a compact primary rail remains visible; contextual navigation and populated details views use dismissible sheets. Layout changes must preserve the mounted conversation and unsent draft.
 
-Machine workspace navigation starts with New conversation, opening an unsaved draft with machine/project selectors, followed by collapsible Pinned, Projects and Recents sections. A single project session is visually flattened; multiple sessions show numbered groups. Recents opens a draft outside projects. Project/session compose opens a draft in that scope; clicking or typing creates no backend entities. First send creates the conversation and submits the prompt, retaining stable creation/message identities for retries. Explicit New session still creates a session. Machine settings replaces the tree with Providers/Projects/Archives categories; client Preferences uses its own categories.
+Machine workspace navigation starts with New conversation, opening an unsaved draft with machine/project selectors, followed by collapsible Pinned, Projects and Recents sections. A single project session is visually flattened; multiple sessions show numbered groups. Recents opens a draft outside projects. Project/session compose opens a draft in that scope; clicking or typing creates no backend entities. First send creates the conversation and submits the prompt, retaining stable creation/message identities for retries. Explicit New session still creates a session. Configuration destinations replace the workspace tree with the shared Preferences navigation, including client categories, the selected machine’s categories and workspace links.
 
 ## Row actions
 
@@ -210,3 +210,15 @@ Browser storage can be cleared by users or browser policy; downloaded backups ar
 
 Appearance provides a downloadable complete sample theme, an inline JSON structure example and Export current theme, which captures effective semantic colors as importable hex tokens.
 The appearance selector uses rounded corners consistent with the current interface.
+
+## Central Preferences
+
+`/settings` is the central configuration hub, with browser preferences, a saved-machine selector and project/session/conversation selectors for connected backends.
+Selections only navigate configuration; they do not connect machines, create chats or start work, and changing a parent selection clears its child selections.
+The far-left rail is the single Preferences entry point; device navigation does not duplicate it.
+All configuration destinations share the Preferences sidebar, with client categories, the selected machine’s categories and workspace links; older deep links remain valid.
+Machine settings entry points open this hub with the machine selected, while client preference links preserve the selected context in query parameters.
+
+The assigned Open settings shortcut always opens the hub, including from text fields; it preserves the active target without changing saved keybindings.
+Conversation configuration has a dedicated destination under the session, reusing the existing inspector editors and validated command handlers without requiring the chat panel to stay open.
+Project ownership is resolved from session metadata when navigating back from a session-only destination, and stale responses from a previously selected backend cannot populate the current selectors.

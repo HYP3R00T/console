@@ -23,6 +23,7 @@ import {
   type CommandId,
   commandIds,
   commands,
+  commandWorksInEditor,
   formatShortcut,
   shortcutFor,
   shortcutFromEvent,
@@ -85,7 +86,7 @@ export function CommandPalette() {
       );
       if (!id) return;
       if (
-        id !== "palette.open" &&
+        !commandWorksInEditor(id) &&
         event
           .composedPath()
           .some(

@@ -1,58 +1,34 @@
 "use client";
 import Link from "next/link";
-import { useParams, usePathname } from "next/navigation";
+import { useParams, usePathname, useSearchParams } from "next/navigation";
+import {
+  isPreferencesPath,
+  type PreferenceTarget,
+  preferencesHref,
+  preferenceTarget,
+} from "@/lib/preferences-navigation";
 export function SettingsScopeNav() {
-  const pathname = usePathname();
-  const { deviceId, projectId, sessionId, conversationId } = useParams<{
-    deviceId?: string;
-    projectId?: string;
-    sessionId?: string;
-    conversationId?: string;
-  }>();
-  if (!pathname.includes("/settings")) return null;
-  const machine = deviceId
-    ? `/devices/${encodeURIComponent(deviceId)}`
-    : undefined;
-  const links = [
-    { label: "Client", href: "/settings/appearance" },
-    ...(machine
-      ? [{ label: "Machine", href: `${machine}/settings/runtime` }]
-      : []),
-    ...(machine && projectId
-      ? [
-          {
-            label: "Project",
-            href: `${machine}/projects/${encodeURIComponent(projectId)}/settings`,
-          },
-        ]
-      : []),
-    ...(machine && sessionId
-      ? [
-          {
-            label: "Session",
-            href: `${machine}/sessions/${encodeURIComponent(sessionId)}/settings`,
-          },
-        ]
-      : []),
-    ...(machine && sessionId && conversationId
-      ? [
-          {
-            label: "Conversation",
-            href: `${machine}/conversations/${encodeURIComponent(sessionId)}/${encodeURIComponent(conversationId)}`,
-          },
-        ]
-      : []),
-  ];
+  const pathname = usePathname(),
+    params = useParams<PreferenceTarget>();
+  const target = preferenceTarget(params, useSearchParams());
+  if (!isPreferencesPath(pathname) || pathname === "/settings") return null;
+  const scope = params.conversationId
+    ? "Conversation"
+    : params.sessionId
+      ? "Session"
+      : params.projectId
+        ? "Project"
+        : params.deviceId
+          ? "Machine"
+          : "Client";
   return (
     <nav
-      aria-label="Settings ownership scopes"
-      className="mb-5 flex flex-wrap gap-4 border-b pb-3 text-sm"
+      aria-label="Preferences location"
+      className="mb-5 flex flex-wrap gap-2 border-b pb-3 text-sm"
     >
-      {links.map((link) => (
-        <Link key={link.label} href={link.href}>
-          {link.label}
-        </Link>
-      ))}
+      <Link href={preferencesHref(target)}>All preferences</Link>
+      <span aria-hidden="true">/</span>
+      <span className="text-muted-foreground">{scope}</span>
     </nav>
   );
 }

@@ -3,6 +3,7 @@
 import { useParams, usePathname, useRouter } from "next/navigation";
 import {
   type ReactNode,
+  Suspense,
   useEffect,
   useRef,
   useState,
@@ -35,6 +36,12 @@ import {
   executeBackendCommand,
 } from "@/lib/backend/commands";
 import {
+  conversationSettingsHref,
+  isPreferencesPath,
+  preferencesHref,
+  preferenceTarget,
+} from "@/lib/preferences-navigation";
+import {
   useWorkspaceChrome,
   WorkspaceChromeProvider,
 } from "./workspace-chrome";
@@ -59,7 +66,9 @@ function Content({ children }: { children: ReactNode }) {
     <main className="flex h-full min-w-0 flex-col bg-background">
       <ViewTransition default="none" update="workspace-fade">
         <div className="flex min-h-0 flex-1 flex-col overflow-auto p-5 md:p-6">
-          <SettingsScopeNav />
+          <Suspense fallback={null}>
+            <SettingsScopeNav />
+          </Suspense>
           {children}
         </div>
       </ViewTransition>
@@ -190,14 +199,7 @@ function ShellLayout({
       : undefined,
   };
   const discovery = useBackendCommands();
-  const settingsHref =
-    sessionId && machine
-      ? `${machine}/sessions/${encodeURIComponent(sessionId)}/settings`
-      : project
-        ? `${project}/settings`
-        : machine
-          ? `${machine}/settings/runtime`
-          : "/settings/appearance";
+  const settingsHref = "/settings";
   const scopeDestinations: Partial<Record<BackendCommandId, string>> = {
     "machine.workspace-guidance.update": machine
       ? `${machine}/settings/guidance`
@@ -228,7 +230,13 @@ function ShellLayout({
           "conversation.configure": {
             run: (input?: unknown) =>
               input === undefined
-                ? setInspectorOpen(true)
+                ? router.push(
+                    conversationSettingsHref(
+                      deviceId ?? "",
+                      active?.sessionId ?? sessionId ?? "",
+                      active?.conversationId ?? conversationId ?? "",
+                    ),
+                  )
                 : executeBackendCommand(
                     commandClient(),
                     "conversation.configure",
@@ -241,7 +249,22 @@ function ShellLayout({
           },
         }
       : {}),
-    "settings.open": { run: () => router.push(settingsHref) },
+    "settings.open": {
+      run: () =>
+        router.push(
+          preferencesHref(
+            preferenceTarget(
+              {
+                deviceId,
+                projectId: active?.projectId ?? projectId,
+                sessionId: active?.sessionId ?? sessionId,
+                conversationId: active?.conversationId ?? conversationId,
+              },
+              new URLSearchParams(window.location.search),
+            ),
+          ),
+        ),
+    },
     "preferences.configuration": {
       run: () => router.push("/settings/configuration"),
     },
@@ -391,7 +414,7 @@ function ShellLayout({
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { deviceId } = useParams<{ deviceId?: string }>();
-  const contextKey = pathname.startsWith("/settings")
+  const contextKey = isPreferencesPath(pathname)
     ? "preferences"
     : deviceId
       ? `device:${deviceId}`
