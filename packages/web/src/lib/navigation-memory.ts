@@ -1,6 +1,11 @@
+import {
+  type InspectorSelection,
+  parseInspectorSelection,
+} from "./inspector-preferences.ts";
 export type NavigationMemory = {
   routes: Record<string, string>;
   disclosures: Record<string, boolean>;
+  inspectors?: Record<string, InspectorSelection>;
 };
 export const navigationMemoryKey = "console.navigation.v1";
 export const emptyNavigationMemory = (): NavigationMemory => ({
@@ -49,6 +54,24 @@ export function parseNavigationMemory(value: string | null): NavigationMemory {
             writable: true,
             configurable: true,
           });
+    if (
+      "inspectors" in data &&
+      data.inspectors &&
+      typeof data.inspectors === "object" &&
+      !Array.isArray(data.inspectors)
+    ) {
+      result.inspectors = {};
+      for (const [key, value] of Object.entries(data.inspectors)) {
+        const selection = parseInspectorSelection(value);
+        if (selection && key.length <= 1024)
+          Object.defineProperty(result.inspectors, key, {
+            value: selection,
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          });
+      }
+    }
   } catch {
     /* Corrupt browser preferences do not block navigation. */
   }

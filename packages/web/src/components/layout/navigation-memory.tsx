@@ -3,6 +3,7 @@ import { usePathname } from "next/navigation";
 import {
   createContext,
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -11,6 +12,7 @@ import {
   clientConfiguration,
   subscribeConfiguration,
 } from "@/lib/configuration/store";
+import type { InspectorSelection } from "@/lib/inspector-preferences";
 import {
   emptyNavigationMemory,
   type NavigationMemory,
@@ -21,6 +23,8 @@ import {
 
 const Context = createContext<{
   memory: NavigationMemory;
+  storageError: boolean;
+  setInspectorSelection: (key: string, value: InspectorSelection) => void;
   setDisclosure: (key: string, open: boolean) => void;
 } | null>(null);
 
@@ -31,6 +35,7 @@ export function NavigationMemoryProvider({
 }) {
   const pathname = usePathname();
   const [memory, setMemory] = useState(emptyNavigationMemory);
+  const [storageError, setStorageError] = useState(false);
   const [ready, setReady] = useState(false);
   useEffect(() => {
     try {
@@ -40,7 +45,7 @@ export function NavigationMemoryProvider({
         ),
       );
     } catch {
-      /* In-memory navigation still works when storage is unavailable. */
+      setStorageError(true);
     }
     setReady(true);
   }, []);
@@ -57,34 +62,44 @@ export function NavigationMemoryProvider({
   useEffect(() => {
     if (ready)
       try {
-        clientConfiguration().setItem(
-          navigationMemoryKey,
-          JSON.stringify(memory),
-        );
+        const serialized = JSON.stringify(memory);
+        if (clientConfiguration().getItem(navigationMemoryKey) !== serialized)
+          clientConfiguration().setItem(navigationMemoryKey, serialized);
+        setStorageError(false);
       } catch {
-        /* Keep the current browser session usable without persistence. */
+        setStorageError(true);
       }
   }, [memory, ready]);
   useEffect(
     () =>
-      subscribeConfiguration((imported) => {
-        if (imported)
-          try {
-            setMemory(
-              parseNavigationMemory(
-                clientConfiguration().getItem(navigationMemoryKey),
-              ),
-            );
-          } catch {
-            /* Keep last confirmed navigation. */
-          }
+      subscribeConfiguration(() => {
+        try {
+          const next = parseNavigationMemory(
+            clientConfiguration().getItem(navigationMemoryKey),
+          );
+          setMemory((current) =>
+            JSON.stringify(current) === JSON.stringify(next) ? current : next,
+          );
+        } catch {
+          setStorageError(true);
+        }
       }),
+    [],
+  );
+  const setInspectorSelection = useCallback(
+    (key: string, value: InspectorSelection) =>
+      setMemory((current) => ({
+        ...current,
+        inspectors: { ...current.inspectors, [key]: value },
+      })),
     [],
   );
   return (
     <Context
       value={{
         memory,
+        storageError,
+        setInspectorSelection,
         setDisclosure: (key, open) =>
           setMemory((current) => ({
             ...current,

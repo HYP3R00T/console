@@ -51,6 +51,7 @@ const formatCost = new Intl.NumberFormat("en-US", {
 export function InspectorContext({
   settings,
   sessionSettingsHref,
+  openSessionSettings,
   selectedModel,
   disabled,
   compacting,
@@ -63,6 +64,7 @@ export function InspectorContext({
 }: {
   settings: ContextSettings;
   sessionSettingsHref?: string;
+  openSessionSettings?: () => void;
   selectedModel?: ChatModel;
   disabled: boolean;
   compacting: boolean;
@@ -186,9 +188,15 @@ export function InspectorContext({
             compaction: {settings.automatic ? "Enabled" : "Disabled"}. Recent
             tokens: {settings.keepRecentTokens}.
           </p>
-          <Link href={sessionSettingsHref}>
-            Edit shared session runtime settings
-          </Link>
+          {openSessionSettings ? (
+            <Button variant="link" size="sm" onClick={openSessionSettings}>
+              Edit shared session runtime settings
+            </Button>
+          ) : (
+            <Link href={sessionSettingsHref}>
+              Edit shared session runtime settings
+            </Link>
+          )}
         </div>
       ) : (
         <Card size="sm">

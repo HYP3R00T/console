@@ -42,12 +42,12 @@ The regression test covers development, production and profiling filters; remove
 - Workspace: one content region with top and bottom insets; both side edges meet their resize boundaries without padding. The bottom bar shows current conversation identity. User prompts use right-aligned bubbles; assistant replies use unframed Markdown without repeated visible role labels.
 - Each prompt starts a chronological display group. Its tool arguments/results/failures appear in a collapsed Activity sequence before its replies. The latest group shows live work. These are display groups, not independent Durable runs: steering can join an existing run. Partial history without a loaded prompt is labelled as earlier activity. Event counts are real; elapsed durations are not currently recorded or displayed.
 - Ask the assistant to use the workspace reviewer. Show reviewer transcript in the parent call's Activity displays the brief, read results, and reviewer findings. The disclosure refreshes while the reviewer works. The review uses the parent model and workspace, with read-only tools. Disable `review_workspace` in Tools to turn it off for the conversation.
-- The right sidebar has Tools, Instructions, Context and Tasks tabs with independently scrollable cards. Execution notices remain visible for retries, provider waits, compaction, post-run work and failed or stopped runs.
+- The right sidebar has Project, Session and Conversation scope tabs; Conversation contains Tools, Instructions, Context and Tasks with independently scrollable cards. Execution notices remain visible for retries, provider waits, compaction, post-run work and failed or stopped runs.
 - Tasks lists active work and lets you save a shell command for checks after successful file edits. Checks run after the answer, hold queued messages until they settle, and report their outcome under Activity and to the model. Set Automatic repair attempts to 1–5 to let the assistant repair failures and recheck; 0 reports results only. Shell and MCP calls also trigger checks because their file effects are unknown. Stop interrupts the check and withdraws waiting input.
 - In Tasks, start a background review immediately or choose a one-time start in local time. The job keeps its scheduled time across backend restarts and uses the saved conversation model. Stop review cancels that job. Findings appear under Activity and include a reviewer transcript. Result delivery offers Display (UI only), Context (available to the next model request without starting work), or Follow up (start or queue a parent response). Context is the default for new reviews.
 - Tools controls access to Durable's read, write, edit and bash for the current conversation. In an idle chat, Enter Plan mode switches to workspace reads and plan submission. The saved plan appears in Tools. Exit restores the previous tool selection and keeps the plan.
 - Expand a tool for its description, typed parameters and optional scrollable JSON schema.
-- Instructions edits conversation guidance and links shared project and machine guidance to their owning settings pages; older backends retain the shared inspector editors. Shared project instructions are stored in Console, separate from repository files such as `AGENTS.md`. Built-in guidance and environment details are behind a disclosure. Guidance overrides can restore their defaults. Unsaved drafts survive tab changes and background refreshes.
+- Instructions edits conversation guidance, opens Project in the same sidebar for shared project guidance and links machine guidance to Preferences; older backends retain the shared inspector editors. Shared project instructions are stored in Console, separate from repository files such as `AGENTS.md`. Built-in guidance and environment details are behind a disclosure. Guidance overrides can restore their defaults. Unsaved drafts survive tab changes and background refreshes.
 - Continue run is available after eligible failures and uses the saved model without sending the composer draft.
 - In project and standalone chats, Fork from here creates a conversation from a saved prompt or completed reply and shows a link to it. The fork links back to its source while that conversation is available and inherits its current SSH profile, if selected. Branch links show the parent, siblings and direct children. Standalone forks have independent Recents/pinned destinations; old root bookmarks remain valid. Forks share their session’s workspace and token budget.
 - In Tools, Execution workspace can attach an existing linked Git worktree to an idle project chat. The checkout becomes the working directory for tools, checks and reviewers, and the attachment persists across restarts.
@@ -56,14 +56,14 @@ The regression test covers development, production and profiling filters; remove
 - Enable Code Mode in Tools to let the assistant compose permitted tools in sandboxed JavaScript. Tool Search reveals deferred tools for later model requests. Completed scripts list nested calls under Activity. Nested tools use the selected execution workspace.
 - When the backend has configured MCP servers, Tools shows their connection status and an Enable MCP action for the current chat. Discover enabled MCP tools through Tool Search or Code Mode. Reconnect servers retries disconnected connections.
 - Context shows recorded usage and cost separately from estimated active context. An idle conversation can set a tool-round limit for each run.
-- Context shows the shared session token budget and links to Session runtime settings; older backends retain the inspector editor. The budget stops new model requests once recorded usage reaches the threshold. Raise or clear it to continue work.
+- Context shows the shared session token budget and opens Session in the same sidebar; older backends retain the inspector editor. The budget stops new model requests once recorded usage reaches the threshold. Raise or clear it to continue work.
 - Context identifies the saved conversation model and its catalog window. A different composer selection appears with its own limit under Selected for next send. Manual compaction uses the saved model. Automatic compaction and the recent-token retention target apply to the session. Manual compaction targets one conversation with optional summary guidance and preserves its transcript.
 - New-chat drafts have no inspector until first send. Conversation switches retain the open panel and its width, with an accessible busy status on the solid panel surface during loading. Empty slots and their toggles stay hidden. Views register route-scoped content through `WorkspaceChromeProvider`. The last resized width is retained within the current app lifetime.
 - Transcripts accumulate immutable messages by ID while mounted, retaining entries as the backend window advances. Reconnects preserve loaded history and show explicit Load missing messages boundaries when entries were missed; Load earlier fills the oldest boundary. Gap detection uses raw entry ancestry, including invisible records, rather than numeric ID adjacency. History requests are scoped to the client/conversation lifetime and merge without replacing newer streaming state. Loading history and incoming updates preserve a manually scrolled message anchor; Latest resumes following. Loaded transcript history is not cached across route remounts.
 - Markdown supports lists, tables, links and fenced code blocks; embedded HTML is not executed, and Markdown images appear as links. Display modes and split panes are not implemented.
 - Mobile: a compact primary rail remains visible; contextual navigation and populated details views use dismissible sheets. Layout changes must preserve the mounted conversation and unsent draft.
 
-Machine workspace navigation starts with New conversation, opening an unsaved draft with machine/project selectors, followed by collapsible Pinned, Projects and Recents sections. A single project session is visually flattened; multiple sessions show numbered groups. Recents opens a draft outside projects. Project/session compose opens a draft in that scope; clicking or typing creates no backend entities. First send creates the conversation and submits the prompt, retaining stable creation/message identities for retries. Explicit New session still creates a session. Configuration destinations replace the workspace tree with the shared Preferences navigation, including client categories, the selected machine’s categories and workspace links.
+Machine workspace navigation starts with New conversation, opening an unsaved draft with machine/project selectors, followed by collapsible Pinned, Projects and Recents sections. A single project session is visually flattened; multiple sessions show numbered groups. Recents opens a draft outside projects. Project/session compose opens a draft in that scope; clicking or typing creates no backend entities. First send creates the conversation and submits the prompt, retaining stable creation/message identities for retries. Explicit New session still creates a session. Configuration destinations replace the workspace tree with the shared Preferences navigation, including client categories and the selected machine’s categories.
 
 ## Row actions
 
@@ -192,8 +192,8 @@ Stop and Continue use the current conversation state; compaction opens a focus d
 Leading-slash suggestions expose `/stop`, `/continue`, `/compact` and `/settings` outside IME composition; only explicit suggestion selection executes a command, and ordinary text submission is preserved.
 Skills are not part of this command milestone.
 
-Settings share the application shell and show ownership links; machine guidance, project agent settings and session runtime settings have dedicated destinations.
-Supported backends replace shared inspector editors with summaries and links; older backends retain their inspector editors.
+Settings identify ownership: client and machine configuration use Preferences; project, session and conversation configuration use the right sidebar.
+Supported backends replace duplicated conversation editors with summaries that select the owning scope; older backends retain their inspector editors.
 Backend setting controls display confirmed responses and pending/error states, with dirty drafts preserved during refresh and stale edits requiring reset.
 
 ## Browser configuration and backup
@@ -213,12 +213,19 @@ The appearance selector uses rounded corners consistent with the current interfa
 
 ## Central Preferences
 
-`/settings` is the central configuration hub, with browser preferences, a saved-machine selector and project/session/conversation selectors for connected backends.
-Selections only navigate configuration; they do not connect machines, create chats or start work, and changing a parent selection clears its child selections.
+`/settings` contains browser preferences and a saved-machine selector for machine settings.
+Selecting a machine only changes the viewed configuration; it does not connect machines, create chats or start work.
 The far-left rail is the single Preferences entry point; device navigation does not duplicate it.
-All configuration destinations share the Preferences sidebar, with client categories, the selected machine’s categories and workspace links; older deep links remain valid.
-Machine settings entry points open this hub with the machine selected, while client preference links preserve the selected context in query parameters.
+Preferences navigation lists client and machine categories; older project, session and conversation settings deep links remain valid for compatibility.
+The assigned Open settings shortcut always opens this hub, including from text fields, with the current machine selected and unchanged keybindings.
 
-The assigned Open settings shortcut always opens the hub, including from text fields; it preserves the active target without changing saved keybindings.
-Conversation configuration has a dedicated destination under the session, reusing the existing inspector editors and validated command handlers without requiring the chat panel to stay open.
-Project ownership is resolved from session metadata when navigating back from a session-only destination, and stale responses from a previously selected backend cannot populate the current selectors.
+## Workspace configuration sidebar
+
+Project, Session and Conversation tabs switch configuration in the right sidebar without leaving the chat; standalone sessions omit Project, and Session represents the harness rather than adding another scope.
+Project exposes metadata, repository inspection, shared guidance, evidence rules and default tools; Session exposes shared token budgets, compaction and runtime policies; Conversation retains its existing Tools, Instructions, Context and Tasks controls.
+Scope descriptions identify affected conversations and workers, and existing backend validation, idle requirements, revisions and confirmed responses remain authoritative.
+Command-palette project/session settings actions select the corresponding sidebar tab; conversation configuration selects Conversation and opens the panel.
+
+The selected scope and conversation subsection are remembered independently for each backend identity, session and conversation in browser configuration, restored after closing or reloading and included in navigation backups.
+Scope panels stay mounted during tab changes so dirty form drafts survive switching scopes and background refreshes; drafts are not persisted across reloads.
+Older backends keep their conversation-based shared editors, and unsupported restored subsections fall back to Tools.

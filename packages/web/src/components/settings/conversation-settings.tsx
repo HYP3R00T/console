@@ -3,9 +3,10 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useRegisterCommands } from "@/components/commands/command-registry";
 import { ConversationCommands } from "@/components/commands/conversation-commands";
-import { ConversationInspector } from "@/components/sessions/conversation-inspector";
 import { useConversation } from "@/components/sessions/use-conversation";
+import { useInspectorSelection } from "@/components/sessions/use-inspector-selection";
 import type { Session } from "@/components/sessions/use-project-sessions";
+import { WorkspaceInspector } from "@/components/sessions/workspace-inspector";
 import { useBackendRequest } from "@/hooks/use-backend-request";
 import { executeBackendCommand } from "@/lib/backend/commands";
 
@@ -64,12 +65,25 @@ export function ConversationSettings() {
       setPending(false);
     }
   }
+  const execution = feed?.data?.execution,
+    working = !!feed?.data?.busy || !!feed?.data?.queued;
+  const owner =
+    session && session.client === client && session.sessionId === sessionId
+      ? session
+      : undefined;
+  const projectId = owner?.projectId || undefined;
+  const inspectorSelection = useInspectorSelection(
+    client?.backendId ?? client?.origin,
+    sessionId,
+    conversationId,
+    !!projectId,
+  );
   useRegisterCommands({
     "conversation.configure": {
       disabled: !client ? "Connect this machine first." : undefined,
       run: (input) =>
         input === undefined
-          ? undefined
+          ? inspectorSelection.selectScope("conversation")
           : executeBackendCommand(
               { request },
               "conversation.configure",
@@ -77,21 +91,39 @@ export function ConversationSettings() {
               input,
             ),
     },
+    "project.agent-settings.update": {
+      disabled:
+        !client || !projectId ? "Select a project conversation." : undefined,
+      run: (input) =>
+        input === undefined
+          ? inspectorSelection.selectScope("project")
+          : executeBackendCommand(
+              { request },
+              "project.agent-settings.update",
+              { ...target, projectId },
+              input,
+            ),
+    },
+    "session.runtime-settings.update": {
+      disabled: !client ? "Connect this machine first." : undefined,
+      run: (input) =>
+        input === undefined
+          ? inspectorSelection.selectScope("session")
+          : executeBackendCommand(
+              { request },
+              "session.runtime-settings.update",
+              target,
+              input,
+            ),
+    },
   });
-  const execution = feed?.data?.execution,
-    working = !!feed?.data?.busy || !!feed?.data?.queued;
-  const owner =
-    session && session.client === client && session.sessionId === sessionId
-      ? session
-      : undefined;
-  const projectId = owner?.projectId;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <header>
-        <h1 className="text-xl font-semibold">Conversation settings</h1>
+        <h1 className="text-xl font-semibold">Workspace configuration</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Applies to this conversation. Shared machine, project and session
-          settings link to their owning section.
+          Choose Project, Session or Conversation. Machine settings remain in
+          Preferences.
         </p>
       </header>
       {!client ? (
@@ -119,8 +151,15 @@ export function ConversationSettings() {
             }
           />
           <div className="min-h-96 flex-1">
-            <ConversationInspector
-              key={`${deviceId}:${path}`}
+            <WorkspaceInspector
+              key={`${client?.backendId ?? deviceId}:${path}`}
+              deviceId={deviceId}
+              sessionId={sessionId}
+              conversationId={conversationId}
+              selection={inspectorSelection.selection}
+              onScopeChange={inspectorSelection.selectScope}
+              onSectionChange={inspectorSelection.selectSection}
+              storageError={inspectorSelection.storageError}
               path={path}
               request={request}
               working={working}

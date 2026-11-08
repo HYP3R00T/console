@@ -29,24 +29,45 @@ const commands = {
   project: "project.agent-settings.update",
   session: "session.runtime-settings.update",
 } as const satisfies Record<Scope, BackendCommandId>;
-export function ScopedSettings({ scope }: { scope: Scope }) {
-  const { deviceId, projectId, sessionId } = useParams<{
+export type ScopedSettingsTarget = {
+  deviceId: string;
+  projectId?: string;
+  sessionId?: string;
+};
+export function ScopedSettings({
+  scope,
+  target,
+  embedded = false,
+}: {
+  scope: Scope;
+  target?: ScopedSettingsTarget;
+  embedded?: boolean;
+}) {
+  const params = useParams<{
     deviceId: string;
     projectId?: string;
     sessionId?: string;
   }>();
+  const resolved = target ?? params;
   return (
     <SettingsForm
-      key={`${deviceId}:${scope}:${projectId}:${sessionId}`}
+      key={`${resolved.deviceId}:${scope}:${resolved.projectId}:${resolved.sessionId}`}
       scope={scope}
+      target={resolved}
+      embedded={embedded}
     />
   );
 }
-function SettingsForm({ scope }: { scope: Scope }) {
-  const { projectId, sessionId } = useParams<{
-    projectId?: string;
-    sessionId?: string;
-  }>();
+function SettingsForm({
+  scope,
+  target,
+  embedded,
+}: {
+  scope: Scope;
+  target: ScopedSettingsTarget;
+  embedded: boolean;
+}) {
+  const { projectId, sessionId } = target;
   const { client, request } = useBackendRequest();
   const discovery = useBackendCommands(),
     registry = useCommands();
@@ -158,13 +179,17 @@ function SettingsForm({ scope }: { scope: Scope }) {
       aria-label={`${scope} settings`}
     >
       <header>
-        <h1 className="text-xl font-semibold">
+        <h2
+          className={
+            embedded ? "text-sm font-semibold" : "text-xl font-semibold"
+          }
+        >
           {scope === "machine"
             ? "Workspace guidance"
             : scope === "project"
               ? "Project agent settings"
               : "Session runtime settings"}
-        </h1>
+        </h2>
         <p className="mt-2 text-sm text-muted-foreground">
           {scope === "machine"
             ? "Backend-owned. Guidance is shared across all projects and conversations on this machine."

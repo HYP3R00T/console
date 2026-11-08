@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/select";
 import {
   clientPreferencePages,
-  conversationSettingsHref,
   machinePreferencePages,
   type PreferenceTarget,
   preferencesHref,
@@ -117,45 +116,6 @@ export function PreferencesNavigation({
           <p className="px-3 text-xs text-muted-foreground">
             Choose a machine to browse its settings.
           </p>
-        )}
-      </section>
-      <section aria-label="Workspace preferences">
-        <h3 className="px-3 pb-1 text-xs font-medium text-muted-foreground">
-          Workspace
-        </h3>
-        {machine &&
-          target.projectId &&
-          link(
-            "Project settings",
-            preferencesHref(
-              target,
-              `${machine}/projects/${encodeURIComponent(target.projectId)}/settings`,
-            ),
-          )}
-        {machine &&
-          target.sessionId &&
-          link(
-            "Session runtime",
-            preferencesHref(
-              target,
-              `${machine}/sessions/${encodeURIComponent(target.sessionId)}/settings`,
-            ),
-          )}
-        {device &&
-          target.sessionId &&
-          target.conversationId &&
-          link(
-            "Conversation settings",
-            conversationSettingsHref(
-              device.id,
-              target.sessionId,
-              target.conversationId,
-            ),
-          )}
-        {link(
-          "Choose project, session or conversation",
-          preferencesHref(target),
-          false,
         )}
       </section>
     </nav>

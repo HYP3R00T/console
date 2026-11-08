@@ -36,7 +36,6 @@ import {
   executeBackendCommand,
 } from "@/lib/backend/commands";
 import {
-  conversationSettingsHref,
   isPreferencesPath,
   preferencesHref,
   preferenceTarget,
@@ -166,8 +165,8 @@ function ShellLayout({
   const machine = deviceId && `/devices/${encodeURIComponent(deviceId)}`;
   const project =
     machine &&
-    projectId &&
-    `${machine}/projects/${encodeURIComponent(projectId)}`;
+    (active?.projectId ?? projectId) &&
+    `${machine}/projects/${encodeURIComponent(active?.projectId ?? projectId ?? "")}`;
   const draftScope =
     project && sessionId
       ? `${project}/sessions/${encodeURIComponent(sessionId)}`
@@ -228,24 +227,22 @@ function ShellLayout({
     ...(details
       ? {
           "conversation.configure": {
-            run: (input?: unknown) =>
-              input === undefined
-                ? router.push(
-                    conversationSettingsHref(
-                      deviceId ?? "",
-                      active?.sessionId ?? sessionId ?? "",
-                      active?.conversationId ?? conversationId ?? "",
-                    ),
-                  )
-                : executeBackendCommand(
-                    commandClient(),
-                    "conversation.configure",
-                    {
-                      sessionId: active?.sessionId ?? sessionId,
-                      conversationId: active?.conversationId ?? conversationId,
-                    },
-                    input,
-                  ),
+            run: (input?: unknown) => {
+              if (input === undefined) {
+                setInspectorOpen(true);
+                details.selectScope?.("conversation");
+                return;
+              }
+              return executeBackendCommand(
+                commandClient(),
+                "conversation.configure",
+                {
+                  sessionId: active?.sessionId ?? sessionId,
+                  conversationId: active?.conversationId ?? conversationId,
+                },
+                input,
+              );
+            },
           },
         }
       : {}),
@@ -271,6 +268,15 @@ function ShellLayout({
     ...Object.fromEntries(
       Object.entries(scopeDestinations)
         .filter(([, href]) => href)
+        .filter(
+          ([id]) =>
+            !(
+              pathname.includes("/conversations/") &&
+              pathname.endsWith("/settings") &&
+              (id === "project.agent-settings.update" ||
+                id === "session.runtime-settings.update")
+            ),
+        )
         .map(([id, href]) => [
           id,
           {
@@ -283,15 +289,33 @@ function ShellLayout({
                   )
                 ? "This backend has not advertised this command."
                 : undefined,
-            run: (input?: unknown) =>
-              input === undefined
-                ? router.push(href ?? settingsHref)
-                : executeBackendCommand(
-                    commandClient(),
-                    id as BackendCommandId,
-                    { projectId, sessionId, conversationId },
-                    input,
-                  ),
+            run: (input?: unknown) => {
+              if (input === undefined) {
+                const scope =
+                  id === "project.agent-settings.update"
+                    ? "project"
+                    : id === "session.runtime-settings.update"
+                      ? "session"
+                      : undefined;
+                if (scope && details?.selectScope) {
+                  details.selectScope(scope);
+                  setInspectorOpen(true);
+                  return;
+                }
+                router.push(href ?? settingsHref);
+                return;
+              }
+              return executeBackendCommand(
+                commandClient(),
+                id as BackendCommandId,
+                {
+                  projectId: active?.projectId ?? projectId,
+                  sessionId: active?.sessionId ?? sessionId,
+                  conversationId: active?.conversationId ?? conversationId,
+                },
+                input,
+              );
+            },
           },
         ]),
     ),
