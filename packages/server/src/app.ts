@@ -1,6 +1,7 @@
 import Fastify, { type FastifyServerOptions } from "fastify";
 import { registerHarnessRoutes } from "./harnesses/routes.ts";
 import type { HarnessService } from "./harnesses/service.ts";
+import { registerCommandCatalog } from "./http/commands.ts";
 import {
   configureHttpConnection,
   type HttpConnectionPolicy,
@@ -27,6 +28,7 @@ export function createApp(
     connectionPolicy,
     providers?.store.installationId(),
   );
+  registerCommandCatalog(app);
   if (providers) {
     registerProviderRoutes(app, providers);
     app.addHook("onClose", () => providers.close());

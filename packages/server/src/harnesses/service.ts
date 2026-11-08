@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { copyJson } from "@earendil-works/chord";
 import {
   BACKGROUND_CONTEXT as context,
@@ -1691,6 +1691,168 @@ export class HarnessService {
       );
   }
 
+  private settingsRevision(values: unknown) {
+    return createHash("sha256").update(JSON.stringify(values)).digest("hex");
+  }
+  workspaceSettings() {
+    const values = {
+      workspaceGuidance: this.projects.store.workspaceGuidance(),
+    };
+    return {
+      values,
+      revision: this.settingsRevision(values),
+      defaults: { workspaceGuidance: defaultWorkspaceGuidance },
+    };
+  }
+  updateWorkspaceSettings(
+    revision: string,
+    change: Pick<ConfigurationChange, "workspaceGuidance">,
+  ) {
+    if (revision !== this.workspaceSettings().revision)
+      throw new HarnessError(
+        409,
+        "Workspace guidance changed. Refresh and retry.",
+      );
+    this.projects.store.setWorkspaceGuidance(
+      change.workspaceGuidance?.trim() || null,
+    );
+    return this.workspaceSettings();
+  }
+  projectAgentSettings(projectId: string) {
+    this.projects.assertWritable(projectId);
+    const settings = this.projects.store.agentSettings(projectId);
+    const values = {
+      projectTools: settings.tools,
+      projectInstructions: settings.instructions,
+      inspectionGuidance: settings.inspectionGuidance ?? null,
+    };
+    const tools = [
+      ...(CodingTools.tools ?? []),
+      ...(ReviewExtension.tools ?? []),
+    ].map((tool) => tool.name);
+    return {
+      values,
+      revision: this.settingsRevision(values),
+      tools,
+      defaults: { inspectionGuidance: defaultInspectionGuidance },
+    };
+  }
+  updateProjectAgentSettings(
+    projectId: string,
+    revision: string,
+    change: Pick<
+      ConfigurationChange,
+      "projectTools" | "projectInstructions" | "inspectionGuidance"
+    >,
+  ) {
+    const current = this.projectAgentSettings(projectId);
+    if (revision !== current.revision)
+      throw new HarnessError(
+        409,
+        "Project configuration changed. Refresh and retry.",
+      );
+    const tools = change.projectTools;
+    if (
+      tools &&
+      (new Set(tools).size !== tools.length ||
+        tools.some((name) => !current.tools.includes(name)))
+    )
+      throw new HarnessError(400, "Unknown or duplicate tool.");
+    const settings = this.projects.store.agentSettings(projectId);
+    this.projects.store.setAgentSettings(projectId, {
+      tools:
+        change.projectTools === undefined
+          ? settings.tools
+          : change.projectTools,
+      instructions:
+        change.projectInstructions === undefined
+          ? settings.instructions
+          : (change.projectInstructions?.trim() ?? ""),
+      inspectionGuidance:
+        change.inspectionGuidance === undefined
+          ? settings.inspectionGuidance
+          : change.inspectionGuidance?.trim() || null,
+    });
+    return this.projectAgentSettings(projectId);
+  }
+  private sessionSettingsValues(sessionId: string) {
+    const compaction = this.store.compaction(sessionId);
+    return {
+      tokenBudget: this.store.tokenBudget(sessionId),
+      automaticCompaction: compaction.enabled,
+      keepRecentTokens: compaction.keepRecentTokens,
+      runtimePolicy: this.store.runtimePolicy(sessionId),
+    };
+  }
+  sessionRuntimeSettings(sessionId: string) {
+    return this.serial(sessionId, async () => {
+      await this.session(sessionId);
+      const values = this.sessionSettingsValues(sessionId);
+      return { values, revision: this.settingsRevision(values) };
+    });
+  }
+  private saveSessionSettings(
+    sessionId: string,
+    change: Pick<
+      ConfigurationChange,
+      | "tokenBudget"
+      | "automaticCompaction"
+      | "keepRecentTokens"
+      | "runtimePolicy"
+    >,
+  ) {
+    if (
+      change.keepRecentTokens !== undefined ||
+      change.automaticCompaction !== undefined
+    ) {
+      const current = this.store.compaction(sessionId);
+      const tokens = change.keepRecentTokens ?? current.keepRecentTokens;
+      if (tokens < 1000 || tokens > 32000 || tokens % 1000 !== 0)
+        throw new HarnessError(400, "Invalid recent context size.");
+      this.store.setCompaction(
+        sessionId,
+        tokens,
+        change.automaticCompaction ?? current.enabled,
+      );
+    }
+    if (change.runtimePolicy !== undefined)
+      this.store.setRuntimePolicy(sessionId, change.runtimePolicy);
+    if (change.tokenBudget !== undefined)
+      this.store.setTokenBudget(sessionId, change.tokenBudget);
+  }
+  updateSessionRuntimeSettings(
+    sessionId: string,
+    revision: string,
+    change: Pick<
+      ConfigurationChange,
+      | "tokenBudget"
+      | "automaticCompaction"
+      | "keepRecentTokens"
+      | "runtimePolicy"
+    >,
+  ) {
+    return this.serial(sessionId, async () => {
+      const { harness } = await this.session(sessionId);
+      if (
+        change.keepRecentTokens !== undefined ||
+        change.automaticCompaction !== undefined ||
+        change.runtimePolicy !== undefined
+      )
+        await this.assertIdle(harness);
+      if (
+        revision !==
+        this.settingsRevision(this.sessionSettingsValues(sessionId))
+      )
+        throw new HarnessError(
+          409,
+          "Session settings changed. Refresh and retry.",
+        );
+      this.saveSessionSettings(sessionId, change);
+      const values = this.sessionSettingsValues(sessionId);
+      return { values, revision: this.settingsRevision(values) };
+    });
+  }
+
   configureConversation(
     sessionId: string,
     id: string,
@@ -1949,54 +2111,22 @@ export class HarnessService {
             409,
             "Workspace guidance changed. Refresh and retry.",
           );
-        this.projects.store.setWorkspaceGuidance(
-          change.workspaceGuidance?.trim() || null,
-        );
+        this.updateWorkspaceSettings(this.workspaceSettings().revision, change);
       } else if (projectChange) {
         if (!current.project)
           throw new HarnessError(400, "This conversation has no project.");
-        this.projects.assertWritable(record.projectId);
-        // Other sessions can write the same project while the catalog is being read.
-        if (
-          JSON.stringify(
-            this.projects.store.agentSettings(record.projectId),
-          ) !== JSON.stringify(current.project)
-        )
-          throw new HarnessError(
-            409,
-            "Project configuration changed. Refresh and retry.",
-          );
-        this.projects.store.setAgentSettings(record.projectId, {
-          ...current.project,
-          ...(change.inspectionGuidance !== undefined && {
-            inspectionGuidance: change.inspectionGuidance?.trim() || null,
-          }),
-          tools:
-            change.projectTools === undefined
-              ? current.project.tools
-              : change.projectTools,
-          instructions:
-            change.projectInstructions === undefined
-              ? current.project.instructions
-              : (change.projectInstructions?.trim() ?? ""),
-        });
+        const values = {
+          projectTools: current.project.tools,
+          projectInstructions: current.project.instructions,
+          inspectionGuidance: current.project.inspectionGuidance ?? null,
+        };
+        this.updateProjectAgentSettings(
+          record.projectId,
+          this.settingsRevision(values),
+          change,
+        );
       } else if (sessionChange) {
-        if (compactionChange) {
-          const { min, max, step } = current.context;
-          const tokens =
-            change.keepRecentTokens ?? current.context.keepRecentTokens;
-          if (tokens < min || tokens > max || tokens % step !== 0)
-            throw new HarnessError(400, "Invalid recent context size.");
-          this.store.setCompaction(
-            sessionId,
-            tokens,
-            change.automaticCompaction ?? current.context.automatic,
-          );
-        }
-        if (change.runtimePolicy !== undefined)
-          this.store.setRuntimePolicy(sessionId, change.runtimePolicy);
-        if (change.tokenBudget !== undefined)
-          this.store.setTokenBudget(sessionId, change.tokenBudget);
+        this.saveSessionSettings(sessionId, change);
       } else {
         if (change.worktree !== undefined) {
           if (record.projectId === standaloneOwner)
