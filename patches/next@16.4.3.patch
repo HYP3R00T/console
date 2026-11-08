@@ -1,0 +1,136 @@
+diff --git a/dist/compiled/react-dom/cjs/react-dom-client.development.js b/dist/compiled/react-dom/cjs/react-dom-client.development.js
+index 9cb40b56ebb66b17f5e8ddd1b4e536b0bbb775df..e9dd88d904dac92286a0f0e37175dbb723595487 100644
+--- a/dist/compiled/react-dom/cjs/react-dom-client.development.js
++++ b/dist/compiled/react-dom/cjs/react-dom-client.development.js
+@@ -24274,6 +24274,8 @@
+               "Skipping view transition because viewport size changed." ===
+                 error.message ||
+               "Transition was aborted because of invalid state" ===
++                error.message ||
++              "Transition was aborted because of invalid state. Document hidden" ===
+                 error.message
+             )
+               return null;
+diff --git a/dist/compiled/react-dom/cjs/react-dom-client.production.js b/dist/compiled/react-dom/cjs/react-dom-client.production.js
+index 49b478252efd4b7a72cbd156d78ab8ae7a385091..e85cfae503e274f36936fb7f42f79fca6ee83322 100644
+--- a/dist/compiled/react-dom/cjs/react-dom-client.production.js
++++ b/dist/compiled/react-dom/cjs/react-dom-client.production.js
+@@ -15887,6 +15887,8 @@ function startViewTransition(
+                   "Skipping view transition because viewport size changed." ===
+                     error.message ||
+                   "Transition was aborted because of invalid state" ===
++                    error.message ||
++                  "Transition was aborted because of invalid state. Document hidden" ===
+                     error.message
+                 )
+                   error = null;
+diff --git a/dist/compiled/react-dom/cjs/react-dom-profiling.development.js b/dist/compiled/react-dom/cjs/react-dom-profiling.development.js
+index c2b404c698ea39714797fc53784ac64e3901ba3b..e5672544a7b42e2a27019a0d46e2f30b44fe9838 100644
+--- a/dist/compiled/react-dom/cjs/react-dom-profiling.development.js
++++ b/dist/compiled/react-dom/cjs/react-dom-profiling.development.js
+@@ -24282,6 +24282,8 @@
+               "Skipping view transition because viewport size changed." ===
+                 error.message ||
+               "Transition was aborted because of invalid state" ===
++                error.message ||
++              "Transition was aborted because of invalid state. Document hidden" ===
+                 error.message
+             )
+               return null;
+diff --git a/dist/compiled/react-dom/cjs/react-dom-profiling.profiling.js b/dist/compiled/react-dom/cjs/react-dom-profiling.profiling.js
+index cc35e673f245ed52d7940f8b42ca13cb6782503c..ce56266938da419e1a278dc685910cea58b07fd5 100644
+--- a/dist/compiled/react-dom/cjs/react-dom-profiling.profiling.js
++++ b/dist/compiled/react-dom/cjs/react-dom-profiling.profiling.js
+@@ -17791,6 +17791,8 @@ function startViewTransition(
+                   "Skipping view transition because viewport size changed." ===
+                     error.message ||
+                   "Transition was aborted because of invalid state" ===
++                    error.message ||
++                  "Transition was aborted because of invalid state. Document hidden" ===
+                     error.message
+                 )
+                   error = null;
+diff --git a/dist/compiled/react-dom-experimental/cjs/react-dom-client.development.js b/dist/compiled/react-dom-experimental/cjs/react-dom-client.development.js
+index 161d6d1415e75c7af2ff944cd86f33b2607cd492..4531e67c5e9f30704def1d6b3b0b6539f2af0ac6 100644
+--- a/dist/compiled/react-dom-experimental/cjs/react-dom-client.development.js
++++ b/dist/compiled/react-dom-experimental/cjs/react-dom-client.development.js
+@@ -26346,6 +26346,8 @@
+               "Skipping view transition because viewport size changed." ===
+                 error.message ||
+               "Transition was aborted because of invalid state" ===
++                error.message ||
++              "Transition was aborted because of invalid state. Document hidden" ===
+                 error.message
+             )
+               return null;
+diff --git a/dist/compiled/react-dom-experimental/cjs/react-dom-client.production.js b/dist/compiled/react-dom-experimental/cjs/react-dom-client.production.js
+index 2e14f4bb0797bfd42dafa7b321f91cb1f32111f4..a0db66598988b6b78e3521dfa96118055232b951 100644
+--- a/dist/compiled/react-dom-experimental/cjs/react-dom-client.production.js
++++ b/dist/compiled/react-dom-experimental/cjs/react-dom-client.production.js
+@@ -17415,7 +17415,9 @@ function customizeViewTransitionError(error, ignoreAbort) {
+             error.message ||
+           "Skipping view transition because viewport size changed." ===
+             error.message ||
+-          "Transition was aborted because of invalid state" === error.message
++          "Transition was aborted because of invalid state" === error.message ||
++          "Transition was aborted because of invalid state. Document hidden" ===
++            error.message
+         )
+           return null;
+     }
+diff --git a/dist/compiled/react-dom-experimental/cjs/react-dom-profiling.development.js b/dist/compiled/react-dom-experimental/cjs/react-dom-profiling.development.js
+index 29430600e3922795911017f5155f1d51a11de351..303da68afe37f8c6d97e5a76fc01ad7f07aaa3b1 100644
+--- a/dist/compiled/react-dom-experimental/cjs/react-dom-profiling.development.js
++++ b/dist/compiled/react-dom-experimental/cjs/react-dom-profiling.development.js
+@@ -26354,6 +26354,8 @@
+               "Skipping view transition because viewport size changed." ===
+                 error.message ||
+               "Transition was aborted because of invalid state" ===
++                error.message ||
++              "Transition was aborted because of invalid state. Document hidden" ===
+                 error.message
+             )
+               return null;
+diff --git a/dist/compiled/react-dom-experimental/cjs/react-dom-profiling.profiling.js b/dist/compiled/react-dom-experimental/cjs/react-dom-profiling.profiling.js
+index 0ca2a97aabf52eea34f249e775a49b913fb8a81b..18a6e779201cb7bb6deb0871873519604d6a3d04 100644
+--- a/dist/compiled/react-dom-experimental/cjs/react-dom-profiling.profiling.js
++++ b/dist/compiled/react-dom-experimental/cjs/react-dom-profiling.profiling.js
+@@ -19461,7 +19461,9 @@ function customizeViewTransitionError(error, ignoreAbort) {
+             error.message ||
+           "Skipping view transition because viewport size changed." ===
+             error.message ||
+-          "Transition was aborted because of invalid state" === error.message
++          "Transition was aborted because of invalid state" === error.message ||
++          "Transition was aborted because of invalid state. Document hidden" ===
++            error.message
+         )
+           return null;
+     }
+diff --git a/dist/compiled/react-dom-experimental/cjs/react-dom-unstable_testing.development.js b/dist/compiled/react-dom-experimental/cjs/react-dom-unstable_testing.development.js
+index 38bf00aa998170689d15e252cb382c7ec8658a68..cdef712868d670a7ac7ba78f92cb16cf14c3138a 100644
+--- a/dist/compiled/react-dom-experimental/cjs/react-dom-unstable_testing.development.js
++++ b/dist/compiled/react-dom-experimental/cjs/react-dom-unstable_testing.development.js
+@@ -26569,6 +26569,8 @@
+               "Skipping view transition because viewport size changed." ===
+                 error.message ||
+               "Transition was aborted because of invalid state" ===
++                error.message ||
++              "Transition was aborted because of invalid state. Document hidden" ===
+                 error.message
+             )
+               return null;
+diff --git a/dist/compiled/react-dom-experimental/cjs/react-dom-unstable_testing.production.js b/dist/compiled/react-dom-experimental/cjs/react-dom-unstable_testing.production.js
+index c7d5988e4379b27bf26dc51f2b0fb6829ae3a7fa..e61b73774272aad2c6801616caaab016db0b7414 100644
+--- a/dist/compiled/react-dom-experimental/cjs/react-dom-unstable_testing.production.js
++++ b/dist/compiled/react-dom-experimental/cjs/react-dom-unstable_testing.production.js
+@@ -17687,7 +17687,9 @@ function customizeViewTransitionError(error, ignoreAbort) {
+             error.message ||
+           "Skipping view transition because viewport size changed." ===
+             error.message ||
+-          "Transition was aborted because of invalid state" === error.message
++          "Transition was aborted because of invalid state" === error.message ||
++          "Transition was aborted because of invalid state. Document hidden" ===
++            error.message
+         )
+           return null;
+     }

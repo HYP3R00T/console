@@ -33,6 +33,9 @@ Paths above are relative to `packages/web`. Backend data remains backend-owned. 
 
 ## Layout and navigation
 
+Next.js 16.4.3's bundled React runtimes use a pnpm patch to recognize Chromium's `InvalidStateError` with the `. Document hidden` suffix as a skipped view transition; updates still complete, and other errors remain reportable.
+The regression test covers development, production and profiling filters; remove the patch when a Next.js upgrade includes the upstream correction.
+
 - Primary rail: Home, all saved machines, Manage devices and Client preferences. It stays visible as a fixed 56px rail, without its own expand/collapse toggle.
 - Selecting a machine restores its last conversation and tree disclosures from browser-local navigation memory. Home does not clear that state; connection choices remain independent. This restores navigation, not transcript scroll position. New-conversation drafts are scoped to the backend/project/session and kept in browser session storage until sent.
 - Secondary panel: context for the selected machine or preference category. It is absent on Home/Manage devices, hideable with the bottom-left toggle and resizable while visible. Hidden navigation has no shortcut rail.
