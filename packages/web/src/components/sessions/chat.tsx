@@ -14,7 +14,6 @@ import { executeBackendCommand } from "@/lib/backend/commands";
 import { standaloneConversationPath } from "@/lib/conversation-path";
 import { type ChatAttachment, wireAttachments } from "./attachments";
 import { ChatComposer } from "./chat-composer";
-import { ConversationInspector } from "./conversation-inspector";
 import { ConversationTurn } from "./conversation-turn";
 import { conversationTurns } from "./conversation-turns";
 import { failureLabel } from "./execution-labels";
@@ -27,8 +26,10 @@ import {
 } from "./scroll-anchor";
 import { type ModelRef, useChatModels } from "./use-chat-models";
 import { useConversation } from "./use-conversation";
+import { useInspectorSelection } from "./use-inspector-selection";
 import type { Conversation } from "./use-project-sessions";
 import { sessionsChanged } from "./use-project-sessions";
+import { WorkspaceInspector } from "./workspace-inspector";
 
 type Pending = {
   attachments?: ChatAttachment[];
@@ -130,13 +131,28 @@ export function Chat({
   );
   const selectedModel = modelSelection.model;
   const savedModel = stream?.data?.model;
+  const inspectorSelection = useInspectorSelection(
+    state.client?.backendId ?? state.origin,
+    sessionId,
+    conversationId,
+    !!projectId,
+  );
   useLayoutEffect(() => {
     const inspector = {
       route,
-      title: "Conversation details",
+      title: "Workspace configuration",
+      selectScope: inspectorSelection.selectScope,
       content: (
-        <ConversationInspector
-          key={`${deviceId}:${path}`}
+        <WorkspaceInspector
+          key={`${state.client?.backendId ?? deviceId}:${path}`}
+          deviceId={deviceId}
+          sessionId={sessionId}
+          conversationId={conversationId}
+          projectId={projectId}
+          selection={inspectorSelection.selection}
+          onScopeChange={inspectorSelection.selectScope}
+          onSectionChange={inspectorSelection.selectSection}
+          storageError={inspectorSelection.storageError}
           path={path}
           request={state.request}
           working={working}
@@ -159,6 +175,14 @@ export function Chat({
     selectedModel,
     savedModel,
     setInspector,
+    state.client?.backendId,
+    projectId,
+    sessionId,
+    conversationId,
+    inspectorSelection.selection,
+    inspectorSelection.selectScope,
+    inspectorSelection.selectSection,
+    inspectorSelection.storageError,
   ]);
   const [showLatest, setShowLatest] = useState(false);
   const [error, setError] = useState<string>();

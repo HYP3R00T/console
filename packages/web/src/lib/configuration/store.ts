@@ -167,7 +167,11 @@ export function parseBackup(value: unknown): ConfigurationBackup {
     ({ backendId: _identity, ...bookmark }) => bookmark,
   );
   const navigation = object(settings.navigation);
-  exact(navigation, ["routes", "disclosures"]);
+  exact(navigation, [
+    "routes",
+    "disclosures",
+    ...(Object.hasOwn(navigation, "inspectors") ? ["inspectors"] : []),
+  ]);
   const parsedNavigation = parseNavigationMemory(JSON.stringify(navigation));
   if (stable(parsedNavigation) !== stable(navigation))
     throw new Error("Invalid navigation preferences.");

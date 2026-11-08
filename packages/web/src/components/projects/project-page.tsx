@@ -13,11 +13,18 @@ import { ProjectIcon, ProjectIconPicker } from "./project-icon";
 import { ProjectRemovalDialog } from "./project-removal-dialog";
 import { type Project, useMachineProjects } from "./projects-provider";
 
-export function ProjectPage({ settings = false }: { settings?: boolean }) {
-  const { deviceId, projectId } = useParams<{
+export function ProjectPage({
+  settings = false,
+  projectId: targetProjectId,
+}: {
+  settings?: boolean;
+  projectId?: string;
+}) {
+  const { deviceId, projectId: routeProjectId } = useParams<{
     deviceId: string;
     projectId: string;
   }>();
+  const projectId = targetProjectId ?? routeProjectId;
   const state = useMachineProjects(deviceId);
   if (!state.connected)
     return (

@@ -3,6 +3,7 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import type { ComponentProps } from "react";
 import {
   startTransition,
   useCallback,
@@ -29,6 +30,12 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { useBackendRequest } from "@/hooks/use-backend-request";
+import type {
+  InspectorScope,
+  InspectorSection,
+} from "@/lib/inspector-preferences";
+import { inspectorSections } from "@/lib/inspector-preferences";
+import { cn } from "@/lib/utils";
 import type { Execution } from "./conversation-state";
 import { executionNeedsAttention } from "./execution-labels";
 import { ExecutionStatus } from "./execution-status";
@@ -123,6 +130,11 @@ export function ConversationInspector({
   selectedModel,
   savedModel,
   projectId: owningProjectId,
+  section,
+  onSectionChange,
+  onScopeChange,
+  embedded = false,
+  active = true,
 }: {
   path: string;
   request: ReturnType<typeof useBackendRequest>["request"];
@@ -131,6 +143,11 @@ export function ConversationInspector({
   selectedModel?: ChatModel;
   savedModel?: ModelRef;
   projectId?: string;
+  section?: InspectorSection;
+  onSectionChange?: (section: InspectorSection) => void;
+  onScopeChange?: (scope: InspectorScope) => void;
+  embedded?: boolean;
+  active?: boolean;
 }) {
   const commands = useCommands();
   const discovery = useBackendCommands();
@@ -145,7 +162,14 @@ export function ConversationInspector({
   const scoped = discovery.supports("session.runtime-settings.update");
   const [data, setData] = useState<Configuration>();
   const [saving, setSaving] = useState(false);
-  const [tasksOpen, setTasksOpen] = useState(false);
+  const [localSection, setLocalSection] = useState<InspectorSection>("tools");
+  const requestedSection = section ?? localSection;
+  const activeSection =
+    (requestedSection === "tasks" && data?.postRunCommand === undefined) ||
+    (requestedSection === "context" && !data?.context)
+      ? "tools"
+      : requestedSection;
+  const tasksOpen = active && activeSection === "tasks";
   const [error, setError] = useState<string>();
   const [loadError, setLoadError] = useState<string>();
   const [reloadNotice, setReloadNotice] = useState<string>();
@@ -251,7 +275,7 @@ export function ConversationInspector({
     });
   }
   return (
-    <div className="flex h-full min-h-0 flex-col p-4">
+    <div className={cn("flex h-full min-h-0 flex-col", !embedded && "p-4")}>
       {(error || loadError) && (
         <p role="alert" className="pb-2 text-xs text-destructive">
           {error || loadError}
@@ -265,8 +289,13 @@ export function ConversationInspector({
       {!data && !loadError && <ConversationInspectorLoading />}
       {data && (
         <Tabs
-          defaultValue="tools"
-          onValueChange={(value) => setTasksOpen(value === "tasks")}
+          value={activeSection}
+          onValueChange={(value) => {
+            if (inspectorSections.includes(value as InspectorSection)) {
+              setLocalSection(value as InspectorSection);
+              onSectionChange?.(value as InspectorSection);
+            }
+          }}
           className="min-h-0 flex-1 gap-3"
         >
           <TabsList
@@ -555,9 +584,19 @@ export function ConversationInspector({
                         Shared project instructions and evidence rules apply
                         across this project.
                       </p>
-                      <Link href={projectHref}>
-                        Edit project agent settings
-                      </Link>
+                      {onScopeChange ? (
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={() => onScopeChange("project")}
+                        >
+                          Edit project agent settings
+                        </Button>
+                      ) : (
+                        <Link href={projectHref}>
+                          Edit project agent settings
+                        </Link>
+                      )}
                     </div>
                   ) : (
                     <InstructionEditor
@@ -691,6 +730,9 @@ export function ConversationInspector({
                   <InspectorContext
                     settings={data.context}
                     sessionSettingsHref={scoped ? sessionHref : undefined}
+                    openSessionSettings={
+                      onScopeChange ? () => onScopeChange("session") : undefined
+                    }
                     selectedModel={selectedModel}
                     compacting={compacting}
                     disabled={disabled}
@@ -730,3 +772,7 @@ export function ConversationInspector({
     </div>
   );
 }
+
+export type ConversationInspectorProps = ComponentProps<
+  typeof ConversationInspector
+>;

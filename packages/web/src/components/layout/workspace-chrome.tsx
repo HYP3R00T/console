@@ -7,6 +7,7 @@ import {
   useContext,
   useState,
 } from "react";
+import type { InspectorScope } from "@/lib/inspector-preferences";
 export type WorkspaceConversation = {
   route: string;
   title: string;
@@ -19,6 +20,7 @@ export type WorkspaceInspector = {
   route: string;
   title: string;
   content: ReactNode;
+  selectScope?: (scope: InspectorScope) => void;
 };
 const Context = createContext<{
   conversation?: WorkspaceConversation;

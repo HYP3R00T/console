@@ -170,3 +170,33 @@ test("downloadable sample theme documents every supported token and round-trips 
   assert.deepEqual(f.store.export().themes, [sample]);
   assert.equal(f.store.export().settings.theme, sample.id);
 });
+
+test("navigation backups preserve per-conversation inspector choices and reject invalid choices atomically", () => {
+  const f = fixture();
+  const navigation = {
+    routes: {},
+    disclosures: {},
+    inspectors: {
+      '["backend","session","1"]': { scope: "project", section: "context" },
+    },
+  };
+  f.store.setItem("console.navigation.v1", JSON.stringify(navigation));
+  const backup = f.store.export();
+  const other = fixture();
+  other.store.import(JSON.parse(JSON.stringify(backup)));
+  assert.deepEqual(other.store.export().settings.navigation, navigation);
+  const before = other.values.get(configurationKey);
+  assert.throws(() =>
+    other.store.import({
+      ...backup,
+      settings: {
+        ...backup.settings,
+        navigation: {
+          ...navigation,
+          inspectors: { bad: { scope: "invalid", section: "tools" } },
+        },
+      },
+    }),
+  );
+  assert.equal(other.values.get(configurationKey), before);
+});
