@@ -1,3 +1,9 @@
+import {
+  conversationConfigurationSchema,
+  projectAgentSettingsSchema,
+  sessionRuntimeSettingsSchema,
+  workspaceGuidanceSchema,
+} from "@console/contracts";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import {
   type ConversationWatch,
@@ -10,13 +16,12 @@ import { ProjectError } from "../projects/service.ts";
 import { ConfigurationFileError } from "../storage/owner-configuration.ts";
 import { type AgentProfile, agentProfileSchema } from "./agent-profiles.ts";
 import { AttachmentError, type AttachmentInput } from "./attachments.ts";
-import { type ConfigurationChange, contextRetention } from "./configuration.ts";
+import type { ConfigurationChange } from "./configuration.ts";
 import { ConversationInfo } from "./documents.ts";
 import {
   type ReviewerProfile,
   reviewerProfileSchema,
 } from "./reviewer-profiles.ts";
-import { runtimePolicySchema } from "./runtime-policy.ts";
 import { HarnessError, type HarnessService } from "./service.ts";
 import {
   conversationView,
@@ -205,6 +210,87 @@ export function registerHarnessRoutes(
           service.updateAgentProfiles(req.body.revision, req.body.profiles),
         ),
     );
+    routes.get("/v1/machine/workspace-guidance", () =>
+      service.operation(async () => service.workspaceSettings()),
+    );
+    routes.patch<{ Body: ConfigurationChange }>(
+      "/v1/machine/workspace-guidance",
+      {
+        config: {
+          consoleCommand: {
+            id: "machine.workspace-guidance.update",
+            scope: "machine",
+          },
+        },
+        schema: { body: workspaceGuidanceSchema },
+      },
+      (req) =>
+        service.operation(async () =>
+          service.updateWorkspaceSettings(req.body.revision, req.body),
+        ),
+    );
+    routes.get<{ Params: { projectId: string } }>(
+      "/v1/projects/:projectId/agent-settings",
+      { schema: { params: params({ projectId: uuid }) } },
+      (req) =>
+        service.operation(async () =>
+          service.projectAgentSettings(req.params.projectId),
+        ),
+    );
+    routes.patch<{ Params: { projectId: string }; Body: ConfigurationChange }>(
+      "/v1/projects/:projectId/agent-settings",
+      {
+        config: {
+          consoleCommand: {
+            id: "project.agent-settings.update",
+            scope: "project",
+          },
+        },
+        schema: {
+          params: params({ projectId: uuid }),
+          body: projectAgentSettingsSchema,
+        },
+      },
+      (req) =>
+        service.operation(async () =>
+          service.updateProjectAgentSettings(
+            req.params.projectId,
+            req.body.revision,
+            req.body,
+          ),
+        ),
+    );
+    routes.get<{ Params: { sessionId: string } }>(
+      "/v1/sessions/:sessionId/runtime-settings",
+      { schema: { params: params({ sessionId: uuid }) } },
+      (req) =>
+        service.operation(() =>
+          service.sessionRuntimeSettings(req.params.sessionId),
+        ),
+    );
+    routes.patch<{ Params: { sessionId: string }; Body: ConfigurationChange }>(
+      "/v1/sessions/:sessionId/runtime-settings",
+      {
+        config: {
+          consoleCommand: {
+            id: "session.runtime-settings.update",
+            scope: "session",
+          },
+        },
+        schema: {
+          params: params({ sessionId: uuid }),
+          body: sessionRuntimeSettingsSchema,
+        },
+      },
+      (req) =>
+        service.operation(() =>
+          service.updateSessionRuntimeSettings(
+            req.params.sessionId,
+            req.body.revision,
+            req.body,
+          ),
+        ),
+    );
     routes.get("/v1/machine/runtime-defaults", () =>
       service.operation(() => service.runtimeDefaults()),
     );
@@ -219,6 +305,12 @@ export function registerHarnessRoutes(
     }>(
       "/v1/machine/runtime-defaults",
       {
+        config: {
+          consoleCommand: {
+            id: "machine.runtime-defaults.update",
+            scope: "machine",
+          },
+        },
         schema: {
           body: {
             type: "object",
@@ -918,17 +1010,7 @@ export function registerHarnessRoutes(
           ),
         ),
     );
-    const toolSelection = {
-      anyOf: [
-        { type: "null" },
-        {
-          type: "array",
-          maxItems: 100,
-          uniqueItems: true,
-          items: { type: "string", maxLength: 120 },
-        },
-      ],
-    };
+
     routes.post<{ Params: Scope; Body: { at: number; creationId: string } }>(
       `${base}/fork`,
       {
@@ -962,85 +1044,19 @@ export function registerHarnessRoutes(
             ),
           ),
     );
-    const instructions = {
-      anyOf: [{ type: "null" }, { type: "string", maxLength: 16000 }],
-    };
+
     routes.patch<{ Params: Scope; Body: ConfigurationChange }>(
       `${base}/configuration`,
       {
+        config: {
+          consoleCommand: {
+            id: "conversation.configure",
+            scope: "conversation",
+          },
+        },
         schema: {
           params: conversationParams,
-          body: {
-            type: "object",
-            additionalProperties: false,
-            required: ["revision"],
-            properties: {
-              revision: { type: "string", pattern: "^[a-f0-9]{64}$" },
-              tools: toolSelection,
-              managedExtensions: {
-                type: "array",
-                maxItems: 32,
-                uniqueItems: true,
-                items: {
-                  type: "string",
-                  pattern: "^user\\.[a-z][a-z0-9-]{0,63}$",
-                },
-              },
-              instructions,
-              projectTools: toolSelection,
-              projectInstructions: instructions,
-              workspaceGuidance: instructions,
-              inspectionGuidance: instructions,
-              runtimePolicy: { anyOf: [{ type: "null" }, runtimePolicySchema] },
-              automaticCompaction: { type: "boolean" },
-              planMode: { type: "boolean" },
-              sandbox: { type: "boolean" },
-              remoteProfile: {
-                anyOf: [
-                  { type: "null" },
-                  { type: "string", pattern: "^[a-z][a-z0-9-]{0,23}$" },
-                ],
-              },
-              codeMode: { type: "boolean" },
-              mcp: { type: "boolean" },
-              postRunRepairLimit: { type: "integer", minimum: 0, maximum: 5 },
-              postRunCommand: {
-                anyOf: [{ type: "null" }, { type: "string", maxLength: 1000 }],
-              },
-              maxTurns: {
-                anyOf: [
-                  { type: "null" },
-                  {
-                    type: "integer",
-                    minimum: 1,
-                    maximum: Number.MAX_SAFE_INTEGER,
-                  },
-                ],
-              },
-              tokenBudget: {
-                anyOf: [
-                  { type: "null" },
-                  {
-                    type: "integer",
-                    minimum: 1,
-                    maximum: Number.MAX_SAFE_INTEGER,
-                  },
-                ],
-              },
-              worktree: {
-                anyOf: [
-                  { type: "null" },
-                  { type: "string", minLength: 1, maxLength: 4096 },
-                ],
-              },
-              keepRecentTokens: {
-                type: "integer",
-                minimum: contextRetention.min,
-                maximum: contextRetention.max,
-                multipleOf: contextRetention.step,
-              },
-            },
-          },
+          body: conversationConfigurationSchema,
         },
       },
       (req) =>
@@ -1055,6 +1071,9 @@ export function registerHarnessRoutes(
     routes.post<{ Params: Scope; Body: { focus?: string } }>(
       `${base}/compact`,
       {
+        config: {
+          consoleCommand: { id: "conversation.compact", scope: "conversation" },
+        },
         schema: {
           params: conversationParams,
           body: {
@@ -1226,6 +1245,12 @@ export function registerHarnessRoutes(
     routes.post<{ Params: Scope; Body: { failedTaskId: number } }>(
       `${base}/continue`,
       {
+        config: {
+          consoleCommand: {
+            id: "conversation.continue",
+            scope: "conversation",
+          },
+        },
         schema: {
           params: conversationParams,
           body: {
@@ -1257,6 +1282,9 @@ export function registerHarnessRoutes(
     routes.post<{ Params: Scope }>(
       `${base}/stop`,
       {
+        config: {
+          consoleCommand: { id: "conversation.stop", scope: "conversation" },
+        },
         schema: { params: conversationParams, body: creation },
       },
       (req) =>

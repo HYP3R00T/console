@@ -93,7 +93,7 @@ Omitted values retain Console/Durable defaults; policy changes affect all siblin
 - `toolExecution` selects `parallel` or `sequential`; `steeringMode` and `followUpMode` select `all` or `one-at-a-time`; `afterFailedRun` selects `keep`, `continue`, or `withdraw` for queued input.
 - `compaction` supports `reserveTokens`, `backgroundTokens`, and exact `provider/modelId` overrides, including per-model `enabled` and `keepRecentTokens`; these override the ordinary session compaction settings for that model.
 - `restartLimit`, `progress` (`partialIntervalMs`, `outputIntervalMs`, `persistWithinMs`), `contextRetentionMs`, and `documentRetentionMs` control recovery, progress persistence and idle memory retention; finite bounds are enforced by the route schema.
-- The Context inspector edits these overrides, including per-model compaction; blank fields follow backend defaults, and restoring defaults clears the entire policy.
+- Session runtime settings edits these overrides, including per-model compaction; older clients retain the Context inspector editor. Blank fields follow backend defaults, and restoring defaults clears the entire policy.
 
 SSE snapshots include an allowlisted execution projection: running/idle/finishing state, generation attempt and retry/poll deadlines, active tool identities/statuses, compaction progress and stable run-failure reasons. Run failures survive reconnect/reopen through Durable’s live document. Raw provider errors, tool output/details, failure diagnostics and compaction error strings are excluded from this projection; ordinary transcript tool results retain their existing bounded display behavior.
 
@@ -316,3 +316,15 @@ Managed definitions are composed with each Harness registry; installation does n
 Conversation configuration accepts a separate `managedExtensions` selection and includes the active catalog in its revision, so replacement invalidates stale edits.
 Selections persist through restart and forks, are suspended in Plan mode, and cannot coexist with sandbox or remote execution.
 Configured post-run checks run after every answered turn while managed extensions are selected, including turns without tool calls, because trusted hooks may change files.
+
+## Commands and scoped settings
+
+`GET /v1/commands` returns a version-1 catalog of supported command IDs, target scopes, HTTP methods/path templates and request schemas, captured from the owning feature routes.
+It advertises operations rather than live availability; existing handlers retain validation, idle checks and retry semantics, and duplicate IDs fail registration.
+The dependency-free `@console/contracts` workspace package owns common command types, setting metadata and configuration schemas.
+
+Machine workspace guidance, project agent settings and session runtime settings have dedicated read/update endpoints under their owning scope, with scope-specific revisions and rejection of stale writes and unknown fields.
+Their route definitions live in `src/harnesses/routes.ts`; reads do not require selecting a conversation, and updates share persistence helpers with legacy conversation configuration.
+Project tools remain creation defaults, guidance remains shared, and session policies affect sibling conversations and owned workers.
+Token budgets remain editable during generation; compaction and runtime-policy changes require the whole session idle.
+The legacy mixed-scope configuration endpoint remains supported, and existing runtime-default revision behavior is unchanged.
