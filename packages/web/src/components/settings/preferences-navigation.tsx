@@ -47,13 +47,8 @@ export function PreferencesNavigation({
       aria-label="Preference categories"
       className="flex flex-col gap-4 px-2"
     >
-      {link(
-        "All preferences",
-        preferencesHref(target),
-        pathname === "/settings",
-      )}
       <section aria-label="Client preferences">
-        <h3 className="px-3 pb-1 text-xs font-medium text-muted-foreground">
+        <h3 className="px-3 pt-2 pb-2 text-sm font-semibold text-foreground">
           Client
         </h3>
         {clientPreferencePages.map((page) =>
@@ -61,7 +56,7 @@ export function PreferencesNavigation({
         )}
       </section>
       <section aria-label="Machine preferences">
-        <h3 className="px-3 pb-1 text-xs font-medium text-muted-foreground">
+        <h3 className="px-3 pt-2 pb-2 text-sm font-semibold text-foreground">
           Machine
         </h3>
         {machinePreferencePages.map((page) =>

@@ -1,190 +1,209 @@
 "use client";
-
-import { Monitor, Moon, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Monitor, Moon, Sun, Upload } from "lucide-react";
+import { useRef, useState } from "react";
 import { useClientAppearance } from "@/components/layout/theme-provider";
 import { Button } from "@/components/ui/button";
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import {
-  currentThemeDocument,
-  downloadTheme,
-} from "@/lib/configuration/theme-export";
+import type { ImportedTheme } from "@/lib/configuration/store";
+import { groupThemeFamilies } from "@/lib/configuration/theme-gallery";
+import { cn } from "@/lib/utils";
+import { ThemeColorsDialog } from "./theme-colors-dialog";
+import { ThemeFamilyCard } from "./theme-family-card";
 
 export function AppearanceSettings() {
   const {
-    selected: theme,
-    select: setTheme,
+    appearance,
+    activeMode,
     themes,
+    setMode,
+    select,
     importTheme,
     error,
+    ready,
   } = useClientAppearance();
+  const [inspected, setInspected] = useState<ImportedTheme>();
   const [message, setMessage] = useState("");
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const [importError, setImportError] = useState<string>();
+  const [dragging, setDragging] = useState(false);
+  const [reading, setReading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  async function importFiles(files: File[]) {
+    setImportError(undefined);
+    setMessage("");
+    if (files.length !== 1) {
+      setImportError("Choose one theme JSON file at a time.");
+      return;
+    }
+    setReading(true);
+    try {
+      const file = files[0];
+      if (file.size > 65536)
+        throw new Error("Theme files must be smaller than 64 KB.");
+      const imported = importTheme(JSON.parse(await file.text()));
+      setMessage(
+        `${imported.name} imported. Choose it in ${imported.mode} themes.`,
+      );
+    } catch (error) {
+      setImportError(
+        error instanceof Error ? error.message : "Theme import failed.",
+      );
+    } finally {
+      setReading(false);
+    }
+  }
   return (
-    <div className="flex flex-col gap-8">
-      <h1 className="text-xl font-semibold tracking-tight">Appearance</h1>
+    <div className="@container flex w-full flex-col gap-7">
+      <header className="flex flex-col gap-2">
+        <h1 className="text-xl font-semibold tracking-tight">Appearance</h1>
+        <p className="text-sm text-muted-foreground">
+          Choose a theme for each mode. System follows your device’s light or
+          dark appearance.
+        </p>
+      </header>
       <section
-        className="flex flex-wrap items-center justify-between gap-4 rounded-xl border px-6 py-5"
-        aria-label="Appearance settings"
+        aria-label="Display mode"
+        className="flex flex-wrap items-center justify-between gap-3"
       >
-        <h2 className="text-sm font-medium">Theme</h2>
+        <h2 className="text-sm font-medium">Display mode</h2>
         <ToggleGroup
-          aria-label="Color theme"
+          aria-label="Display mode"
           variant="outline"
           spacing={0}
           multiple={false}
-          disabled={!mounted}
-          value={mounted ? [theme ?? "system"] : []}
+          disabled={!ready}
+          value={ready ? [appearance.mode] : []}
           onValueChange={(values) => {
-            if (values[0]) setTheme(values[0]);
+            if (
+              values[0] === "system" ||
+              values[0] === "light" ||
+              values[0] === "dark"
+            )
+              setMode(values[0]);
           }}
         >
-          <ToggleGroupItem value="system" aria-label="System theme">
+          <ToggleGroupItem value="system">
             <Monitor />
             System
           </ToggleGroupItem>
-          <ToggleGroupItem value="light" aria-label="Light theme">
+          <ToggleGroupItem value="light">
             <Sun />
             Light
           </ToggleGroupItem>
-          <ToggleGroupItem value="dark" aria-label="Dark theme">
+          <ToggleGroupItem value="dark">
             <Moon />
             Dark
           </ToggleGroupItem>
         </ToggleGroup>
       </section>
-      <section aria-label="Theme files" className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium">Theme files</h2>
-        <p className="text-sm text-muted-foreground">
-          Download a complete example to edit, or export the theme currently
-          displayed. Both files can be imported below.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            nativeButton={false}
-            render={
-              <a
-                href="/themes/example.json"
-                download="console-theme-example.json"
-              />
-            }
+      {(["light", "dark"] as const).map((mode) => {
+        const selected =
+          mode === "dark" ? appearance.darkTheme : appearance.lightTheme;
+        return (
+          <section
+            key={mode}
+            aria-label={`${mode} themes`}
+            className="flex flex-col gap-3"
           >
-            Download sample theme
-          </Button>
-          <Button
-            variant="outline"
-            disabled={!mounted}
-            onClick={() => {
-              try {
-                downloadTheme(
-                  currentThemeDocument(
-                    document.documentElement,
-                    themes.find((item) => item.id === theme),
-                  ),
-                );
-                setMessage("Current theme exported.");
-              } catch (error) {
-                setMessage(
-                  error instanceof Error
-                    ? error.message
-                    : "Theme export failed.",
-                );
-              }
-            }}
-          >
-            Export current theme
-          </Button>
-        </div>
-        <details className="text-sm">
-          <summary className="cursor-pointer">Theme JSON structure</summary>
-          <pre className="mt-2 overflow-x-auto rounded-lg bg-muted p-3 text-xs">
-            <code>
-              {JSON.stringify(
-                {
-                  id: "custom-my-theme",
-                  name: "My Theme",
-                  mode: "dark",
-                  tokens: {
-                    background: "#18181b",
-                    foreground: "#fafafa",
-                    primary: "#60a5fa",
-                    "primary-foreground": "#18181b",
-                  },
-                },
-                null,
-                2,
-              )}
-            </code>
-          </pre>
-          <p className="mt-2 text-muted-foreground">
-            IDs start with custom-. Use light or dark for the base, then
-            override its colors. The sample download lists every supported
-            token.
-          </p>
-        </details>
-      </section>
-      <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor="theme-file">Import theme</FieldLabel>
-          <Input
-            id="theme-file"
-            type="file"
-            accept=".json,application/json"
-            onChange={async (event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (!file) return;
-              try {
-                if (file.size > 65536)
-                  throw new Error("Theme files must be smaller than 64 KB.");
-                importTheme(JSON.parse(await file.text()));
-                setMessage("Theme imported. Select it below to apply.");
-              } catch (error) {
-                setMessage(
-                  error instanceof Error
-                    ? error.message
-                    : "Theme import failed.",
-                );
-              }
-            }}
-          />
-          <FieldDescription>
-            JSON: id (custom-name), name, mode (light/dark), and tokens mapping
-            supported color names to #RRGGBB values.
-          </FieldDescription>
-        </Field>
-        {themes.length > 0 && (
-          <Field>
-            <FieldLabel htmlFor="custom-theme">Imported themes</FieldLabel>
-            <select
-              id="custom-theme"
-              className="rounded-md border border-input bg-background p-2"
-              value={themes.some((item) => item.id === theme) ? theme : ""}
-              onChange={(event) => {
-                if (event.target.value) setTheme(event.target.value);
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-sm font-medium">
+                {mode === "light" ? "Light themes" : "Dark themes"}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {activeMode === mode
+                  ? "Active mode · selections apply immediately"
+                  : `Saved for ${mode} mode`}
+              </p>
+            </div>
+            <ToggleGroup
+              aria-label={`Default ${mode} theme`}
+              multiple={false}
+              value={ready ? [selected] : []}
+              disabled={!ready}
+              onValueChange={(values) => {
+                if (values[0]) select(mode, values[0]);
               }}
+              className="grid! w-full grid-cols-1 items-start gap-5 @xl:grid-cols-2 @5xl:grid-cols-3 @7xl:grid-cols-4"
             >
-              <option value="">Choose an imported theme</option>
-              {themes.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
+              {groupThemeFamilies(themes, mode).map((family) => (
+                <ThemeFamilyCard
+                  key={`${mode}:${family.id}`}
+                  family={family}
+                  selected={selected}
+                  disabled={!ready}
+                  onSelect={(id) => select(mode, id)}
+                  onInspect={setInspected}
+                  onMessage={setMessage}
+                  onError={setImportError}
+                />
               ))}
-            </select>
-          </Field>
+            </ToggleGroup>
+          </section>
+        );
+      })}
+      <section
+        aria-label="Import themes"
+        onDragOver={(event) => {
+          event.preventDefault();
+          if (!reading) setDragging(true);
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node))
+            setDragging(false);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          if (!reading && ready)
+            void importFiles(Array.from(event.dataTransfer.files));
+        }}
+        className={cn(
+          "flex flex-col items-center gap-3 rounded-xl border border-dashed p-6 text-center",
+          dragging && "bg-muted",
         )}
-      </FieldGroup>
+      >
+        <Upload aria-hidden="true" className="size-5 text-muted-foreground" />
+        <h2 className="text-sm font-medium">Import themes</h2>
+        <p className="text-sm text-muted-foreground">
+          Drop a theme JSON file here, or choose a file.
+        </p>
+        <Input
+          ref={fileInput}
+          id="theme-file"
+          type="file"
+          accept=".json,application/json"
+          aria-label="Theme JSON file"
+          className="sr-only"
+          tabIndex={-1}
+          disabled={!ready || reading}
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            event.target.value = "";
+            if (files.length) void importFiles(files);
+          }}
+        />
+        <Button
+          variant="outline"
+          disabled={!ready || reading}
+          onClick={() => fileInput.current?.click()}
+        >
+          {reading ? "Importing…" : "Choose file"}
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Up to 64 KB. Download any theme above as a starting point.
+        </p>
+      </section>
+      <ThemeColorsDialog
+        theme={inspected}
+        onClose={() => setInspected(undefined)}
+      />
+      {(error || importError) && (
+        <p role="alert" className="text-sm text-destructive">
+          {error ?? importError}
+        </p>
+      )}
       <p role="status" className="text-sm">
-        {error ?? message}
+        {message}
       </p>
     </div>
   );

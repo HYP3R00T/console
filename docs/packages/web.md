@@ -204,12 +204,23 @@ Client preferences → Configuration backup exports versioned JSON and previews 
 Undo import restores the previous configuration during the current page lifetime; imports and undo disconnect machines and require explicit reconnection, without trusting imported backend identities.
 Exports omit backend settings, credentials, transcripts, drafts and remembered/active connections.
 
-Appearance imports token-based JSON themes with a `custom-` ID, name, light/dark mode and a nonempty map of supported semantic tokens to six-digit hex colors.
-Theme import does not execute code or accept arbitrary CSS, and built-in System, Light and Dark options remain available.
-Browser storage can be cleared by users or browser policy; downloaded backups are user-managed, and no native companion or configuration directory is used.
+Appearance separates display mode (System, Light or Dark) from independently selected light and dark palettes.
+System follows operating-system changes; choosing an inactive mode’s palette saves its default without changing the displayed interface, while active-mode selections apply after successful storage.
+The full-width gallery groups 19 themes into Console, Catppuccin (Latte, Mocha, Frappé, Macchiato), Tokyo Night (Night, Storm, Moon, Day), Nord, Dracula, Solarized (Light/Dark), Gruvbox (Light/Dark) and Rosé Pine (Main, Moon, Dawn) families.
+Background-colored variant tabs choose that mode’s default, with names on hover and keyboard focus; a border identifies the selected palette without a duplicate tick.
+Every card uses one aligned footer row: variant selectors on the left, All colors and download on the right; preference category headings use stronger contrast.
+Labeled Surfaces, Text & actions, Borders and Navigation strips cover all 29 exported tokens, combining repeated colors within each group.
+All colors opens the complete token list with each role and hex value, including roles that share colors; it inspects without applying a theme.
+Console adapts colors from [Catppuccin](https://catppuccin.com/palette/), [Tokyo Night](https://github.com/tokyo-night/tokyo-night-vscode-theme), [Nord](https://www.nordtheme.com/) [Dracula](https://draculatheme.com/contribute), [Solarized](https://ethanschoonover.com/solarized/), [Gruvbox](https://github.com/morhetz/gruvbox) and [Rosé Pine](https://rosepinetheme.com/palette/) to its semantic interface tokens; these are Console adaptations rather than official ports.
 
-Appearance provides a downloadable complete sample theme, an inline JSON structure example and Export current theme, which captures effective semantic colors as importable hex tokens.
-The appearance selector uses rounded corners consistent with the current interface.
+Each download is complete, importable JSON with a `custom-` ID, name, light/dark mode and supported tokens mapped to six-digit hex colors, including navigation surfaces.
+Import themes accepts one file through the picker or drag and drop, validates it before saving, caps files at 64 KB and preserves existing preferences on errors.
+Imported themes join the appropriate gallery without automatically applying; partial token maps inherit Console’s matching base palette, and changing the mode of a currently selected imported theme is rejected.
+Theme import does not execute code or accept arbitrary CSS.
+
+Version 2 configuration backups include display mode, both selected palettes and imported definitions; version 1 backups and existing single-theme preferences migrate without losing their selected palette.
+Storage/import failures retain confirmed preferences, and applied changes synchronize across browser tabs.
+Browser storage can be cleared by users or browser policy; downloaded backups are user-managed, and no native companion or configuration directory is used.
 
 ## Central Preferences
 
@@ -217,7 +228,7 @@ The appearance selector uses rounded corners consistent with the current interfa
 Each machine category shows a row of prominent machine cards above its settings; selecting a card keeps the current category and changes only the viewed machine, without connecting it or starting work.
 Cards show connection status and the selected machine; client pages have no machine cards.
 Category navigation retains a saved selection or uses the first saved machine, and categories remain visible when no machines exist, with a Manage devices link instead of an editor.
-The far-left rail is the single Preferences entry point; device navigation does not duplicate it.
+The far-left rail is the single Preferences entry point; device navigation does not duplicate it, and settings pages omit the redundant All preferences row and breadcrumb.
 Preferences navigation lists client and machine categories; older project, session and conversation settings deep links remain valid for compatibility.
 The assigned Open settings shortcut always opens this hub, including from text fields, with the current machine selected and unchanged keybindings.
 

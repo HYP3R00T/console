@@ -1,4 +1,20 @@
 import {
+  exact,
+  type ImportedTheme,
+  object,
+  parseTheme,
+} from "./theme-schema.ts";
+import {
+  type Appearance,
+  appearanceKey,
+  migrateAppearance,
+  parseAppearance,
+  readAppearance,
+} from "./themes.ts";
+
+export { type ImportedTheme, parseTheme, themeTokens } from "./theme-schema.ts";
+
+import {
   commandIds,
   parseShortcuts,
   type ShortcutOverrides,
@@ -10,42 +26,9 @@ import { parseProjectPins } from "../project-pins.ts";
 
 export const configurationKey = "console.configuration.v1";
 export const configurationEvent = "console:configuration";
-export const themeTokens = [
-  "background",
-  "foreground",
-  "card",
-  "card-foreground",
-  "popover",
-  "popover-foreground",
-  "primary",
-  "primary-foreground",
-  "secondary",
-  "secondary-foreground",
-  "muted",
-  "muted-foreground",
-  "accent",
-  "accent-foreground",
-  "destructive",
-  "border",
-  "input",
-  "ring",
-  "sidebar",
-  "sidebar-foreground",
-  "sidebar-primary",
-  "sidebar-primary-foreground",
-  "sidebar-accent",
-  "sidebar-accent-foreground",
-  "sidebar-border",
-  "sidebar-ring",
-] as const;
-export type ImportedTheme = {
-  id: string;
-  name: string;
-  mode: "light" | "dark";
-  tokens: Partial<Record<(typeof themeTokens)[number], string>>;
-};
 export const preferenceKeys = [
   "theme",
+  appearanceKey,
   "console.shortcuts.v1",
   "console.devices.v1",
   "console.project-pins.v1",
@@ -61,9 +44,9 @@ const internalKeys = [
 ];
 type Values = Record<string, string>;
 export type ConfigurationBackup = {
-  version: 1;
+  version: 2;
   settings: {
-    theme: string;
+    appearance: Appearance;
     bookmarks: ReturnType<typeof parseDevices>;
     projectPins: ReturnType<typeof parseProjectPins>;
     conversationPins: ReturnType<typeof parseConversationPins>;
@@ -72,50 +55,6 @@ export type ConfigurationBackup = {
   keybindings: ShortcutOverrides;
   themes: ImportedTheme[];
 };
-function object(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error("Expected a configuration object.");
-  return value as Record<string, unknown>;
-}
-function exact(value: Record<string, unknown>, keys: string[]) {
-  if (
-    Object.keys(value).some((key) => !keys.includes(key)) ||
-    keys.some((key) => !Object.hasOwn(value, key))
-  )
-    throw new Error("Unexpected or missing configuration fields.");
-}
-export function parseTheme(value: unknown): ImportedTheme {
-  const theme = object(value);
-  exact(theme, ["id", "name", "mode", "tokens"]);
-  if (
-    typeof theme.id !== "string" ||
-    !/^custom-[a-z0-9-]{1,50}$/.test(theme.id) ||
-    typeof theme.name !== "string" ||
-    !theme.name.trim() ||
-    theme.name.length > 80 ||
-    !["light", "dark"].includes(String(theme.mode))
-  )
-    throw new Error("Invalid theme identity, name or mode.");
-  const tokens = object(theme.tokens);
-  if (
-    !Object.keys(tokens).length ||
-    Object.entries(tokens).some(
-      ([key, value]) =>
-        !themeTokens.includes(key as (typeof themeTokens)[number]) ||
-        typeof value !== "string" ||
-        !/^#[\da-f]{6}$/i.test(value),
-    )
-  )
-    throw new Error(
-      "Theme tokens must use supported names and six-digit hex colors.",
-    );
-  return {
-    id: theme.id,
-    name: theme.name,
-    mode: theme.mode as ImportedTheme["mode"],
-    tokens: { ...tokens },
-  } as ImportedTheme;
-}
 function stable(value: unknown): string {
   return JSON.stringify(value, (_key, item) =>
     item && typeof item === "object" && !Array.isArray(item)
@@ -128,10 +67,11 @@ function stable(value: unknown): string {
 export function parseBackup(value: unknown): ConfigurationBackup {
   const data = object(value);
   exact(data, ["version", "settings", "keybindings", "themes"]);
-  if (data.version !== 1) throw new Error("Unsupported configuration version.");
+  if (data.version !== 1 && data.version !== 2)
+    throw new Error("Unsupported configuration version.");
   const settings = object(data.settings);
   exact(settings, [
-    "theme",
+    data.version === 1 ? "theme" : "appearance",
     "bookmarks",
     "projectPins",
     "conversationPins",
@@ -155,13 +95,13 @@ export function parseBackup(value: unknown): ConfigurationBackup {
   const themes = data.themes.map(parseTheme);
   if (new Set(themes.map((theme) => theme.id)).size !== themes.length)
     throw new Error("Duplicate theme IDs.");
-  if (
-    typeof settings.theme !== "string" ||
-    !["system", "light", "dark", ...themes.map((theme) => theme.id)].includes(
-      settings.theme,
-    )
-  )
-    throw new Error("Unknown selected theme.");
+  const appearance =
+    data.version === 1
+      ? migrateAppearance(
+          typeof settings.theme === "string" ? settings.theme : "",
+          themes,
+        )
+      : parseAppearance(settings.appearance, themes);
   // Bookmark identity is deliberately discarded: imported addresses are not trusted installations.
   const bookmarks = parseDevices(JSON.stringify(settings.bookmarks)).map(
     ({ backendId: _identity, ...bookmark }) => bookmark,
@@ -176,9 +116,9 @@ export function parseBackup(value: unknown): ConfigurationBackup {
   if (stable(parsedNavigation) !== stable(navigation))
     throw new Error("Invalid navigation preferences.");
   return {
-    version: 1,
+    version: 2,
     settings: {
-      theme: settings.theme,
+      appearance,
       bookmarks,
       projectPins: parseProjectPins(JSON.stringify(settings.projectPins)),
       conversationPins: parseConversationPins(
@@ -246,12 +186,45 @@ export class ConfigurationStore {
     );
     this.changed(imported);
   }
+  appearance(): Appearance {
+    return readAppearance(
+      this.getItem(appearanceKey),
+      this.getItem("theme"),
+      this.themes(),
+    );
+  }
+  themes(): ImportedTheme[] {
+    const themes: unknown = JSON.parse(
+      this.getItem("console.themes.v1") ?? "[]",
+    );
+    if (!Array.isArray(themes) || themes.length > 100)
+      throw new Error("Invalid theme collection.");
+    return themes.map(parseTheme);
+  }
+  saveAppearance(value: Appearance) {
+    const appearance = parseAppearance(value, this.themes());
+    this.setItem(appearanceKey, JSON.stringify(appearance));
+  }
+  importTheme(value: unknown) {
+    const theme = parseTheme(value);
+    const current = this.themes();
+    if (current.length >= 100 && !current.some((item) => item.id === theme.id))
+      throw new Error("At most 100 imported themes are supported.");
+    const next = [...current.filter((item) => item.id !== theme.id), theme];
+    parseAppearance(this.appearance(), next);
+    this.setItem("console.themes.v1", JSON.stringify(next));
+    return theme;
+  }
   export(): ConfigurationBackup {
     const v = this.values();
     return parseBackup({
-      version: 1,
+      version: 2,
       settings: {
-        theme: v.theme ?? "system",
+        appearance: readAppearance(
+          v[appearanceKey] ?? null,
+          v.theme ?? null,
+          JSON.parse(v["console.themes.v1"] ?? "[]").map(parseTheme),
+        ),
         bookmarks: parseDevices(v["console.devices.v1"] ?? null),
         projectPins: parseProjectPins(v["console.project-pins.v1"] ?? null),
         conversationPins: parseConversationPins(
@@ -268,7 +241,7 @@ export class ConfigurationStore {
       previous = this.values();
     this.commit(
       {
-        theme: data.settings.theme,
+        [appearanceKey]: JSON.stringify(data.settings.appearance),
         "console.shortcuts.v1": JSON.stringify(data.keybindings),
         "console.devices.v1": JSON.stringify(data.settings.bookmarks),
         "console.project-pins.v1": JSON.stringify(data.settings.projectPins),
