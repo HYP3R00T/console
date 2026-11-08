@@ -126,3 +126,38 @@ test("machine categories remain navigable without a saved selection", () => {
     "/settings/machines/providers",
   );
 });
+
+test("palette settings destinations explicitly select existing editors without applying values", async () => {
+  const { settingsDestinationHref, scopedSettingsDestinations } = await import(
+    "../src/lib/preferences-navigation.ts"
+  );
+  assert.equal(
+    settingsDestinationHref({
+      destination: "machine:providers",
+      target: { deviceId: "other" },
+    }),
+    "/devices/other/settings/providers",
+  );
+  assert.equal(
+    settingsDestinationHref({
+      destination: "session",
+      target: { deviceId: "m", projectId: undefined, sessionId: "s" },
+    }),
+    "/devices/m/sessions/s/settings",
+  );
+  assert.equal(
+    settingsDestinationHref({
+      destination: "conversation",
+      target: { deviceId: "m", sessionId: "s", conversationId: "2" },
+    }),
+    "/devices/m/sessions/s/conversations/2/settings",
+  );
+  assert.equal(scopedSettingsDestinations({ deviceId: "m" }).length, 9);
+  for (const value of [
+    null,
+    { destination: "https://example.com", target: { deviceId: "m" } },
+    { destination: "project", target: {} },
+    { destination: "machine:providers", target: { deviceId: 42 } },
+  ])
+    assert.throws(() => settingsDestinationHref(value));
+});

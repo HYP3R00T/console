@@ -11,7 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
 
 function Command({
   className,
@@ -36,6 +35,7 @@ function CommandDialog({
   trigger,
   className,
   showCloseButton = false,
+  initialFocus,
   ...props
 }: Omit<React.ComponentProps<typeof Dialog>, "children"> & {
   trigger?: React.ReactNode;
@@ -43,12 +43,14 @@ function CommandDialog({
   description?: string;
   className?: string;
   showCloseButton?: boolean;
+  initialFocus?: React.ComponentProps<typeof DialogContent>["initialFocus"];
   children: React.ReactNode;
 }) {
   return (
     <Dialog {...props}>
       {trigger}
       <DialogContent
+        initialFocus={initialFocus}
         className={cn(
           "top-1/3 translate-y-0 overflow-hidden rounded-md p-0",
           className,
@@ -70,20 +72,22 @@ function CommandInput({
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
-    <div data-slot="command-input-wrapper" className="border-b pb-0">
-      <InputGroup className="h-8 border-none border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-2!">
-        <CommandPrimitive.Input
-          data-slot="command-input"
-          className={cn(
-            "w-full text-xs outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
-            className,
-          )}
-          {...props}
-        />
-        <InputGroupAddon>
-          <SearchIcon className="size-4 shrink-0 opacity-50" />
-        </InputGroupAddon>
-      </InputGroup>
+    <div
+      data-slot="command-input-wrapper"
+      className="flex h-11 shrink-0 items-center gap-2 border-y bg-muted/40 px-3 focus-within:bg-muted/70"
+    >
+      <SearchIcon
+        className="size-4 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <CommandPrimitive.Input
+        data-slot="command-input"
+        className={cn(
+          "h-full w-full min-w-0 rounded-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          className,
+        )}
+        {...props}
+      />
     </div>
   );
 }
@@ -119,13 +123,18 @@ function CommandEmpty({
 
 function CommandGroup({
   className,
+  emphasis = false,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Group>) {
+}: React.ComponentProps<typeof CommandPrimitive.Group> & {
+  emphasis?: boolean;
+}) {
   return (
     <CommandPrimitive.Group
       data-slot="command-group"
       className={cn(
         "overflow-hidden text-foreground **:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:py-1.5 **:[[cmdk-group-heading]]:text-xs **:[[cmdk-group-heading]]:text-muted-foreground",
+        emphasis &&
+          "pb-2 pt-4 first:pt-1 **:[[cmdk-group-heading]]:mb-2 **:[[cmdk-group-heading]]:flex **:[[cmdk-group-heading]]:items-center **:[[cmdk-group-heading]]:gap-2 **:[[cmdk-group-heading]]:py-0 **:[[cmdk-group-heading]]:text-[11px] **:[[cmdk-group-heading]]:font-medium **:[[cmdk-group-heading]]:tracking-wide **:[[cmdk-group-heading]]:text-foreground/60",
         className,
       )}
       {...props}

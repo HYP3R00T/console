@@ -110,6 +110,7 @@ export function parseBackup(value: unknown): ConfigurationBackup {
   exact(navigation, [
     "routes",
     "disclosures",
+    ...(Object.hasOwn(navigation, "recentRoutes") ? ["recentRoutes"] : []),
     ...(Object.hasOwn(navigation, "inspectors") ? ["inspectors"] : []),
   ]);
   const parsedNavigation = parseNavigationMemory(JSON.stringify(navigation));

@@ -40,6 +40,7 @@ import {
   isPreferencesPath,
   preferencesHref,
   preferenceTarget,
+  settingsDestinationHref,
 } from "@/lib/preferences-navigation";
 import {
   useWorkspaceChrome,
@@ -256,7 +257,11 @@ function ShellLayout({
         }
       : {}),
     "settings.open": {
-      run: () =>
+      run: (input?: unknown) => {
+        if (input !== undefined) {
+          router.push(settingsDestinationHref(input));
+          return;
+        }
         router.push(
           preferencesHref(
             preferenceTarget(
@@ -269,7 +274,8 @@ function ShellLayout({
               new URLSearchParams(window.location.search),
             ),
           ),
-        ),
+        );
+      },
     },
     "preferences.configuration": {
       run: () => router.push("/settings/configuration"),
@@ -408,7 +414,20 @@ function ShellLayout({
           onOpenChange={isMobile ? setOpenMobile : setOpen}
           disabled={!hasContext}
         />
-        <CommandPalette />
+        <CommandPalette
+          target={{
+            deviceId,
+            projectId: active?.projectId ?? projectId,
+            sessionId: active?.sessionId ?? sessionId,
+            conversationId:
+              active?.conversationId ??
+              conversationId ??
+              (sessionId && pathname.includes("/conversations/")
+                ? "1"
+                : undefined),
+          }}
+          currentTitle={active?.title}
+        />
         {discovery.status === "error" && (
           <Button
             variant="ghost"

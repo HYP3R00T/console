@@ -69,3 +69,35 @@ test("standalone branch bookmarks retain the machine scope", () => {
     assert.equal(workspaceDevice(path), undefined);
   }
 });
+
+test("recent routes retain visit order, deduplicate, stay bounded and migrate legacy memory", async () => {
+  const { rememberWorkspaceRoute } = await import(
+    "../src/lib/navigation-memory.ts"
+  );
+  let memory = emptyNavigationMemory();
+  for (let i = 0; i < 35; i++)
+    memory = rememberWorkspaceRoute(memory, `/devices/a/conversations/s${i}`);
+  assert.equal(memory.recentRoutes?.length, 30);
+  memory = rememberWorkspaceRoute(memory, "/devices/a/conversations/s10");
+  assert.equal(memory.recentRoutes?.[0], "/devices/a/conversations/s10");
+  assert.equal(
+    memory.recentRoutes?.filter((route) => route.endsWith("/s10")).length,
+    1,
+  );
+  assert.equal(rememberWorkspaceRoute(memory, "/settings/appearance"), memory);
+  assert.deepEqual(parseNavigationMemory(JSON.stringify(memory)), memory);
+  const legacy = {
+    routes: { b: "/devices/b/conversations/old" },
+    disclosures: {},
+  };
+  assert.deepEqual(
+    rememberWorkspaceRoute(legacy, "/devices/a/conversations/new").recentRoutes,
+    ["/devices/a/conversations/new", "/devices/b/conversations/old"],
+  );
+  assert.deepEqual(
+    parseNavigationMemory(
+      '{"recentRoutes":["https://example.com","/devices/a/conversations/s","/devices/a/conversations/s"]}',
+    ).recentRoutes,
+    ["/devices/a/conversations/s"],
+  );
+});

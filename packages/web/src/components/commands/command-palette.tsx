@@ -3,59 +3,135 @@
 import { Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useDevices } from "@/components/devices/device-provider";
+import { useConnections } from "@/components/connection-provider";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
-import { useNavigationMemory } from "@/components/layout/navigation-memory";
+import { useClientAppearance } from "@/components/layout/theme-provider";
 import { Button } from "@/components/ui/button";
-import {
-  Command,
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandShortcut,
-} from "@/components/ui/command";
+import { CommandDialog } from "@/components/ui/command";
 import { DialogTrigger } from "@/components/ui/dialog";
+import { toast } from "@/components/ui/toast";
 import {
   ariaShortcut,
   type CommandId,
   commandIds,
-  commands,
   commandWorksInEditor,
   formatShortcut,
   shortcutFor,
   shortcutFromEvent,
   shortcutsFor,
 } from "@/lib/commands";
-import { useCommands } from "./command-registry";
+import {
+  type AppearanceCommandId,
+  type AppearancePicker,
+  appearanceCommandIds,
+  appearancePicker,
+  applyAppearanceCommand,
+} from "@/lib/configuration/appearance-command";
+import { clientConfiguration } from "@/lib/configuration/store";
+import {
+  type PaletteTarget,
+  paletteSelectionIsCurrent,
+} from "@/lib/palette-navigation";
+import { preferenceTarget } from "@/lib/preferences-navigation";
+import { useCommands, useRegisterCommands } from "./command-registry";
+import { PaletteBrowser, type PaletteFilter } from "./palette-browser";
 import { useShortcutPreferences } from "./shortcut-preferences";
 
 export type CommandActions = Partial<Record<CommandId, () => void>>;
 
-export function CommandPalette() {
+export function CommandPalette({
+  target = {},
+  currentTitle,
+}: {
+  target?: PaletteTarget;
+  currentTitle?: string;
+}) {
   const registry = useCommands();
+  const searchInput = useRef<HTMLInputElement>(null);
   const route = usePathname();
-  const [commandError, setCommandError] = useState<string>();
-  function invoke(id: CommandId) {
-    try {
-      Promise.resolve(registry.invoke(id)).catch((error) =>
-        setCommandError(
-          error instanceof Error ? error.message : "Command failed.",
-        ),
-      );
-    } catch (error) {
-      setCommandError(
+  const { manager } = useConnections();
+  const [initialTarget, setInitialTarget] = useState(target);
+  function failed(error: unknown) {
+    toast.add({
+      type: "error",
+      title: "Command failed",
+      description:
         error instanceof Error ? error.message : "Command unavailable.",
-      );
+    });
+  }
+  function invoke(id: CommandId, input?: unknown) {
+    try {
+      Promise.resolve(registry.invoke(id, input)).catch(failed);
+    } catch (error) {
+      failed(error);
     }
   }
   const { overrides, ready, platform } = useShortcutPreferences();
-  const { devices } = useDevices();
-  const { memory } = useNavigationMemory();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const appearance = useClientAppearance();
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<PaletteFilter>("all");
+  const [picker, setPicker] = useState<{
+    id: AppearanceCommandId;
+    view: AppearancePicker;
+    initialValue: string;
+  }>();
+  useRegisterCommands({
+    "navigation.conversations": {
+      run: () => {
+        setQuery("");
+        setFilter("conversations");
+        setPicker(undefined);
+        setOpen(true);
+      },
+    },
+    ...Object.fromEntries(
+      appearanceCommandIds.map((id) => [
+        id,
+        {
+          disabled: !appearance.ready
+            ? "Wait for client preferences to load."
+            : appearance.error,
+          run: (input?: unknown) => {
+            if (input === undefined) {
+              setInitialTarget(
+                preferenceTarget(
+                  target,
+                  new URLSearchParams(window.location.search),
+                ),
+              );
+              const view = appearancePicker(
+                id,
+                appearance.activeMode ?? "light",
+              );
+              setPicker({
+                id,
+                view,
+                initialValue:
+                  view.kind === "mode"
+                    ? appearance.appearance.mode
+                    : view.mode === "dark"
+                      ? appearance.appearance.darkTheme
+                      : appearance.appearance.lightTheme,
+              });
+              setOpen(true);
+              return;
+            }
+            applyAppearanceCommand(clientConfiguration(), id, input);
+            setOpen(false);
+            toast.add({
+              title: "Appearance saved",
+              description:
+                id === "appearance.mode"
+                  ? "Display mode updated."
+                  : "Your theme default is saved; display mode is unchanged.",
+            });
+          },
+        },
+      ]),
+    ),
+  });
   const pendingAction = useRef<() => void>(undefined);
   const routeRef = useRef(route);
   routeRef.current = route;
@@ -69,6 +145,19 @@ export function CommandPalette() {
     ready && openingShortcut
       ? formatShortcut(openingShortcut, platform)
       : undefined;
+
+  function changeOpen(next: boolean) {
+    if (next) {
+      pendingAction.current = undefined;
+      setPicker(undefined);
+      setQuery("");
+      setFilter("all");
+      setInitialTarget(
+        preferenceTarget(target, new URLSearchParams(window.location.search)),
+      );
+    }
+    setOpen(next);
+  }
 
   useEffect(() => {
     if (!ready || open) return;
@@ -101,7 +190,7 @@ export function CommandPalette() {
       const handler = registry.get(id);
       const run =
         id === "palette.open"
-          ? () => setOpen(true)
+          ? () => changeOpen(true)
           : handler && !handler.disabled
             ? () => invoke(id)
             : undefined;
@@ -115,8 +204,24 @@ export function CommandPalette() {
 
   function select(run: () => void) {
     const selectedRoute = route;
+    const selectedUrl = window.location.href;
+    const selectedClient = target.deviceId
+      ? manager.snapshot()[target.deviceId]?.client
+      : undefined;
     pendingAction.current = () => {
-      if (routeRef.current === selectedRoute) run();
+      if (
+        paletteSelectionIsCurrent(
+          { route: selectedRoute, url: selectedUrl, client: selectedClient },
+          {
+            route: routeRef.current,
+            url: window.location.href,
+            client: target.deviceId
+              ? manager.snapshot()[target.deviceId]?.client
+              : undefined,
+          },
+        )
+      )
+        run();
     };
     setOpen(false);
   }
@@ -124,10 +229,8 @@ export function CommandPalette() {
   return (
     <CommandDialog
       open={open}
-      onOpenChange={(nextOpen) => {
-        if (nextOpen) pendingAction.current = undefined;
-        setOpen(nextOpen);
-      }}
+      initialFocus={searchInput}
+      onOpenChange={changeOpen}
       onOpenChangeComplete={(isOpen) => {
         if (isOpen || !pendingAction.current) return;
         const run = pendingAction.current;
@@ -135,7 +238,8 @@ export function CommandPalette() {
         // Base UI reports close completion inside its synchronous popup cleanup.
         queueMicrotask(run);
       }}
-      className="sm:max-w-lg"
+      description="Search across machines, projects, conversations, actions and settings. Commands show their execution target."
+      className="top-[10svh] max-h-[85svh] sm:max-w-2xl"
       trigger={
         <ControlTooltip
           label={
@@ -169,65 +273,30 @@ export function CommandPalette() {
         </ControlTooltip>
       }
     >
-      <Command>
-        <CommandInput
-          aria-label="Search commands"
-          placeholder="Search commands…"
-        />
-        {commandError && <p role="alert">{commandError}</p>}
-        <CommandList>
-          <CommandEmpty>No matching commands.</CommandEmpty>
-          <CommandGroup heading="Commands">
-            {commandIds.map((id) => {
-              const handler = registry.get(id);
-              if (!handler) return null;
-              const run = () => invoke(id);
-              const shortcut = shortcutFor(id, overrides);
-              return (
-                <CommandItem
-                  key={id}
-                  disabled={!!handler.disabled}
-                  title={handler.disabled}
-                  value={id}
-                  keywords={[commands[id].label]}
-                  onSelect={() => select(run)}
-                >
-                  {commands[id].label}
-                  {shortcut && (
-                    <CommandShortcut>
-                      {formatShortcut(shortcut, platform)}
-                    </CommandShortcut>
-                  )}
-                </CommandItem>
-              );
-            })}
-          </CommandGroup>
-          {devices.length > 0 && (
-            <CommandGroup heading="Machines">
-              {devices.map((device) => (
-                <CommandItem
-                  key={device.id}
-                  value={`device:${device.id}`}
-                  keywords={[device.name, device.url]}
-                  onSelect={() =>
-                    select(() => {
-                      router.push(
-                        memory.routes[device.id] ??
-                          `/devices/${encodeURIComponent(device.id)}`,
-                      );
-                    })
-                  }
-                >
-                  {device.name}
-                  <span className="ml-auto truncate text-muted-foreground">
-                    {device.url}
-                  </span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          )}
-        </CommandList>
-      </Command>
+      <PaletteBrowser
+        inputRef={searchInput}
+        open={open}
+        initialTarget={initialTarget}
+        currentTarget={target}
+        currentTitle={currentTitle}
+        picker={picker}
+        query={query}
+        onQueryChange={setQuery}
+        filter={filter}
+        onFilterChange={setFilter}
+        onBack={() => setPicker(undefined)}
+        applyPicker={(id, input) => registry.invoke(id, input)}
+        overrides={overrides}
+        platform={platform}
+        getCommand={registry.get}
+        selectCommand={(id, input) =>
+          appearanceCommandIds.includes(id as AppearanceCommandId) ||
+          id === "navigation.conversations"
+            ? invoke(id, input)
+            : select(() => invoke(id, input))
+        }
+        navigate={(href) => select(() => router.push(href))}
+      />
     </CommandDialog>
   );
 }

@@ -5,6 +5,7 @@ import {
 export type NavigationMemory = {
   routes: Record<string, string>;
   disclosures: Record<string, boolean>;
+  recentRoutes?: string[];
   inspectors?: Record<string, InspectorSelection>;
 };
 export const navigationMemoryKey = "console.navigation.v1";
@@ -54,6 +55,15 @@ export function parseNavigationMemory(value: string | null): NavigationMemory {
             writable: true,
             configurable: true,
           });
+    if ("recentRoutes" in data && Array.isArray(data.recentRoutes))
+      result.recentRoutes = [
+        ...new Set(
+          data.recentRoutes.filter(
+            (route): route is string =>
+              typeof route === "string" && !!workspaceDevice(route),
+          ),
+        ),
+      ].slice(0, 30);
     if (
       "inspectors" in data &&
       data.inspectors &&
@@ -76,4 +86,24 @@ export function parseNavigationMemory(value: string | null): NavigationMemory {
     /* Corrupt browser preferences do not block navigation. */
   }
   return result;
+}
+
+export function rememberWorkspaceRoute(
+  current: NavigationMemory,
+  pathname: string,
+): NavigationMemory {
+  const id = workspaceDevice(pathname);
+  if (!id) return current;
+  if (current.routes[id] === pathname && current.recentRoutes?.[0] === pathname)
+    return current;
+  return {
+    ...current,
+    routes: { ...current.routes, [id]: pathname },
+    recentRoutes: [
+      pathname,
+      ...(current.recentRoutes ?? Object.values(current.routes)).filter(
+        (route) => route !== pathname,
+      ),
+    ].slice(0, 30),
+  };
 }

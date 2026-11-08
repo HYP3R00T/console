@@ -1,6 +1,10 @@
 export type Shortcut = `Mod+${string}` | `Alt+${string}`;
 
 export const commands = {
+  "appearance.theme": { label: "Appearance: Change theme…" },
+  "appearance.light-theme": { label: "Appearance: Set light theme…" },
+  "appearance.dark-theme": { label: "Appearance: Set dark theme…" },
+  "appearance.mode": { label: "Appearance: Change display mode…" },
   "settings.open": { label: "Open settings" },
   "preferences.configuration": { label: "Open client configuration backup" },
   "machine.workspace-guidance.update": {
@@ -16,15 +20,16 @@ export const commands = {
   "conversation.continue": { label: "Continue conversation run" },
   "conversation.compact": { label: "Compact conversation context" },
   "palette.open": { label: "Open command palette", shortcut: "Mod+K" },
+  "navigation.conversations": { label: "Switch conversation…" },
   "navigation.home": { label: "Go to Home" },
   "navigation.devices": { label: "Manage devices" },
   "preferences.appearance": { label: "Open appearance settings" },
   "preferences.shortcuts": { label: "Open keyboard shortcuts" },
   "workspace.navigation": {
-    label: "Toggle workspace navigation",
+    label: "View: Toggle left sidebar",
     shortcut: "Mod+B",
   },
-  "workspace.details": { label: "Toggle conversation details" },
+  "workspace.details": { label: "View: Toggle right sidebar" },
   "conversation.new": { label: "New conversation" },
   "machine.providers": { label: "Open machine providers" },
   "machine.projects": { label: "Open machine project settings" },

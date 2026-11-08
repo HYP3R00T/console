@@ -7,26 +7,26 @@ import {
   subscribeConfiguration,
   themeTokens,
 } from "@/lib/configuration/store";
+import { themePreview } from "@/lib/configuration/theme-preview";
 import {
   type Appearance,
-  activeTheme,
   defaultAppearance,
   themeCatalog,
 } from "@/lib/configuration/themes";
 
 function ThemeConfiguration() {
-  const { setTheme, systemTheme } = useTheme();
+  const { setTheme, systemTheme, theme: runtimeMode } = useTheme();
   useEffect(() => {
     function apply() {
       try {
         const store = clientConfiguration(),
           appearance = store.appearance();
-        const theme = activeTheme(
+        const theme = themePreview.resolve(
           appearance,
           systemTheme === "dark" ? "dark" : "light",
           store.themes(),
         );
-        setTheme(appearance.mode);
+        if (runtimeMode !== appearance.mode) setTheme(appearance.mode);
         const style = document.documentElement.style;
         for (const token of themeTokens) style.removeProperty(`--${token}`);
         for (const [token, value] of Object.entries(theme.tokens))
@@ -36,8 +36,13 @@ function ThemeConfiguration() {
       }
     }
     apply();
-    return subscribeConfiguration(apply);
-  }, [setTheme, systemTheme]);
+    const saved = subscribeConfiguration(apply);
+    const preview = themePreview.subscribe(apply);
+    return () => {
+      saved();
+      preview();
+    };
+  }, [setTheme, systemTheme, runtimeMode]);
   return null;
 }
 export function ThemeProvider(

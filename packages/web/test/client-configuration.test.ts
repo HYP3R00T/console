@@ -205,3 +205,33 @@ test("multiple bindings round-trip backups and malformed arrays leave storage un
     assert.equal(other.values.get(configurationKey), before);
   }
 });
+
+test("recent navigation history round-trips backups and invalid imported routes apply nothing", () => {
+  const f = fixture();
+  f.store.setItem(
+    "console.navigation.v1",
+    JSON.stringify({
+      routes: { a: "/devices/a/conversations/s" },
+      disclosures: {},
+      recentRoutes: ["/devices/a/conversations/s"],
+    }),
+  );
+  const backup = f.store.export();
+  const other = fixture();
+  other.store.import(backup);
+  assert.deepEqual(other.store.export(), backup);
+  const before = other.values.get(configurationKey);
+  assert.throws(() =>
+    other.store.import({
+      ...backup,
+      settings: {
+        ...backup.settings,
+        navigation: {
+          ...backup.settings.navigation,
+          recentRoutes: ["https://example.com"],
+        },
+      },
+    }),
+  );
+  assert.equal(other.values.get(configurationKey), before);
+});
