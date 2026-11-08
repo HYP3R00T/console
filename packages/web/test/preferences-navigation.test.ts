@@ -4,6 +4,10 @@ import { commandWorksInEditor } from "../src/lib/commands.ts";
 import {
   conversationSettingsHref,
   isPreferencesPath,
+  machinePreferenceCategory,
+  machinePreferenceHref,
+  machinePreferencePages,
+  preferenceMachine,
   preferencesHref,
   preferenceTarget,
 } from "../src/lib/preferences-navigation.ts";
@@ -87,4 +91,38 @@ test("the Preferences shortcut works in text editors without enabling execution 
     "workspace.navigation",
   ] as const)
     assert.equal(commandWorksInEditor(id), false);
+});
+
+test("machine categories keep their destination while switching machines and clear previous workspace ancestry", () => {
+  for (const page of machinePreferencePages) {
+    const first = machinePreferenceHref(page.id, "machine/a");
+    const second = machinePreferenceHref(page.id, "machine-b");
+    assert.equal(first, `/devices/machine%2Fa/settings/${page.id}`);
+    assert.equal(machinePreferenceCategory(first), page.id);
+    assert.equal(machinePreferenceCategory(second), page.id);
+    assert.equal(
+      machinePreferenceCategory(machinePreferenceHref(page.id)),
+      page.id,
+    );
+    assert.equal(second.includes("?"), false);
+  }
+  for (const path of [
+    "/settings/appearance",
+    "/devices/m/projects/p/settings",
+    "/devices/m/settings/missing",
+    "/settings/machines/missing",
+  ])
+    assert.equal(machinePreferenceCategory(path), undefined);
+});
+
+test("machine categories remain navigable without a saved selection", () => {
+  const machines = [{ id: "a" }, { id: "b" }];
+  assert.equal(preferenceMachine(machines, "b")?.id, "b");
+  assert.equal(preferenceMachine(machines, "forgotten")?.id, "a");
+  assert.equal(preferenceMachine(machines)?.id, "a");
+  assert.equal(preferenceMachine([], "forgotten"), undefined);
+  assert.equal(
+    machinePreferenceHref("providers"),
+    "/settings/machines/providers",
+  );
 });
