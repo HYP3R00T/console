@@ -63,10 +63,10 @@ export function ProjectRemovalDialog({
     >
       <DialogContent showCloseButton={!busy}>
         <DialogHeader>
-          <DialogTitle>Remove {project.name}?</DialogTitle>
+          <DialogTitle>Archive {project.name}?</DialogTitle>
           <DialogDescription>
             Sessions and conversations are archived and can be restored from
-            Machine settings → Projects. Source files stay on this machine.
+            Machine settings → Archives. Source files stay on this machine.
           </DialogDescription>
         </DialogHeader>
         <p className="break-all font-mono text-xs text-muted-foreground">
@@ -98,10 +98,10 @@ export function ProjectRemovalDialog({
           >
             <X className="size-3.5" />
             {busy
-              ? "Removing…"
+              ? "Archiving…"
               : needsStop
                 ? "Stop all and remove"
-                : "Remove project"}
+                : "Archive project"}
           </Button>
         </DialogFooter>
       </DialogContent>

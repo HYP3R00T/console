@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronRight, GitFork } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,16 +41,18 @@ export function ConversationTurn({
   const shownReviews = new Set<number>();
   const forkAction = (entryId: number) =>
     fork && (
-      <Button
-        type="button"
-        size="xs"
-        variant="ghost"
-        disabled={forkDisabled}
-        onClick={() => fork(entryId)}
-      >
-        <GitFork data-icon="inline-start" />
-        Fork from here
-      </Button>
+      <ControlTooltip label="Start a new conversation from this message. Shared session policies still apply.">
+        <Button
+          type="button"
+          size="xs"
+          variant="ghost"
+          className="text-xs text-foreground/60 hover:text-foreground"
+          disabled={forkDisabled}
+          onClick={() => fork(entryId)}
+        >
+          Fork conversation
+        </Button>
+      </ControlTooltip>
     );
   const files = (message: NonNullable<Turn["prompt"]>) =>
     !!message.attachments?.length && (

@@ -8,7 +8,10 @@ import {
   Square,
 } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
-import { useCommands } from "@/components/commands/command-registry";
+import {
+  useCommands,
+  useRegisterCommands,
+} from "@/components/commands/command-registry";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,9 +22,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { slashSuggestions } from "@/lib/command-registry";
-import type { CommandId } from "@/lib/commands";
+import { type CommandId, commands as commandMetadata } from "@/lib/commands";
 import { DraftAttachments } from "./attachment-list";
 import { type ChatAttachment, fileAccept, readFiles } from "./attachments";
 import { ChatModelControl } from "./chat-model-control";
@@ -57,8 +61,22 @@ export function ChatComposer({
   context?: ReactNode;
 }) {
   const commands = useCommands();
+  const [modelOpen, setModelOpen] = useState(false);
+  const slashList = useRef<HTMLUListElement>(null);
+  useRegisterCommands({
+    "composer.model": {
+      disabled: !models.loaded
+        ? "Wait for the model catalog to load."
+        : models.models.length === 0
+          ? "Enable a provider and favorite a model first."
+          : undefined,
+      run: () => setModelOpen(true),
+    },
+  });
   const [composing, setComposing] = useState(false);
   const suggestions = slashSuggestions(content, composing);
+  const latestContent = useRef(content);
+  latestContent.current = content;
   const fileInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const reading = useRef(false);
@@ -147,42 +165,89 @@ export function ChatComposer({
           />
         )}
         {suggestions.length > 0 && (
-          <ul aria-label="Slash commands" className="mb-2 flex flex-wrap gap-2">
-            {suggestions.map(([name, rawId]) => {
-              const id = rawId as CommandId;
-              const handler = commands.get(id);
-              return (
-                <li key={name}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={!handler || !!handler.disabled}
-                    title={handler?.disabled}
-                    onClick={() => {
-                      try {
-                        Promise.resolve(commands.invoke(id)).catch((error) =>
+          <ScrollArea className="mb-3 h-48" viewportClassName="pr-3">
+            <ul
+              ref={slashList}
+              aria-label="Slash commands"
+              className="flex flex-col gap-1"
+              onKeyDown={(event) => {
+                const buttons = [
+                  ...(slashList.current?.querySelectorAll<HTMLButtonElement>(
+                    "button:not(:disabled)",
+                  ) ?? []),
+                ];
+                const index = buttons.indexOf(
+                  event.target as HTMLButtonElement,
+                );
+                if (
+                  (event.key === "ArrowDown" || event.key === "ArrowUp") &&
+                  index >= 0
+                ) {
+                  event.preventDefault();
+                  buttons[
+                    (index +
+                      (event.key === "ArrowDown" ? 1 : -1) +
+                      buttons.length) %
+                      buttons.length
+                  ]?.focus();
+                }
+              }}
+            >
+              {suggestions.map(([name, rawId]) => {
+                const id = rawId as CommandId;
+                const handler = commands.get(id);
+                return (
+                  <li key={name}>
+                    <Button
+                      aria-label={name}
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto w-full justify-start whitespace-normal py-2 text-left"
+                      disabled={!handler || !!handler.disabled}
+                      title={handler?.disabled}
+                      onClick={() => {
+                        try {
+                          Promise.resolve(commands.invoke(id))
+                            .then(() => {
+                              if (latestContent.current === content)
+                                onChange("");
+                            })
+                            .catch((error) =>
+                              setFileError(
+                                error instanceof Error
+                                  ? error.message
+                                  : "Command failed.",
+                              ),
+                            );
+                        } catch (error) {
                           setFileError(
                             error instanceof Error
                               ? error.message
-                              : "Command failed.",
-                          ),
-                        );
-                      } catch (error) {
-                        setFileError(
-                          error instanceof Error
-                            ? error.message
-                            : "Command unavailable.",
-                        );
-                      }
-                    }}
-                  >
-                    {name}
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
+                              : "Command unavailable.",
+                          );
+                        }
+                      }}
+                    >
+                      <span>
+                        <span className="block font-mono text-xs text-foreground">
+                          {name}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-foreground/70">
+                          {commandMetadata[id].label}
+                        </span>
+                      </span>
+                    </Button>
+                    {handler?.disabled && (
+                      <p className="px-2 pb-2 text-[11px] text-foreground/65">
+                        {handler.disabled}
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </ScrollArea>
         )}
         <Textarea
           aria-label="Message"
@@ -202,6 +267,16 @@ export function ChatComposer({
             }
           }}
           onKeyDown={(event) => {
+            if (event.key === "ArrowDown" && suggestions.length && !composing) {
+              const first = slashList.current?.querySelector<HTMLButtonElement>(
+                "button:not(:disabled)",
+              );
+              if (first) {
+                event.preventDefault();
+                first.focus();
+                return;
+              }
+            }
             if (
               event.key === "Enter" &&
               !event.shiftKey &&
@@ -260,7 +335,12 @@ export function ChatComposer({
             </span>
           )}
           <div className="ml-auto flex min-w-0 items-center gap-1">
-            <ChatModelControl models={models} disabled={disabled} />
+            <ChatModelControl
+              models={models}
+              disabled={disabled}
+              open={modelOpen}
+              onOpenChange={setModelOpen}
+            />
             {working && onStop && (
               <ControlTooltip label="Stop this conversation and withdraw queued messages">
                 <Button

@@ -14,6 +14,7 @@ import {
   BackendCommandsProvider,
   useBackendCommands,
 } from "@/components/commands/backend-commands";
+import { CapabilityDirectory } from "@/components/commands/capability-directory";
 import {
   type CommandActions,
   CommandPalette,
@@ -36,6 +37,7 @@ import {
   type BackendCommandId,
   executeBackendCommand,
 } from "@/lib/backend/commands";
+import { inspectorSections } from "@/lib/inspector-preferences";
 import {
   isPreferencesPath,
   preferencesHref,
@@ -230,6 +232,31 @@ function ShellLayout({
   }
   useRegisterCommands({
     ...Object.fromEntries(
+      inspectorSections.map((section) => [
+        `inspector.${section}`,
+        {
+          disabled: !details?.selectSection
+            ? "Open a conversation to use this control."
+            : undefined,
+          run: () => {
+            if (!details?.selectSection)
+              throw new Error("Open a conversation first.");
+            setInspectorOpen(true);
+            details.selectSection(section);
+          },
+        },
+      ]),
+    ),
+    "inspector.session": {
+      disabled: !details?.selectScope
+        ? "Open a conversation to edit its session."
+        : undefined,
+      run: () => {
+        setInspectorOpen(true);
+        details?.selectScope?.("session");
+      },
+    },
+    ...Object.fromEntries(
       Object.entries(
         commandActions as Record<string, (() => void) | undefined>,
       ).flatMap(([id, run]) => (run ? [[id, { run }]] : [])),
@@ -414,6 +441,9 @@ function ShellLayout({
           onOpenChange={isMobile ? setOpenMobile : setOpen}
           disabled={!hasContext}
         />
+        <Suspense fallback={null}>
+          <CapabilityDirectory />
+        </Suspense>
         <CommandPalette
           target={{
             deviceId,

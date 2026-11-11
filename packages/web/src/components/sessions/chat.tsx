@@ -3,7 +3,10 @@ import { ArrowDown } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useCommands } from "@/components/commands/command-registry";
+import {
+  useCommands,
+  useRegisterCommands,
+} from "@/components/commands/command-registry";
 import { ConversationCommands } from "@/components/commands/conversation-commands";
 import { ControlTooltip } from "@/components/layout/control-tooltip";
 import { useWorkspaceChrome } from "@/components/layout/workspace-chrome";
@@ -18,6 +21,7 @@ import { ConversationTurn } from "./conversation-turn";
 import { conversationTurns } from "./conversation-turns";
 import { failureLabel } from "./execution-labels";
 import { ExecutionStatus } from "./execution-status";
+import { ForkConversationDialog } from "./fork-conversation-dialog";
 import { QueuedMessages } from "./queued-messages";
 import {
   captureScrollAnchor,
@@ -96,6 +100,7 @@ export function Chat({
   const [stopping, setStopping] = useState(false);
   const [continuing, setContinuing] = useState(false);
   const [forking, setForking] = useState(false);
+  const [forkPickerOpen, setForkPickerOpen] = useState(false);
   const [createdFork, setCreatedFork] = useState<{
     id: number;
     name: string;
@@ -142,6 +147,7 @@ export function Chat({
       route,
       title: "Workspace configuration",
       selectScope: inspectorSelection.selectScope,
+      selectSection: inspectorSelection.openSection,
       content: (
         <WorkspaceInspector
           sidebar
@@ -182,6 +188,7 @@ export function Chat({
     conversationId,
     inspectorSelection.selection,
     inspectorSelection.selectScope,
+    inspectorSelection.openSection,
     inspectorSelection.selectSection,
     inspectorSelection.storageError,
   ]);
@@ -309,6 +316,7 @@ export function Chat({
       forkRequest.current = undefined;
       sessionsChanged();
       setCreatedFork(created);
+      return created;
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -406,6 +414,38 @@ export function Chat({
     turns: conversationTurns(section.messages),
   }));
   const lastTurn = sections.flatMap((section) => section.turns).at(-1)?.id;
+  const forkMessages = (stream?.sections ?? []).flatMap(
+    (section) => section.messages,
+  );
+  useRegisterCommands({
+    "conversation.fork": {
+      disabled: forking
+        ? "A fork is pending."
+        : !forkMessages.some(
+              (message) =>
+                message.role !== "tool" &&
+                (message.text || message.attachments?.length),
+            )
+          ? "Load a conversation with messages first."
+          : undefined,
+      run: (input) => {
+        if (input === undefined) {
+          setForkPickerOpen(true);
+          return;
+        }
+        if (
+          !input ||
+          typeof input !== "object" ||
+          Array.isArray(input) ||
+          !("entryId" in input) ||
+          !Number.isSafeInteger(input.entryId) ||
+          Number(input.entryId) < 1
+        )
+          throw new Error("Choose a valid message to fork from.");
+        return fork(Number(input.entryId));
+      },
+    },
+  });
   if (!stream?.data)
     return (
       <p role="status" className="text-sm text-muted-foreground">
@@ -414,6 +454,15 @@ export function Chat({
     );
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
+      <ForkConversationDialog
+        open={forkPickerOpen}
+        onOpenChange={setForkPickerOpen}
+        messages={forkMessages}
+        busy={forking}
+        fork={async (entryId) =>
+          !!(await commands.invoke("conversation.fork", { entryId }))
+        }
+      />
       <ConversationCommands
         key={`${deviceId}:${path}`}
         request={state.request}
@@ -525,7 +574,9 @@ export function Chat({
                   liveTools={execution?.tools}
                   path={path}
                   request={state.request}
-                  fork={(entryId) => void fork(entryId)}
+                  fork={(entryId) => {
+                    void commands.invoke("conversation.fork", { entryId });
+                  }}
                   forkDisabled={forking}
                 />
               )),

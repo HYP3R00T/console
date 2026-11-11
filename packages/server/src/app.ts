@@ -11,6 +11,8 @@ import { registerProjectRoutes } from "./projects/routes.ts";
 import type { ProjectService } from "./projects/service.ts";
 import { registerProviderRoutes } from "./providers/routes.ts";
 import type { ProviderService } from "./providers/service.ts";
+import { registerWorkflowRoutes } from "./workflows/routes.ts";
+import { WorkflowService } from "./workflows/service.ts";
 
 export function createApp(
   options: FastifyServerOptions = {},
@@ -40,6 +42,12 @@ export function createApp(
   if (harnesses) {
     registerHarnessRoutes(app, harnesses);
     app.addHook("onReady", () => harnesses.start());
+    if (projects) {
+      const workflows = new WorkflowService(harnesses, projects);
+      registerWorkflowRoutes(app, workflows);
+      app.addHook("onReady", async () => workflows.startScheduler());
+      app.addHook("preClose", () => workflows.close());
+    }
     app.addHook("preClose", () => harnesses.close());
   }
   return app;

@@ -1,23 +1,27 @@
 "use client";
-import { RefreshCw, SquarePen, X } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import { FolderOpen, RefreshCw, SquarePen } from "lucide-react";
+import { useParams } from "next/navigation";
 import { useState } from "react";
 import { ProjectSessions } from "@/components/sessions/project-sessions";
 import { useProjectNavigation } from "@/components/sessions/use-project-navigation";
+import { SettingsDisclosure } from "@/components/settings/settings-presentation";
 import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { ProjectGit } from "./project-git";
 import { ProjectIcon, ProjectIconPicker } from "./project-icon";
-import { ProjectRemovalDialog } from "./project-removal-dialog";
+import { ProjectWorkflows } from "./project-workflows";
 import { type Project, useMachineProjects } from "./projects-provider";
 
 export function ProjectPage({
   settings = false,
+  embedded = false,
   projectId: targetProjectId,
 }: {
   settings?: boolean;
+  embedded?: boolean;
   projectId?: string;
 }) {
   const { deviceId, projectId: routeProjectId } = useParams<{
@@ -51,7 +55,7 @@ export function ProjectPage({
         key={project.id}
         project={project}
         state={state}
-        deviceId={deviceId}
+        embedded={embedded}
       />
     );
   return (
@@ -103,17 +107,22 @@ function ProjectWorkspace({
           void create("conversation", sessionId)
         }
       />
+      <ProjectWorkflows
+        projectId={project.id}
+        deviceId={deviceId}
+        sessions={state.sessions}
+      />
     </div>
   );
 }
 function ProjectEditor({
   project,
   state,
-  deviceId,
+  embedded,
 }: {
   project: Project;
   state: ReturnType<typeof useMachineProjects>;
-  deviceId: string;
+  embedded: boolean;
 }) {
   const [name, setName] = useState(project.name);
   const [icon, setIcon] = useState(project.icon);
@@ -129,11 +138,9 @@ function ProjectEditor({
     color !== persisted.color;
   const [gitLoading, setGitLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState(false);
   const [error, setError] = useState<string>();
   const [saved, setSaved] = useState(false);
   const [revision, setRevision] = useState(0);
-  const router = useRouter();
   const endpoint = `/v1/projects/${encodeURIComponent(project.id)}`;
   async function run(action: "save" | "check") {
     if (busy || (action === "save" && (!dirty || !name.trim()))) return;
@@ -164,134 +171,128 @@ function ProjectEditor({
       setBusy(false);
     }
   }
-  return (
-    <div className="@container w-full min-w-0 space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-2">
-          <h1 className="truncate text-xl font-semibold">{project.name}</h1>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Refresh project metadata"
-            title="Refresh project metadata"
-            disabled={busy || gitLoading}
-            onClick={() => void run("check")}
-          >
-            <RefreshCw
-              className={cn(
-                "size-4",
-                (busy || gitLoading) && "motion-safe:animate-spin",
-              )}
-            />
-          </Button>
-        </div>
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          {dirty && (
-            <Button
-              type="submit"
-              form="project-details"
-              disabled={busy || !name.trim()}
-            >
-              Save changes
-            </Button>
-          )}
-          <Button
-            variant="destructive"
-            disabled={busy}
-            onClick={() => setConfirm(true)}
-          >
-            <X className="size-3.5" />
-            Remove
-          </Button>
-        </div>
-      </header>
-      {confirm && (
-        <ProjectRemovalDialog
-          project={project}
-          deviceId={deviceId}
-          onClose={() => setConfirm(false)}
-          onRemoved={() =>
-            router.push(`/devices/${encodeURIComponent(deviceId)}`)
-          }
-        />
-      )}
-      <div className="grid items-start gap-6 @3xl:grid-cols-2">
-        <form
-          id="project-details"
-          className="min-w-0 space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void run("save");
-          }}
-        >
-          <div className="space-y-2">
-            <Label htmlFor="project-name" className="pl-10">
-              Name
-            </Label>
-            <div className="flex flex-wrap items-center gap-2">
-              <ProjectIconPicker
-                disabled={busy}
-                icon={icon}
-                color={color}
-                onChange={(i, c) => {
-                  setIcon(i);
-                  setColor(c);
-                  setSaved(false);
-                }}
-              />
-              <Input
-                className="flex-1 basis-48 border-0 bg-muted/40 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
-                spellCheck={false}
-                id="project-name"
-                required
-                maxLength={120}
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setSaved(false);
-                }}
-                disabled={busy}
-              />
-            </div>
-          </div>
-        </form>
-        <div className="min-w-0 space-y-2">
+  const identityForm = (
+    <form
+      id={`project-details-${project.id}`}
+      className="flex min-w-0 flex-col gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void run("save");
+      }}
+    >
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor={`project-name-${project.id}`}>
+            Project name
+          </FieldLabel>
           <div className="flex items-center gap-2">
-            <p className="text-xs font-medium">Directory</p>
-            <span
-              role="img"
-              aria-label={
-                project.available
-                  ? "Directory accessible"
-                  : "Directory unavailable"
-              }
-              title={
-                project.available
-                  ? "Directory accessible"
-                  : project.unavailableReason
-              }
-              className={cn(
-                "size-1.5 shrink-0",
-                project.available ? "bg-emerald-500" : "bg-red-500",
-              )}
+            <ProjectIconPicker
+              disabled={busy}
+              icon={icon}
+              color={color}
+              onChange={(i, c) => {
+                setIcon(i);
+                setColor(c);
+                setSaved(false);
+              }}
+            />
+            <Input
+              className="min-w-0 flex-1"
+              spellCheck={false}
+              id={`project-name-${project.id}`}
+              required
+              maxLength={120}
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setSaved(false);
+              }}
+              disabled={busy}
             />
           </div>
-          <div className="flex min-h-8 items-center">
-            <p className="min-w-0 flex-1 break-all font-mono text-xs text-muted-foreground">
-              {project.path}
-            </p>
-          </div>
+        </Field>
+      </FieldGroup>
+      {dirty && (
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" disabled={busy || !name.trim()}>
+            {busy ? "Saving…" : "Save identity"}
+          </Button>
+          <Button
+            variant="outline"
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setName(persisted.name);
+              setIcon(persisted.icon);
+              setColor(persisted.color);
+            }}
+          >
+            Discard
+          </Button>
+        </div>
+      )}
+    </form>
+  );
+  return (
+    <div className="@container flex w-full min-w-0 flex-col gap-4">
+      <header className="flex min-w-0 items-center gap-2">
+        <ProjectIcon
+          icon={project.icon}
+          color={project.color}
+          className="size-4 shrink-0"
+        />
+        <h2
+          className={cn(
+            "min-w-0 flex-1 truncate font-semibold",
+            embedded ? "text-sm" : "text-xl",
+          )}
+        >
+          {project.name}
+        </h2>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Refresh project metadata"
+          disabled={busy || gitLoading}
+          onClick={() => void run("check")}
+        >
+          <RefreshCw
+            className={cn((busy || gitLoading) && "motion-safe:animate-spin")}
+          />
+        </Button>
+      </header>
+      <div className="flex min-w-0 items-start gap-2 text-xs text-muted-foreground">
+        <FolderOpen className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="wrap-anywhere font-mono">{project.path}</p>
+          <p className="mt-1">
+            {project.available
+              ? "Directory accessible"
+              : (project.unavailableReason ?? "Directory unavailable")}
+          </p>
         </div>
       </div>
+      {embedded ? (
+        <SettingsDisclosure title="Name & icon">
+          {identityForm}
+        </SettingsDisclosure>
+      ) : (
+        identityForm
+      )}
+      <Separator />
       <ProjectGit
         key={`${project.id}:${revision}`}
+        compact={embedded}
         projectId={project.id}
         path={project.path}
         request={state.request}
         onLoadingChange={setGitLoading}
       />
-      <span role="status" className="sr-only">
-        {dirty ? "Unsaved changes" : saved ? "Changes saved" : ""}
+      <span
+        role="status"
+        className={saved ? "text-xs text-muted-foreground" : "sr-only"}
+      >
+        {dirty ? "Unsaved identity changes" : saved ? "Identity saved" : ""}
       </span>
       {error && (
         <p role="alert" className="text-sm text-destructive">

@@ -2,18 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { useBackendRequest } from "@/hooks/use-backend-request";
+import {
+  InspectorSection,
+  InspectorSectionActions,
+  InspectorSectionContent,
+  InspectorSectionDescription,
+  InspectorSectionHeader,
+  InspectorSectionTitle,
+} from "./inspector-section";
 import { taskLabels } from "./inspector-tasks";
 import { ReviewTranscript } from "./review-transcript";
 
@@ -148,19 +148,19 @@ function HistoryPage({
     return () => controller.abort();
   }, [active, path, query, request, reviewId]);
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle>
+    <InspectorSection>
+      <InspectorSectionHeader>
+        <InspectorSectionTitle>
           {reviewId === undefined
             ? "Completed tasks"
             : `Reviewer #${reviewId} tasks`}
-        </CardTitle>
-        <CardDescription>
+        </InspectorSectionTitle>
+        <InspectorSectionDescription>
           Finished work, newest task first. Refresh to include newly finished
           tasks.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+        </InspectorSectionDescription>
+      </InspectorSectionHeader>
+      <InspectorSectionContent>
         {error && <p role="alert">{error}</p>}
         {actionError && <p role="alert">{actionError}</p>}
         {!page && loading && <p role="status">Loading history…</p>}
@@ -279,8 +279,8 @@ function HistoryPage({
             ))}
           </ul>
         </ScrollArea>
-      </CardContent>
-      <CardFooter className="flex-wrap gap-2">
+      </InspectorSectionContent>
+      <InspectorSectionActions className="flex-wrap gap-2">
         {reviewId !== undefined && (
           <Button
             size="xs"
@@ -310,7 +310,7 @@ function HistoryPage({
             {loading ? "Loading…" : "Load older tasks"}
           </Button>
         )}
-      </CardFooter>
-    </Card>
+      </InspectorSectionActions>
+    </InspectorSection>
   );
 }

@@ -5,14 +5,6 @@ import { useParams } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Field,
   FieldDescription,
   FieldError,
@@ -32,6 +24,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { useBackendRequest } from "@/hooks/use-backend-request";
 import { ChatModelControl } from "./chat-model-control";
+import {
+  InspectorSection,
+  InspectorSectionActions,
+  InspectorSectionContent,
+  InspectorSectionDescription,
+  InspectorSectionHeader,
+  InspectorSectionTitle,
+} from "./inspector-section";
 import { ReviewTranscript } from "./review-transcript";
 import { type ModelRef, useChatModels } from "./use-chat-models";
 import { useReviewerProfiles } from "./use-reviewer-profiles";
@@ -127,14 +127,14 @@ export function InspectorTasks({
     };
   }, [active, path, request]);
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle>Active tasks</CardTitle>
-        <CardDescription>
+    <InspectorSection>
+      <InspectorSectionHeader>
+        <InspectorSectionTitle>Active tasks</InspectorSectionTitle>
+        <InspectorSectionDescription>
           Work in this conversation and its task-owned chats.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+        </InspectorSectionDescription>
+      </InspectorSectionHeader>
+      <InspectorSectionContent>
         {(error || actionError) && (
           <p role="alert" className="text-destructive">
             {actionError ?? error}
@@ -213,8 +213,8 @@ export function InspectorTasks({
           ))}
         </ul>
         {snapshot?.more && <p>Showing the first 100 tasks.</p>}
-      </CardContent>
-    </Card>
+      </InspectorSectionContent>
+    </InspectorSection>
   );
 }
 
@@ -388,14 +388,14 @@ export function ScheduleReview({
     }
   }
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle>Background review</CardTitle>
-        <CardDescription>
+    <InspectorSection>
+      <InspectorSectionHeader>
+        <InspectorSectionTitle>Background review</InspectorSectionTitle>
+        <InspectorSectionDescription>
           Review the workspace independently while this chat stays available.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+        </InspectorSectionDescription>
+      </InspectorSectionHeader>
+      <InspectorSectionContent>
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor={`${id}-brief`}>Review brief</FieldLabel>
@@ -713,8 +713,8 @@ export function ScheduleReview({
         {message && (
           <p role={message.error ? "alert" : "status"}>{message.text}</p>
         )}
-      </CardContent>
-      <CardFooter>
+      </InspectorSectionContent>
+      <InspectorSectionActions>
         <Button
           size="xs"
           disabled={saving || invalid || !brief.trim()}
@@ -728,8 +728,8 @@ export function ScheduleReview({
                 ? "Start review"
                 : "Schedule review"}
         </Button>
-      </CardFooter>
-    </Card>
+      </InspectorSectionActions>
+    </InspectorSection>
   );
 }
 
@@ -758,14 +758,14 @@ export function PostRunSettings({
     !!draft &&
     (draft.original !== value || draft.originalLimit !== repairLimit);
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle>Post-run check</CardTitle>
-        <CardDescription>
+    <InspectorSection>
+      <InspectorSectionHeader>
+        <InspectorSectionTitle>Post-run check</InspectorSectionTitle>
+        <InspectorSectionDescription>
           Run a check after file edits, shell commands, or MCP calls.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+        </InspectorSectionDescription>
+      </InspectorSectionHeader>
+      <InspectorSectionContent>
         <FieldGroup>
           <Field data-invalid={stale} data-disabled={disabled}>
             <FieldLabel htmlFor={id}>Check command</FieldLabel>
@@ -792,7 +792,7 @@ export function PostRunSettings({
             </FieldDescription>
             {stale && (
               <FieldError>
-                The saved command changed elsewhere. Reset your draft.
+                The saved command changed elsewhere. Discard your draft.
               </FieldError>
             )}
           </Field>
@@ -825,18 +825,18 @@ export function PostRunSettings({
             </FieldDescription>
           </Field>
         </FieldGroup>
-      </CardContent>
+      </InspectorSectionContent>
       {draft &&
         (command.trim() !== (value ?? "") ||
           Number(limit) !== repairLimit ||
           stale) && (
-          <CardFooter className="justify-end gap-2">
+          <InspectorSectionActions className="justify-end gap-2">
             <Button
               size="xs"
               variant="ghost"
               onClick={() => setDraft(undefined)}
             >
-              Reset draft
+              Discard changes
             </Button>
             <Button
               size="xs"
@@ -848,8 +848,8 @@ export function PostRunSettings({
             >
               Save check
             </Button>
-          </CardFooter>
+          </InspectorSectionActions>
         )}
-    </Card>
+    </InspectorSection>
   );
 }

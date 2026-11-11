@@ -35,5 +35,11 @@ export function useInspectorSelection(
     },
     [key, selection, setInspectorSelection],
   );
-  return { selection, selectScope, selectSection, storageError };
+  const openSection = useCallback(
+    (section: InspectorSection) => {
+      if (key) setInspectorSelection(key, { scope: "conversation", section });
+    },
+    [key, setInspectorSelection],
+  );
+  return { selection, selectScope, selectSection, openSection, storageError };
 }

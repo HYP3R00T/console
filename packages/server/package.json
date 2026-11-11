@@ -11,9 +11,11 @@
     "build": "node -e \"require('node:fs').rmSync('dist', {recursive:true,force:true})\" && tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.test.ts"
+    "test": "node --test test/*.test.ts",
+    "access": "node src/access/cli.ts"
   },
   "dependencies": {
+    "@console/contracts": "workspace:*",
     "@earendil-works/chord": "1.5.0",
     "@earendil-works/pi-ai": "1.5.0",
     "@earendil-works/pi-codemode": "1.5.0",
@@ -21,9 +23,9 @@
     "@earendil-works/pi-env": "1.5.0",
     "@earendil-works/pi-mcp": "1.5.0",
     "@fastify/cors": "^11.3.1",
+    "cron-parser": "^5.10.4",
     "fastify": "5.12.7",
-    "sharp": "^0.35.5",
-    "@console/contracts": "workspace:*"
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

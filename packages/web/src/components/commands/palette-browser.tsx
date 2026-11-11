@@ -66,6 +66,7 @@ const icons = {
   conversation: MessageSquare,
 };
 const quickIds: CommandId[] = [
+  "help.capabilities",
   "navigation.conversations",
   "appearance.theme",
   "workspace.navigation",

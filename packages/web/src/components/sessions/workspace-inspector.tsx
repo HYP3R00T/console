@@ -1,7 +1,9 @@
 "use client";
+import { FolderOpen, Layers, MessageSquare } from "lucide-react";
 import { ProjectPage } from "@/components/projects/project-page";
 import { ScopedSettings } from "@/components/settings/scoped-settings";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   type InspectorScope,
@@ -43,7 +45,7 @@ export function WorkspaceInspector({
   return (
     <div
       className={cn(
-        "flex h-full min-h-0 flex-col gap-2",
+        "@container/inspector flex h-full min-h-0 flex-col gap-2",
         sidebar ? "py-2 pl-2" : "p-2",
       )}
     >
@@ -56,19 +58,36 @@ export function WorkspaceInspector({
         className="min-h-0 flex-1"
       >
         <TabsList aria-label="Configuration scope" className="w-full shrink-0">
-          {projectId && <TabsTrigger value="project">Project</TabsTrigger>}
-          <TabsTrigger value="session">Session</TabsTrigger>
-          <TabsTrigger value="conversation">Conversation</TabsTrigger>
+          {projectId && (
+            <TabsTrigger value="project">
+              <FolderOpen
+                className="hidden @min-[280px]/inspector:block"
+                aria-hidden="true"
+              />
+              Project
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="session">
+            <Layers
+              className="hidden @min-[280px]/inspector:block"
+              aria-hidden="true"
+            />
+            Session
+          </TabsTrigger>
+          <TabsTrigger value="conversation">
+            <MessageSquare
+              className="hidden @min-[280px]/inspector:block"
+              aria-hidden="true"
+            />
+            Conversation
+          </TabsTrigger>
         </TabsList>
         {projectId && (
           <TabsContent value="project" keepMounted className="min-h-0">
             <ScrollArea className="h-full">
               <div className="flex min-w-0 flex-col gap-5 px-1 py-2 pr-3">
-                <p className="text-xs text-muted-foreground">
-                  Shared across every session and conversation in this project.
-                  Tool defaults affect new conversations only.
-                </p>
-                <ProjectPage settings projectId={projectId} />
+                <ProjectPage settings embedded projectId={projectId} />
+                <Separator />
                 <ScopedSettings scope="project" target={target} embedded />
               </div>
             </ScrollArea>
@@ -82,10 +101,9 @@ export function WorkspaceInspector({
           </ScrollArea>
         </TabsContent>
         <TabsContent value="conversation" keepMounted className="min-h-0">
-          <div className="flex h-full min-h-0 flex-col gap-2">
+          <div className="@container/inspector flex h-full min-h-0 flex-col gap-2">
             <p className="px-1 text-xs text-muted-foreground">
-              Conversation {conversationId} · changes below apply to this agent.
-              Shared controls identify their broader scope.
+              Conversation {conversationId} · settings for this agent
             </p>
             <ConversationInspector
               {...conversation}
@@ -93,6 +111,7 @@ export function WorkspaceInspector({
               embedded
               active={selection.scope === "conversation"}
               section={selection.section}
+              sectionRequest={selection}
               onSectionChange={onSectionChange}
               onScopeChange={onScopeChange}
             />

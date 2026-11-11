@@ -175,6 +175,7 @@ test("session runtime edits enforce idle boundaries but permit budget changes du
   const current = (await f.app.inject(path)).json();
   for (const change of [
     { runtimePolicy: null },
+    { runtimePolicy: { toolExecution: "sequential" }, tokenBudget: 98765 },
     { keepRecentTokens: 2000 },
     { automaticCompaction: false },
   ]) {
@@ -185,6 +186,10 @@ test("session runtime edits enforce idle boundaries but permit budget changes du
     });
     assert.equal(response.statusCode, 409, response.body);
   }
+  assert.equal(
+    (await f.app.inject(path)).json().values.tokenBudget,
+    current.values.tokenBudget,
+  );
   const budget = await f.app.inject({
     method: "PATCH",
     url: path,

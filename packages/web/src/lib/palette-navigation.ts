@@ -77,6 +77,7 @@ export function paletteCommandTarget(
     id.startsWith("preferences.") ||
     id.startsWith("appearance.") ||
     id === "navigation.conversations" ||
+    id === "help.capabilities" ||
     id === "settings.open" ||
     id === "navigation.home" ||
     id === "navigation.devices"
@@ -85,12 +86,13 @@ export function paletteCommandTarget(
   const { deviceId, projectId, sessionId, conversationId } = current;
   if (id.startsWith("machine.")) return { deviceId };
   if (id.startsWith("project.")) return { deviceId, projectId };
-  if (id.startsWith("session.")) return { deviceId, projectId, sessionId };
+  if (id.startsWith("session.") || id === "inspector.session")
+    return { deviceId, projectId, sessionId };
   if (id === "conversation.new") return { deviceId, projectId, sessionId };
   return { deviceId, projectId, sessionId, conversationId };
 }
 export function paletteCommandGroup(id: CommandId) {
-  return /settings|preferences|^appearance\.|\.configure$|\.update$|^machine\.(providers|projects|runtime|archives|reviewers|agents|integrations|extensions)$/.test(
+  return /settings|preferences|^inspector\.|^composer\.|^appearance\.|\.configure$|\.update$|^machine\.(providers|projects|runtime|archives|reviewers|agents|integrations|extensions)$/.test(
     id,
   )
     ? "Settings"

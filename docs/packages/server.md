@@ -327,4 +327,34 @@ Machine workspace guidance, project agent settings and session runtime settings 
 Their route definitions live in `src/harnesses/routes.ts`; reads do not require selecting a conversation, and updates share persistence helpers with legacy conversation configuration.
 Project tools remain creation defaults, guidance remains shared, and session policies affect sibling conversations and owned workers.
 Token budgets remain editable during generation; compaction and runtime-policy changes require the whole session idle.
+An update mixing a budget change with idle-only fields is rejected before applying any of those values while the session is busy; revision checks likewise precede persistence.
 The legacy mixed-scope configuration endpoint remains supported, and existing runtime-default revision behavior is unchanged.
+
+## Project workflows
+
+`src/workflows/` stores immutable project workflow versions and admission receipts in `harnesses.sqlite`; each run captures its definition, input, conversation model/tools, workspace and check policy before creating one background Durable task in the selected existing session.
+`GET /v1/projects/:projectId/workflows`, `PUT /workflows/:id`, `GET /workflows/:id/versions` and `POST /workflows/:id/runs` provide listing, revision-protected saves, version history and deduplicated manual admission under that project prefix.
+Agent steps create owned background jobs; forward-only conditions select the next step using an earlier agent output, and approval steps persist a revision-bound wait across restarts.
+Templates accept `{{input.name}}` and `{{steps.step_id}}`; each agent step uses a separate worker conversation and receives previous outputs through its instructions.
+
+`/v1/projects/:projectId/workflow-runs` lists all active runs and the latest 50 terminal receipts per session; `/:sessionId/:taskId` reads or stops a run, and `/decision` approves or rejects its current revision.
+`/invalidate` withdraws a pending revision; decisions retain their actor, timestamp and approved action after execution advances, while rejection stops downstream work.
+GitHub merge actions require a full PR head SHA, verify it before granting approval and again before a SHA-conditional merge, and reconcile an already-merged matching PR after interruption.
+The backend reads `CONSOLE_GITHUB_TOKEN` for these declared merge actions; ordinary agent tools retain their existing execution permissions.
+
+Five-field cron triggers use an explicit IANA timezone, admit one occurrence after missed schedules, skip overlapping occurrences and advance to the next future time; disabling or editing a trigger creates a new version and leaves existing runs governed by their captured version.
+`POST /v1/hooks/github/:projectId` verifies the exact raw payload against `CONSOLE_GITHUB_WEBHOOK_SECRET` using `X-Hub-Signature-256`, matches the configured repository/event/action and deduplicates `X-GitHub-Delivery` across restart.
+Webhook inputs include repository, number, title, body, SHA, event and action; GitHub must reach this endpoint through the owner's HTTPS reverse proxy.
+Triggers recover pending admissions after restart and expose their latest admission error through the workflow catalog.
+
+## Authenticated remote clients
+
+The owner can provision an owner-only `http.json` beside `harnesses.sqlite` with `host`, `port`, explicit browser `origins` and `authentication`; binding to `0.0.0.0` or `::` requires authentication.
+For example, `{"host":"0.0.0.0","port":3000,"origins":["https://console.example.com"],"authentication":true}` enables authenticated access behind an HTTPS reverse proxy; apply startup configuration when the owner next starts the backend.
+Default startup uses the existing loopback addresses; the browser accepts HTTPS remote origins and HTTP loopback origins.
+
+Run `pnpm --filter @console/server access invite` on the backend host to generate a single-use code expiring after ten minutes, then enter it in Add device or Edit connection.
+The exchange returns a random bearer credential once; `access.sqlite` stores hashes, and the web client keeps the credential in tab-session storage, scoped to its backend origin.
+Authenticated clients have owner-level access to that backend, including workflows and approvals; API requests, connection probes and SSE carry the bearer header.
+`access list` and `access revoke <client-id>` manage credentials locally; authenticated `/v1/access/clients` supports listing and revocation through HTTP, and revocation closes active streams within one second.
+Pairing attempts are throttled, browser origins are checked independently, and health checks and signed webhook admission remain reachable without bearer authentication.

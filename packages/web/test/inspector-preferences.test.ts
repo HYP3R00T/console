@@ -29,7 +29,7 @@ test("inspector selections survive serialization and remain isolated by backend,
     availableInspectorSelection(restored.inspectors?.[keys[3]], true),
     {
       scope: "conversation",
-      section: "tools",
+      section: "overview",
     },
   );
 });

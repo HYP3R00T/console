@@ -215,3 +215,11 @@ export const settingMetadata = {
     idle: "conversation",
   },
 } satisfies Record<string, SettingMetadata>;
+
+export type {
+  WorkflowDefinition,
+  WorkflowRunView,
+  WorkflowStep,
+  WorkflowVersion,
+} from "./workflows.ts";
+export { workflowDefinitionSchema } from "./workflows.ts";

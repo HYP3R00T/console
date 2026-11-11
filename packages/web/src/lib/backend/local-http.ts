@@ -1,11 +1,13 @@
 import { backendOrigin, checkConnection } from "../connection.ts";
+import { backendToken } from "./auth.ts";
 import {
   type BackendClient,
   type BackendConnector,
   BackendRequestError,
 } from "./client.ts";
+import { authenticatedEvents } from "./event-stream.ts";
 
-/** Current local-only policy. Future connectors can own tunnels and authentication. */
+/** HTTP transport for loopback and authenticated HTTPS backends. */
 export const localHttpConnector: BackendConnector = {
   async open(address, signal) {
     const origin = backendOrigin(address);
@@ -28,6 +30,7 @@ export const localHttpConnector: BackendConnector = {
 
 function createLocalClient(origin: string): BackendClient {
   const lifetime = new AbortController();
+  const token = backendToken(origin);
   let backendId: string | undefined;
   function url(path: string) {
     // Keep future credentials scoped to this backend, including malformed paths.
@@ -49,6 +52,7 @@ function createLocalClient(origin: string): BackendClient {
       const result = await checkConnection(
         origin,
         AbortSignal.any([signal, lifetime.signal]),
+        token,
       );
       backendId = result.backendId;
       return result;
@@ -65,6 +69,7 @@ function createLocalClient(origin: string): BackendClient {
         ...(init.signal ? [init.signal] : []),
       ]);
       const headers = new Headers(init.headers);
+      if (token) headers.set("Authorization", `Bearer ${token}`);
       if (init.body && !headers.has("Content-Type"))
         headers.set("Content-Type", "application/json");
       const response = await fetch(url(path), {
@@ -89,6 +94,14 @@ function createLocalClient(origin: string): BackendClient {
     },
     subscribe(path, event, observer) {
       lifetime.signal.throwIfAborted();
+      if (token)
+        return authenticatedEvents(
+          url(path),
+          token,
+          event,
+          observer,
+          lifetime.signal,
+        );
       const events = new EventSource(url(path));
       let closed = false;
       const close = () => {

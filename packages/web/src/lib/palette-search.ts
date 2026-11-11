@@ -1,6 +1,38 @@
+import { capabilities } from "./capabilities.ts";
 import type { CommandId } from "./commands.ts";
 
 const aliases: Partial<Record<CommandId, string[]>> = {
+  "help.capabilities": [
+    "help",
+    "capability map",
+    "all controls",
+    "what can I do",
+    "settings directory",
+  ],
+  "inspector.session": [
+    "harness",
+    "token budget",
+    "runtime policies",
+    "retry",
+    "automatic compaction",
+  ],
+  "inspector.status": [
+    "effective configuration",
+    "confirmed state",
+    "current permissions",
+  ],
+  "inspector.workspace": ["worktree", "sandbox", "remote execution", "SSH"],
+  "inspector.integrations": [
+    "MCP",
+    "extensions",
+    "Code Mode",
+    "tool scripting",
+  ],
+  "inspector.agents": ["persistent agents", "background workers"],
+  "inspector.checks": ["post run command", "repair limit", "validation"],
+  "inspector.history": ["receipts", "retry job", "retry review", "recheck"],
+  "conversation.fork": ["branch chat", "fork from here", "history point"],
+  "composer.model": ["choose model", "thinking effort", "reasoning"],
   "workspace.navigation": [
     "toggle left sidebar",
     "left panel",
@@ -44,6 +76,13 @@ const aliases: Partial<Record<CommandId, string[]>> = {
     "policies",
   ],
   "conversation.new": ["new chat", "create conversation", "start chat"],
+  "conversation.plan": [
+    "plan mode",
+    "read only",
+    "planning",
+    "implement",
+    "execute",
+  ],
   "conversation.stop": ["cancel", "stop run", "interrupt"],
   "conversation.continue": ["resume", "retry run"],
   "conversation.compact": ["summarize", "compaction", "context"],
@@ -68,7 +107,12 @@ const aliases: Partial<Record<CommandId, string[]>> = {
   ],
 };
 export function commandAliases(id: CommandId) {
-  return aliases[id] ?? [];
+  return [
+    ...(aliases[id] ?? []),
+    ...capabilities
+      .filter((entry) => entry.command === id && id !== "settings.open")
+      .map((entry) => entry.label),
+  ];
 }
 function normalized(value: string) {
   return value

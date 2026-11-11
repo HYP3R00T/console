@@ -3,14 +3,6 @@ import { ChevronRight } from "lucide-react";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -25,7 +17,20 @@ import {
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
-  applyFields,
+  type RuntimePolicyDraft,
+  resetRuntimePolicyDraft,
+  runtimePolicyDraftInvalid,
+  runtimePolicyDraftValue,
+} from "@/lib/runtime-policy-draft";
+import {
+  InspectorSection,
+  InspectorSectionActions,
+  InspectorSectionContent,
+  InspectorSectionDescription,
+  InspectorSectionHeader,
+  InspectorSectionTitle,
+} from "./inspector-section";
+import {
   fieldError,
   fieldValue,
   modelFields,
@@ -33,8 +38,196 @@ import {
   type PolicyField,
   policyGroups,
   type RuntimePolicy,
-  setModelPolicy,
 } from "./runtime-policy-form";
+
+export function RuntimePolicyFields({
+  value,
+  draft,
+  onChange,
+  disabled,
+  model,
+}: {
+  value: RuntimePolicy;
+  draft?: RuntimePolicyDraft;
+  onChange: (draft: RuntimePolicyDraft) => void;
+  disabled: boolean;
+  model?: string;
+}) {
+  const id = useId();
+  const [modelKey, setModelKey] = useState("");
+  const [modelError, setModelError] = useState("");
+  const base = draft?.base ?? value;
+  const values = draft?.values ?? {};
+  const models = draft?.models ?? modelPolicies(value);
+  const locked = disabled;
+  function edit(values: Record<string, string>, nextModels = models) {
+    onChange({
+      original: draft?.original ?? JSON.stringify(value),
+      base,
+      values,
+      models: nextModels,
+      reset: draft?.reset,
+    });
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {policyGroups.map((group) => (
+        <Collapsible key={group.title} className="group/policy">
+          <CollapsibleTrigger
+            render={<Button variant="ghost" size="sm" />}
+            className="h-auto min-h-7 w-full justify-start whitespace-normal"
+          >
+            <ChevronRight
+              aria-hidden
+              data-icon="inline-start"
+              className="group-data-panel-open/policy:rotate-90"
+            />
+            {group.title}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3">
+            <FieldGroup>
+              {group.fields.map((field) => (
+                <PolicyInput
+                  key={field.key}
+                  field={field}
+                  value={values[field.key] ?? fieldValue(base, field.key)}
+                  disabled={locked}
+                  change={(text) => edit({ ...values, [field.key]: text })}
+                />
+              ))}
+            </FieldGroup>
+          </CollapsibleContent>
+        </Collapsible>
+      ))}
+      <Collapsible className="group/model-policy">
+        <CollapsibleTrigger
+          render={<Button variant="ghost" size="sm" />}
+          className="h-auto min-h-7 w-full justify-start whitespace-normal"
+        >
+          <ChevronRight
+            aria-hidden
+            data-icon="inline-start"
+            className="group-data-panel-open/model-policy:rotate-90"
+          />
+          Per-model compaction ({Object.keys(models).length})
+        </CollapsibleTrigger>
+        <CollapsibleContent className="flex flex-col gap-4 pt-3">
+          <p className="text-muted-foreground">
+            These values override session compaction settings for the exact
+            model, including the automatic-compaction toggle above.
+          </p>
+          {Object.entries(models).map(
+            ([key, policy]) =>
+              typeof policy === "object" && (
+                <InspectorSection key={key}>
+                  <InspectorSectionHeader>
+                    <InspectorSectionTitle className="wrap-anywhere">
+                      {key}
+                    </InspectorSectionTitle>
+                  </InspectorSectionHeader>
+                  <InspectorSectionContent>
+                    <FieldGroup>
+                      {modelFields.map((field) => (
+                        <PolicyInput
+                          key={field.key}
+                          field={field}
+                          value={fieldValue(policy, field.key)}
+                          disabled={locked}
+                          change={(text) =>
+                            edit(values, {
+                              ...models,
+                              [key]: { ...policy, [field.key]: text },
+                            })
+                          }
+                        />
+                      ))}
+                    </FieldGroup>
+                  </InspectorSectionContent>
+                  <InspectorSectionActions>
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="ghost"
+                      disabled={locked}
+                      onClick={() => {
+                        const next = { ...models };
+                        delete next[key];
+                        edit(values, next);
+                      }}
+                    >
+                      Remove model override
+                    </Button>
+                  </InspectorSectionActions>
+                </InspectorSection>
+              ),
+          )}
+          <FieldGroup>
+            <Field data-invalid={!!modelError} data-disabled={locked}>
+              <FieldLabel htmlFor={id}>Model identifier</FieldLabel>
+              <Input
+                id={id}
+                value={modelKey}
+                disabled={locked}
+                placeholder={model ?? "provider/model-id"}
+                aria-invalid={!!modelError}
+                aria-describedby={`${id}-help`}
+                onChange={(event) => {
+                  setModelKey(event.target.value);
+                  setModelError("");
+                }}
+              />
+              <FieldDescription id={`${id}-help`}>
+                Use the exact provider/model ID. You can configure a model
+                before enabling it.
+              </FieldDescription>
+              {modelError && <FieldError>{modelError}</FieldError>}
+            </Field>
+          </FieldGroup>
+          <div className="flex flex-wrap gap-2">
+            {model && (
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                disabled={locked}
+                onClick={() => setModelKey(model)}
+              >
+                Use current model
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              disabled={locked}
+              onClick={() => {
+                const key = modelKey.trim();
+                if (!/^[^/\s]+\/.+$/.test(key) || key.length > 256) {
+                  setModelError("Enter provider/model-id.");
+                  return;
+                }
+                if (Object.hasOwn(models, key)) {
+                  setModelError("This model already has an override.");
+                  return;
+                }
+                if (Object.keys(models).length >= 100) {
+                  setModelError(
+                    "Remove an override before adding another (limit 100).",
+                  );
+                  return;
+                }
+                edit(values, { ...models, [key]: {} });
+                setModelKey("");
+              }}
+            >
+              Add model override
+            </Button>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
+  );
+}
 
 export function InspectorRuntimePolicy({
   value,
@@ -47,263 +240,75 @@ export function InspectorRuntimePolicy({
   model?: string;
   save: (value: RuntimePolicy | null) => Promise<boolean>;
 }) {
-  const id = useId();
-  const [draft, setDraft] = useState<{
-    original: string;
-    values: Record<string, string>;
-    models: RuntimePolicy;
-  }>();
-  const [modelKey, setModelKey] = useState("");
-  const [modelError, setModelError] = useState("");
+  const [draft, setDraft] = useState<RuntimePolicyDraft>();
   const [notice, setNotice] = useState("");
-  const original = JSON.stringify(value);
-  const stale = !!draft && draft.original !== original;
-  const fields = policyGroups.flatMap((group) => group.fields);
-  const values = draft?.values ?? {};
-  const models = draft?.models ?? modelPolicies(value);
-  const invalid =
-    fields.some((field) =>
-      fieldError(field, values[field.key] ?? fieldValue(value, field.key)),
-    ) ||
-    Object.values(models).some(
-      (policy) =>
-        typeof policy === "object" &&
-        modelFields.some((field) =>
-          fieldError(field, fieldValue(policy, field.key)),
-        ),
-    );
-  function edit(values: Record<string, string>, nextModels = models) {
-    setNotice("");
-    setDraft({
-      original: draft?.original ?? original,
-      values,
-      models: nextModels,
-    });
-  }
-  const locked = disabled || stale;
+  const stale = !!draft && draft.original !== JSON.stringify(value);
+  const invalid = runtimePolicyDraftInvalid(value, draft);
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle>Session runtime policies</CardTitle>
-        <CardDescription>
-          Shared by all conversations and reviewers in this session. Save when
-          the whole session is idle. Blank fields and Default follow the backend
-          defaults.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {policyGroups.map((group) => (
-          <Collapsible key={group.title} className="group/policy">
-            <CollapsibleTrigger
-              render={<Button variant="ghost" size="sm" />}
-              className="h-auto min-h-7 w-full justify-start whitespace-normal"
-            >
-              <ChevronRight
-                aria-hidden
-                data-icon="inline-start"
-                className="group-data-panel-open/policy:rotate-90"
-              />
-              {group.title}
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-3">
-              <FieldGroup>
-                {group.fields.map((field) => (
-                  <PolicyInput
-                    key={field.key}
-                    field={field}
-                    value={values[field.key] ?? fieldValue(value, field.key)}
-                    disabled={locked}
-                    change={(text) => edit({ ...values, [field.key]: text })}
-                  />
-                ))}
-              </FieldGroup>
-            </CollapsibleContent>
-          </Collapsible>
-        ))}
-        <Collapsible className="group/model-policy">
-          <CollapsibleTrigger
-            render={<Button variant="ghost" size="sm" />}
-            className="h-auto min-h-7 w-full justify-start whitespace-normal"
-          >
-            <ChevronRight
-              aria-hidden
-              data-icon="inline-start"
-              className="group-data-panel-open/model-policy:rotate-90"
-            />
-            Per-model compaction ({Object.keys(models).length})
-          </CollapsibleTrigger>
-          <CollapsibleContent className="flex flex-col gap-4 pt-3">
-            <p className="text-muted-foreground">
-              These values override session compaction settings for the exact
-              model, including the automatic-compaction toggle above.
-            </p>
-            {Object.entries(models).map(
-              ([key, policy]) =>
-                typeof policy === "object" && (
-                  <Card key={key} size="sm">
-                    <CardHeader>
-                      <CardTitle className="wrap-anywhere">{key}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <FieldGroup>
-                        {modelFields.map((field) => (
-                          <PolicyInput
-                            key={field.key}
-                            field={field}
-                            value={fieldValue(policy, field.key)}
-                            disabled={locked}
-                            change={(text) =>
-                              edit(values, {
-                                ...models,
-                                [key]: { ...policy, [field.key]: text },
-                              })
-                            }
-                          />
-                        ))}
-                      </FieldGroup>
-                    </CardContent>
-                    <CardFooter>
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        disabled={locked}
-                        onClick={() => {
-                          const next = { ...models };
-                          delete next[key];
-                          edit(values, next);
-                        }}
-                      >
-                        Remove model override
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                ),
-            )}
-            <FieldGroup>
-              <Field data-invalid={!!modelError} data-disabled={locked}>
-                <FieldLabel htmlFor={id}>Model identifier</FieldLabel>
-                <Input
-                  id={id}
-                  value={modelKey}
-                  disabled={locked}
-                  placeholder={model ?? "provider/model-id"}
-                  aria-invalid={!!modelError}
-                  aria-describedby={`${id}-help`}
-                  onChange={(event) => {
-                    setModelKey(event.target.value);
-                    setModelError("");
-                  }}
-                />
-                <FieldDescription id={`${id}-help`}>
-                  Use the exact provider/model ID. You can configure a model
-                  before enabling it.
-                </FieldDescription>
-                {modelError && <FieldError>{modelError}</FieldError>}
-              </Field>
-            </FieldGroup>
-            <div className="flex flex-wrap gap-2">
-              {model && (
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  disabled={locked}
-                  onClick={() => setModelKey(model)}
-                >
-                  Use current model
-                </Button>
-              )}
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={locked}
-                onClick={() => {
-                  const key = modelKey.trim();
-                  if (!/^[^/\s]+\/.+$/.test(key) || key.length > 256) {
-                    setModelError("Enter provider/model-id.");
-                    return;
-                  }
-                  if (Object.hasOwn(models, key)) {
-                    setModelError("This model already has an override.");
-                    return;
-                  }
-                  if (Object.keys(models).length >= 100) {
-                    setModelError(
-                      "Remove an override before adding another (limit 100).",
-                    );
-                    return;
-                  }
-                  edit(values, { ...models, [key]: {} });
-                  setModelKey("");
-                }}
-              >
-                Add model override
-              </Button>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+    <InspectorSection>
+      <InspectorSectionHeader>
+        <InspectorSectionTitle>Execution policies</InspectorSectionTitle>
+        <InspectorSectionDescription>
+          Shared by this session’s conversations and workers. Blank values
+          inherit backend defaults.
+        </InspectorSectionDescription>
+      </InspectorSectionHeader>
+      <InspectorSectionContent>
+        <RuntimePolicyFields
+          value={value}
+          draft={draft}
+          onChange={setDraft}
+          disabled={disabled || stale}
+          model={model}
+        />
         {stale && (
-          <p role="alert" className="text-destructive">
-            Policies changed elsewhere. Reset your draft before saving.
+          <p role="alert" className="text-xs text-destructive">
+            Policies changed elsewhere. Discard this draft before saving.
           </p>
         )}
-        <p role="status" className="text-muted-foreground">
-          {notice}
-        </p>
-      </CardContent>
-      <CardFooter className="flex-wrap justify-end gap-2">
+        {(notice || draft?.reset) && (
+          <p role="status" className="text-xs text-foreground/65">
+            {draft?.reset ? "Defaults staged. Save to apply." : notice}
+          </p>
+        )}
+      </InspectorSectionContent>
+      <InspectorSectionActions>
         {draft && (
-          <Button size="xs" variant="ghost" onClick={() => setDraft(undefined)}>
-            Reset draft
-          </Button>
+          <>
+            <Button
+              size="sm"
+              disabled={disabled || stale || invalid}
+              onClick={async () => {
+                if (await save(runtimePolicyDraftValue(draft))) {
+                  setDraft(undefined);
+                  setNotice("Policies saved.");
+                }
+              }}
+            >
+              Save changes
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={disabled}
+              onClick={() => setDraft(undefined)}
+            >
+              Discard changes
+            </Button>
+          </>
         )}
         <Button
-          size="xs"
-          variant="outline"
+          size="sm"
+          variant="ghost"
           disabled={
-            disabled || stale || !!draft || Object.keys(value).length === 0
+            disabled || stale || (!draft && Object.keys(value).length === 0)
           }
-          onClick={async () => {
-            if (await save(null)) {
-              setNotice("Session defaults restored.");
-              setDraft(undefined);
-            }
-          }}
+          onClick={() => setDraft(resetRuntimePolicyDraft(value))}
         >
           Restore defaults
         </Button>
-        <Button
-          size="xs"
-          disabled={locked || !draft || invalid}
-          onClick={async () => {
-            let next = applyFields(value, fields, values);
-            for (const key of Object.keys(modelPolicies(next)))
-              next = setModelPolicy(next, key, null);
-            for (const [key, policy] of Object.entries(models))
-              if (typeof policy === "object")
-                next = setModelPolicy(
-                  next,
-                  key,
-                  applyFields(
-                    {},
-                    modelFields,
-                    Object.fromEntries(
-                      modelFields.map((field) => [
-                        field.key,
-                        fieldValue(policy, field.key),
-                      ]),
-                    ),
-                  ),
-                );
-            if (await save(next)) {
-              setDraft(undefined);
-              setNotice("Session policies saved.");
-            }
-          }}
-        >
-          Save policies
-        </Button>
-      </CardFooter>
-    </Card>
+      </InspectorSectionActions>
+    </InspectorSection>
   );
 }
 
