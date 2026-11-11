@@ -47,8 +47,8 @@ test("duplicate URLs and unsafe addresses cannot be saved", () => {
     /already saved/,
   );
   assert.throws(
-    () => newDevice([], "Remote", "https://example.com", "two"),
-    /loopback/,
+    () => newDevice([], "Remote", "http://example.com", "two"),
+    /HTTPS/,
   );
   assert.throws(
     () => newDevice([], " ", "http://localhost:3000", "two"),
@@ -63,7 +63,7 @@ test("corrupt or duplicate saved records are rejected rather than trusted", () =
     "{}",
     '[{"name":"Missing URL"}]',
     JSON.stringify([device, device]),
-    JSON.stringify([{ ...device, url: "https://example.com" }]),
+    JSON.stringify([{ ...device, url: "http://example.com" }]),
   ]) {
     assert.throws(() => parseDevices(value));
   }

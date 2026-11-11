@@ -1,4 +1,6 @@
 import { dirname, join } from "node:path";
+import { httpConfiguration } from "./access/configuration.ts";
+import { AccessService } from "./access/service.ts";
 import { createApp } from "./app.ts";
 import { HarnessService } from "./harnesses/service.ts";
 import { HarnessStore, harnessDataPath } from "./harnesses/store.ts";
@@ -20,7 +22,28 @@ const harnesses = new HarnessService(
   projects,
   providers,
 );
-const app = createApp({ logger: true }, providers, projects, harnesses);
+const http = await httpConfiguration(
+  join(dirname(projectDatabasePath()), "http.json"),
+);
+const access = http.authentication
+  ? new AccessService(join(dirname(projectDatabasePath()), "access.sqlite"))
+  : undefined;
+const app = createApp(
+  { logger: { redact: ["req.headers.authorization", "req.body.code"] } },
+  providers,
+  projects,
+  harnesses,
+  {
+    origins: http.origins,
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: false,
+    ...(access && { authorize: access.authorize }),
+  },
+);
+if (access) {
+  access.register(app);
+  app.addHook("preClose", async () => access.close());
+}
 let stopping = false;
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -38,7 +61,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 
 try {
-  await app.listen({ host: "127.0.0.1", port: 3000 });
+  await app.listen({ host: http.host, port: http.port });
 } catch (error) {
   app.log.error(error);
   process.exitCode = 1;

@@ -21,6 +21,8 @@ import { SandboxDoc, WorkspaceSandboxes } from "../execution/sandbox.ts";
 import { linkedWorktreePath } from "../projects/git-metadata.ts";
 import type { ProviderService } from "../providers/service.ts";
 import { openDatabase } from "../storage/database.ts";
+import { GitHubActions } from "../workflows/github.ts";
+import { createWorkflowExtension } from "../workflows/task.ts";
 import { createAdvancedTools } from "./advanced-tools.ts";
 import { AgentControlExtension } from "./agent-tools.ts";
 import { createBackgroundJobExtension } from "./background-job.ts";
@@ -277,6 +279,12 @@ export class HarnessRuntime {
       );
       registry.install(RecurringReviewExtension);
       registry.install(RecurringJobExtension);
+      const github = new GitHubActions();
+      registry.install(
+        createWorkflowExtension((action, signal) =>
+          github.merge(action, signal),
+        ),
+      );
       registry.install(PersistentAgentExtension);
       registry.install(AgentControlExtension);
       registry.install(advancedTools.extension);

@@ -1,16 +1,18 @@
 "use client";
 
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import type { useBackendRequest } from "@/hooks/use-backend-request";
+import {
+  InspectorSection,
+  InspectorSectionActions,
+  InspectorSectionContent,
+  InspectorSectionDescription,
+  InspectorSectionHeader,
+  InspectorSectionTitle,
+} from "./inspector-section";
 
 type Worktree = { path: string; branch: string | null };
 export type RemoteWorkspace = {
@@ -44,6 +46,7 @@ export function InspectorWorkspace({
   reloadRemote: () => Promise<void>;
   hostMcp?: boolean;
 }) {
+  const { deviceId } = useParams<{ deviceId: string }>();
   const [choices, setChoices] = useState<Worktree[]>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
@@ -68,15 +71,15 @@ export function InspectorWorkspace({
   return (
     <>
       {assigned !== undefined && !remote?.profile && (
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>Execution workspace</CardTitle>
-            <CardDescription>
-              Attach an existing Git worktree to use its checkout as the working
-              directory for tools and checks.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
+        <InspectorSection>
+          <InspectorSectionHeader>
+            <InspectorSectionTitle>Execution workspace</InspectorSectionTitle>
+            <InspectorSectionDescription>
+              Use a different Git checkout for this conversation’s tools.
+              Otherwise, keep the project directory.
+            </InspectorSectionDescription>
+          </InspectorSectionHeader>
+          <InspectorSectionContent className="flex flex-col gap-2">
             {assigned ? (
               <code className="wrap-anywhere">{assigned}</code>
             ) : (
@@ -115,8 +118,8 @@ export function InspectorWorkspace({
                 ))}
               </ul>
             )}
-          </CardContent>
-          <CardFooter className="flex-wrap gap-2">
+          </InspectorSectionContent>
+          <InspectorSectionActions className="flex-wrap gap-2">
             <Button
               variant="outline"
               size="xs"
@@ -139,27 +142,26 @@ export function InspectorWorkspace({
                 Use project directory
               </Button>
             )}
-          </CardFooter>
-        </Card>
+          </InspectorSectionActions>
+        </InspectorSection>
       )}
       {sandbox !== undefined && !remote?.profile && (
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>Workspace sandbox</CardTitle>
-            <CardDescription>
-              Mount the checkout at /workspace and run file tools, shell
-              commands and checks with a separate filesystem and network
-              namespace.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <InspectorSection>
+          <InspectorSectionHeader>
+            <InspectorSectionTitle>Workspace sandbox</InspectorSectionTitle>
+            <InspectorSectionDescription>
+              Run workspace tools with a separate filesystem and network
+              namespace. The checkout is mounted at /workspace.
+            </InspectorSectionDescription>
+          </InspectorSectionHeader>
+          <InspectorSectionContent>
             <p>
               {sandbox
                 ? "Sandbox enabled"
                 : "Tools use the backend user’s environment."}
             </p>
-          </CardContent>
-          <CardFooter>
+          </InspectorSectionContent>
+          <InspectorSectionActions>
             <Button
               variant="outline"
               size="xs"
@@ -168,21 +170,28 @@ export function InspectorWorkspace({
             >
               {sandbox ? "Disable sandbox" : "Enable sandbox"}
             </Button>
-          </CardFooter>
-        </Card>
+          </InspectorSectionActions>
+        </InspectorSection>
       )}
       {remote && (
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>Remote execution</CardTitle>
-            <CardDescription>
-              Use a backend-configured SSH workspace for file tools, shell
-              commands and checks.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
+        <InspectorSection>
+          <InspectorSectionHeader>
+            <InspectorSectionTitle>Remote execution</InspectorSectionTitle>
+            <InspectorSectionDescription>
+              Run tools on another machine using a saved SSH workspace.
+            </InspectorSectionDescription>
+          </InspectorSectionHeader>
+          <InspectorSectionContent className="flex flex-col gap-2">
             {remote.profiles.length === 0 && !remote.invalid && (
-              <p>No SSH profiles are configured.</p>
+              <p>
+                <Link
+                  className="underline underline-offset-4"
+                  href={`/devices/${encodeURIComponent(deviceId)}/settings/ssh`}
+                >
+                  Add an SSH workspace
+                </Link>{" "}
+                in machine settings.
+              </p>
             )}
             <p>
               Reload reads the backend configuration file and closes shared SSH
@@ -231,8 +240,8 @@ export function InspectorWorkspace({
                 ))}
               </ul>
             )}
-          </CardContent>
-          <CardFooter className="flex-wrap gap-2">
+          </InspectorSectionContent>
+          <InspectorSectionActions className="flex-wrap gap-2">
             <Button
               size="xs"
               variant="outline"
@@ -251,8 +260,8 @@ export function InspectorWorkspace({
                 Return to local execution
               </Button>
             )}
-          </CardFooter>
-        </Card>
+          </InspectorSectionActions>
+        </InspectorSection>
       )}
     </>
   );

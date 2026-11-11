@@ -2,13 +2,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Field,
   FieldDescription,
   FieldGroup,
@@ -19,6 +12,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { useBackendRequest } from "@/hooks/use-backend-request";
 import { AgentProfilePicker } from "./agent-profile-picker";
+import {
+  InspectorSection,
+  InspectorSectionContent,
+  InspectorSectionDescription,
+  InspectorSectionHeader,
+  InspectorSectionTitle,
+} from "./inspector-section";
 import { ReviewTranscript } from "./review-transcript";
 
 type Request = ReturnType<typeof useBackendRequest>["request"];
@@ -106,16 +106,16 @@ export function InspectorAgents({
     }
   }
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle>Background agents</CardTitle>
-        <CardDescription>
+    <InspectorSection>
+      <InspectorSectionHeader>
+        <InspectorSectionTitle>Background agents</InspectorSectionTitle>
+        <InspectorSectionDescription>
           Named agents keep their own conversation and inherit this chat’s
           configuration or a selected profile when created. Parent Stop leaves
           them running.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+        </InspectorSectionDescription>
+      </InspectorSectionHeader>
+      <InspectorSectionContent className="flex flex-col gap-4">
         {(error || actionError) && (
           <p role="alert" className="text-destructive">
             {actionError ?? error}
@@ -166,8 +166,8 @@ export function InspectorAgents({
             </Button>
           </FieldGroup>
         </form>
-      </CardContent>
-    </Card>
+      </InspectorSectionContent>
+    </InspectorSection>
   );
 }
 function AgentControls({
@@ -237,14 +237,16 @@ function AgentControls({
     }
   }
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle className="break-words">{agent.name}</CardTitle>
-        <CardDescription>
+    <InspectorSection>
+      <InspectorSectionHeader>
+        <InspectorSectionTitle className="break-words">
+          {agent.name}
+        </InspectorSectionTitle>
+        <InspectorSectionDescription>
           {agent.busy ? "Working" : "Idle"} · {agent.queue.length} queued
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+        </InspectorSectionDescription>
+      </InspectorSectionHeader>
+      <InspectorSectionContent className="flex flex-col gap-3">
         {error && (
           <p role="alert" className="text-destructive">
             {error}
@@ -333,7 +335,7 @@ function AgentControls({
             </div>
           </FieldGroup>
         </form>
-      </CardContent>
-    </Card>
+      </InspectorSectionContent>
+    </InspectorSection>
   );
 }

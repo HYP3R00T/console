@@ -3,7 +3,6 @@
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Collapsible,
   CollapsibleContent,
@@ -11,6 +10,12 @@ import {
 } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
 import { InspectorCode } from "./inspector-code";
+import {
+  InspectorSection,
+  InspectorSectionContent,
+  InspectorSectionHeader,
+  InspectorSectionTitle,
+} from "./inspector-section";
 
 type Parameters = {
   properties?: Record<string, { type?: string; description?: string }>;
@@ -29,6 +34,8 @@ const toolGroups: Record<string, string> = {
   "coding-tools": "Coding",
   "console.advanced-tools": "Code Mode and discovery",
   "console.mcp": "MCP",
+  "console.review": "Reviews",
+  "console.agent-controls": "Background agents",
 };
 const purposes: Record<string, string> = {
   read: "Read a text file or inspect an image.",
@@ -134,11 +141,13 @@ export function InspectorTools({
         )}
       </div>
       {groups.map((extension) => (
-        <Card key={extension} size="sm">
-          <CardHeader>
-            <CardTitle>{toolGroups[extension] ?? extension}</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <InspectorSection key={extension}>
+          <InspectorSectionHeader>
+            <InspectorSectionTitle>
+              {toolGroups[extension] ?? extension}
+            </InspectorSectionTitle>
+          </InspectorSectionHeader>
+          <InspectorSectionContent>
             <ul className="flex min-w-0 flex-col gap-1">
               {tools
                 .filter((tool) => tool.extension === extension)
@@ -184,8 +193,8 @@ export function InspectorTools({
                   </li>
                 ))}
             </ul>
-          </CardContent>
-        </Card>
+          </InspectorSectionContent>
+        </InspectorSection>
       ))}
     </>
   );

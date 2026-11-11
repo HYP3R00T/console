@@ -17,10 +17,14 @@ export function ChatModelControl({
   models,
   disabled,
   label = "Model and thinking",
+  open,
+  onOpenChange,
 }: {
   models: ReturnType<typeof useChatModels>;
   disabled: boolean;
   label?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [list, setList] = useState(false);
   const focusControl = useCallback(
@@ -32,8 +36,10 @@ export function ChatModelControl({
     models.model?.name ?? (!models.loaded ? "Loading models…" : "Choose model");
   return (
     <Popover
+      open={open}
       onOpenChange={(open) => {
         if (!open) setList(false);
+        onOpenChange?.(open);
       }}
     >
       <PopoverTrigger

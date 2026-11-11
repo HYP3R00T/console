@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { backendOrigin, checkConnection } from "../src/lib/connection.ts";
 
-test("backend addresses are local-only without URL credentials or extra paths", () => {
+test("backend addresses permit HTTPS remote origins and HTTP loopback without URL credentials or extra paths", () => {
   assert.equal(
     backendOrigin(" http://127.0.0.1:3000/ "),
     "http://127.0.0.1:3000",
@@ -13,10 +13,13 @@ test("backend addresses are local-only without URL credentials or extra paths", 
     backendOrigin("https://localhost:3000"),
     "https://localhost:3000",
   );
+  assert.equal(
+    backendOrigin("https://backend.example.com"),
+    "https://backend.example.com",
+  );
   for (const value of [
     "127.0.0.1:3000",
     "http://192.168.0.10:3000",
-    "https://backend.example.com",
     "ftp://localhost",
     "https://example.com/api",
     "https://example.com/?token=secret",
@@ -60,8 +63,8 @@ test("nonlocal addresses are rejected before making a request", async (t) => {
     Response.json({}),
   );
   await assert.rejects(
-    checkConnection("https://example.com", new AbortController().signal),
-    /loopback/,
+    checkConnection("http://example.com", new AbortController().signal),
+    /HTTPS/,
   );
   assert.equal(fetch.mock.callCount(), 0);
 });

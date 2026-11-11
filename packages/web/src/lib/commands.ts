@@ -1,6 +1,28 @@
 export type Shortcut = `Mod+${string}` | `Alt+${string}`;
 
 export const commands = {
+  "help.capabilities": { label: "Explore capabilities and settings" },
+  "composer.model": { label: "Choose model and thinking level" },
+  "conversation.fork": { label: "Fork conversation from a message…" },
+  "inspector.overview": { label: "Open conversation overview" },
+  "inspector.tools": { label: "Edit conversation behavior and tool access" },
+  "inspector.workspace": { label: "Edit workspace, sandbox and SSH execution" },
+  "inspector.integrations": {
+    label: "Edit MCP, extensions and tool scripting",
+  },
+  "inspector.instructions": { label: "Edit conversation instructions" },
+  "inspector.context": { label: "Inspect context, usage and run limits" },
+  "inspector.tasks": { label: "Open automation and active tasks" },
+  "inspector.agents": { label: "Manage background agents" },
+  "inspector.review": { label: "Schedule a background review" },
+  "inspector.job": { label: "Schedule a background job" },
+  "inspector.history": { label: "Inspect task history and recovery" },
+  "inspector.checks": { label: "Edit post-run checks and repairs" },
+  "inspector.status": { label: "Inspect effective conversation status" },
+  "inspector.session": {
+    label: "Edit shared session budget, compaction and policies",
+  },
+
   "appearance.theme": { label: "Appearance: Change theme…" },
   "appearance.light-theme": { label: "Appearance: Set light theme…" },
   "appearance.dark-theme": { label: "Appearance: Set dark theme…" },
@@ -16,6 +38,7 @@ export const commands = {
   "project.agent-settings.update": { label: "Edit project agent settings" },
   "session.runtime-settings.update": { label: "Edit session runtime settings" },
   "conversation.configure": { label: "Edit conversation settings" },
+  "conversation.plan": { label: "Toggle Plan mode" },
   "conversation.stop": { label: "Stop conversation" },
   "conversation.continue": { label: "Continue conversation run" },
   "conversation.compact": { label: "Compact conversation context" },

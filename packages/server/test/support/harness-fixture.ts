@@ -3,6 +3,7 @@ import { createModels, fauxProvider } from "@earendil-works/pi-ai";
 import { createApp } from "../../src/app.ts";
 import { HarnessService } from "../../src/harnesses/service.ts";
 import { HarnessStore } from "../../src/harnesses/store.ts";
+import type { HttpConnectionPolicy } from "../../src/http/connection.ts";
 import { ProjectService } from "../../src/projects/service.ts";
 import { ProjectStore } from "../../src/projects/store.ts";
 import { ProviderService } from "../../src/providers/service.ts";
@@ -11,6 +12,10 @@ export async function fixture(
   directory: string,
   prepare?: (faux: ReturnType<typeof fauxProvider>) => void,
   vision = false,
+  options: {
+    connectionPolicy?: HttpConnectionPolicy;
+    configure?: (app: ReturnType<typeof createApp>) => void;
+  } = {},
 ) {
   const providerStore = new ProviderStore(join(directory, "providers.sqlite"));
   const models = createModels({
@@ -54,7 +59,14 @@ export async function fixture(
     projects,
     providers,
   );
-  const app = createApp({}, providers, projects, service);
+  const app = createApp(
+    {},
+    providers,
+    projects,
+    service,
+    options.connectionPolicy,
+  );
+  options.configure?.(app);
   prepare?.(faux);
   await app.ready();
   return { app, service, projects, providers, faux };

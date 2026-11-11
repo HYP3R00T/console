@@ -13,28 +13,27 @@ import {
 } from "react";
 import { useBackendCommands } from "@/components/commands/backend-commands";
 import { useCommands } from "@/components/commands/command-registry";
+import { SettingsDisclosure } from "@/components/settings/settings-presentation";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Switch } from "@/components/ui/switch";
 import type { useBackendRequest } from "@/hooks/use-backend-request";
+import { inspectorSectionAvailable } from "@/lib/inspector-availability";
 import type {
   InspectorScope,
-  InspectorSection,
+  InspectorSection as InspectorSectionId,
 } from "@/lib/inspector-preferences";
-import { inspectorSections } from "@/lib/inspector-preferences";
+import { inspectorSectionInfo } from "@/lib/inspector-preferences";
 import { cn } from "@/lib/utils";
 import type { Execution } from "./conversation-state";
 import { executionNeedsAttention } from "./execution-labels";
@@ -46,7 +45,16 @@ import {
   InstructionEditor,
   RuntimeGuidance,
 } from "./inspector-instructions";
+import { InspectorNavigation, InspectorPanel } from "./inspector-navigation";
 import { InspectorRuntimePolicy } from "./inspector-runtime-policy";
+import {
+  InspectorSection,
+  InspectorSectionActions,
+  InspectorSectionContent,
+  InspectorSectionDescription,
+  InspectorSectionHeader,
+  InspectorSectionTitle,
+} from "./inspector-section";
 import { InspectorTaskHistory } from "./inspector-task-history";
 import {
   InspectorTasks,
@@ -131,6 +139,7 @@ export function ConversationInspector({
   savedModel,
   projectId: owningProjectId,
   section,
+  sectionRequest,
   onSectionChange,
   onScopeChange,
   embedded = false,
@@ -143,8 +152,9 @@ export function ConversationInspector({
   selectedModel?: ChatModel;
   savedModel?: ModelRef;
   projectId?: string;
-  section?: InspectorSection;
-  onSectionChange?: (section: InspectorSection) => void;
+  section?: InspectorSectionId;
+  sectionRequest?: object;
+  onSectionChange?: (section: InspectorSectionId) => void;
   onScopeChange?: (scope: InspectorScope) => void;
   embedded?: boolean;
   active?: boolean;
@@ -162,14 +172,19 @@ export function ConversationInspector({
   const scoped = discovery.supports("session.runtime-settings.update");
   const [data, setData] = useState<Configuration>();
   const [saving, setSaving] = useState(false);
-  const [localSection, setLocalSection] = useState<InspectorSection>("tools");
-  const requestedSection = section ?? localSection;
-  const activeSection =
-    (requestedSection === "tasks" && data?.postRunCommand === undefined) ||
-    (requestedSection === "context" && !data?.context)
-      ? "tools"
-      : requestedSection;
-  const tasksOpen = active && activeSection === "tasks";
+  const [localSelection, setLocalSelection] = useState<{
+    section: InspectorSectionId;
+  }>({ section: "overview" });
+  const requestedSection = section ?? localSelection.section;
+  const availableSection = (value: InspectorSectionId) =>
+    inspectorSectionAvailable(value, data);
+  const activeSection = availableSection(requestedSection)
+    ? requestedSection
+    : "overview";
+  function selectSection(value: InspectorSectionId) {
+    setLocalSelection({ section: value });
+    onSectionChange?.(value);
+  }
   const [error, setError] = useState<string>();
   const [loadError, setLoadError] = useState<string>();
   const [reloadNotice, setReloadNotice] = useState<string>();
@@ -288,72 +303,120 @@ export function ConversationInspector({
       )}
       {!data && !loadError && <ConversationInspectorLoading />}
       {data && (
-        <Tabs
-          value={activeSection}
-          onValueChange={(value) => {
-            if (inspectorSections.includes(value as InspectorSection)) {
-              setLocalSection(value as InspectorSection);
-              onSectionChange?.(value as InspectorSection);
-            }
-          }}
-          className="min-h-0 flex-1 gap-3"
-        >
-          <TabsList
-            aria-label="Conversation settings"
-            className="w-full shrink-0"
-          >
-            <TabsTrigger value="tools">Tools</TabsTrigger>
-            <TabsTrigger value="instructions">Instructions</TabsTrigger>
-            {data.context && <TabsTrigger value="context">Context</TabsTrigger>}
-            {data.postRunCommand !== undefined && (
-              <TabsTrigger value="tasks">Tasks</TabsTrigger>
-            )}
-          </TabsList>
-          {executionNeedsAttention(execution) && (
-            <Card size="sm" className="shrink-0">
-              <CardHeader>
-                <CardTitle>Execution</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ExecutionStatus execution={execution} details />
-              </CardContent>
-            </Card>
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
+          {requestedSection !== activeSection && (
+            <p role="status" className="px-1 text-xs text-foreground/65">
+              {inspectorSectionInfo[requestedSection].label} is unavailable on
+              this backend. Available controls are listed below.
+            </p>
           )}
-          <TabsContent value="tools" keepMounted className="min-h-0">
-            <ScrollArea className="h-full">
-              <div className="flex min-w-0 flex-col gap-4 px-1 py-2 pr-3">
+          {busy && (
+            <p role="status" className="px-1 text-xs text-foreground/65">
+              Conversation settings can change when this conversation is idle.
+            </p>
+          )}
+          {saving && (
+            <p role="status" className="px-1 text-xs text-foreground/65">
+              Saving changes… Displayed configuration remains confirmed until
+              the backend responds.
+            </p>
+          )}
+          {executionNeedsAttention(execution) && (
+            <InspectorSection className="shrink-0">
+              <InspectorSectionHeader>
+                <InspectorSectionTitle>Execution</InspectorSectionTitle>
+              </InspectorSectionHeader>
+              <InspectorSectionContent>
+                <ExecutionStatus execution={execution} details />
+              </InspectorSectionContent>
+            </InspectorSection>
+          )}
+          <InspectorNavigation
+            section={activeSection}
+            request={sectionRequest ?? localSelection}
+            select={selectSection}
+            available={availableSection}
+            focused={active}
+            help={() => commands.invoke("help.capabilities")}
+          >
+            <InspectorPanel value="overview" active={activeSection}>
+              <div className="flex min-w-0 flex-col gap-5">
+                <section>
+                  <p className="mt-1 text-xs leading-relaxed text-foreground/65">
+                    Changes here affect this agent. Project guidance and session
+                    policies have their own scope tabs.
+                  </p>
+                  <p className="mt-3 text-xs text-foreground/80">
+                    {data.plan?.active ? "Plan mode" : "Execution mode"} ·{" "}
+                    {data.tools.filter((tool) => tool.enabled).length} tools
+                    enabled
+                  </p>
+                  <p className="mt-1 wrap-anywhere text-xs text-foreground/65">
+                    Workspace:{" "}
+                    {data.remote?.profile
+                      ? `SSH ${data.remote.profile}`
+                      : (data.worktree ??
+                        data.guidance?.directory ??
+                        "Backend workspace")}
+                    {data.sandbox ? " · sandbox enabled" : ""}
+                  </p>
+                </section>
+              </div>
+            </InspectorPanel>
+            <InspectorPanel value="tools" active={activeSection}>
+              <div className="flex min-w-0 flex-col gap-4">
                 {data.plan && (
-                  <Card size="sm">
-                    <CardHeader>
-                      <CardTitle>
-                        {data.plan.active ? "Plan mode active" : "Plan mode"}
-                      </CardTitle>
-                      <CardDescription>
-                        The assistant can read workspace files and save a plan.
-                        Exit to restore the previous tools.
-                      </CardDescription>
-                    </CardHeader>
-                    {data.plan.markdown && (
-                      <CardContent>
-                        <MessageMarkdown compact text={data.plan.markdown} />
-                      </CardContent>
-                    )}
-                    <CardFooter>
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        disabled={disabled}
-                        onClick={() =>
-                          void update({ planMode: !data.plan?.active })
+                  <section
+                    className="flex flex-col gap-3"
+                    aria-label="Plan mode"
+                  >
+                    <Field orientation="horizontal">
+                      <FieldContent>
+                        <FieldLabel htmlFor="conversation-plan">
+                          Plan mode
+                        </FieldLabel>
+                        <FieldDescription>
+                          Review files and propose steps without editing
+                          workspace files. Turn off to implement.
+                        </FieldDescription>
+                      </FieldContent>
+                      <Switch
+                        id="conversation-plan"
+                        checked={data.plan.active}
+                        disabled={
+                          disabled ||
+                          !!commands.get("conversation.plan")?.disabled
                         }
-                      >
-                        {data.plan.active
-                          ? "Exit Plan mode"
-                          : "Enter Plan mode"}
-                      </Button>
-                    </CardFooter>
-                  </Card>
+                        onCheckedChange={() =>
+                          void mutate(async () => {
+                            setData(
+                              (await commands.invoke(
+                                "conversation.plan",
+                              )) as Configuration,
+                            );
+                          })
+                        }
+                      />
+                    </Field>
+                    {data.plan.markdown && (
+                      <SettingsDisclosure title="Saved plan">
+                        <MessageMarkdown compact text={data.plan.markdown} />
+                      </SettingsDisclosure>
+                    )}
+                  </section>
                 )}
+                <InspectorTools
+                  tools={data.tools}
+                  custom={data.toolSource === "conversation"}
+                  working={busy}
+                  saving={saving}
+                  planMode={data.plan?.active}
+                  update={(tools) => void update({ tools })}
+                />
+              </div>
+            </InspectorPanel>
+            <InspectorPanel value="workspace" active={activeSection}>
+              <div className="flex min-w-0 flex-col gap-7">
                 {(showRemote ||
                   data.worktree !== undefined ||
                   data.sandbox !== undefined) && (
@@ -371,20 +434,39 @@ export function ConversationInspector({
                     hostMcp={data.mcpEnabled || data.mcpSuspended}
                   />
                 )}
-                {data.codeMode !== undefined && !data.plan?.active && (
-                  <Card size="sm">
-                    <CardHeader>
-                      <CardTitle>Code Mode</CardTitle>
-                      <CardDescription>
-                        Let the assistant compose enabled tools in sandboxed
-                        JavaScript and discover deferred tools.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardFooter>
+              </div>
+            </InspectorPanel>
+            <InspectorPanel value="integrations" active={activeSection}>
+              <div className="flex min-w-0 flex-col gap-7">
+                {data.plan?.active && (
+                  <p className="text-xs text-foreground/65">
+                    Plan mode suspends integration tools. Turn it off in
+                    Behavior &amp; tool access to change these selections.
+                  </p>
+                )}
+                {(data.sandbox || data.remote?.profile) && (
+                  <p className="text-xs text-foreground/65">
+                    Host MCP and managed extensions cannot be enabled with
+                    sandbox or SSH execution. Use Workspace &amp; isolation to
+                    change the execution environment.
+                  </p>
+                )}
+                {data.codeMode !== undefined && (
+                  <InspectorSection>
+                    <InspectorSectionHeader>
+                      <InspectorSectionTitle>
+                        Tool scripting (Code Mode)
+                      </InspectorSectionTitle>
+                      <InspectorSectionDescription>
+                        Let the assistant combine tool calls in JavaScript.
+                        Leave off for ordinary tool use.
+                      </InspectorSectionDescription>
+                    </InspectorSectionHeader>
+                    <InspectorSectionActions>
                       <Button
                         size="xs"
                         variant="outline"
-                        disabled={disabled}
+                        disabled={disabled || !!data.plan?.active}
                         onClick={() =>
                           void update({ codeMode: !data.codeMode })
                         }
@@ -393,19 +475,19 @@ export function ConversationInspector({
                           ? "Disable Code Mode"
                           : "Enable Code Mode"}
                       </Button>
-                    </CardFooter>
-                  </Card>
+                    </InspectorSectionActions>
+                  </InspectorSection>
                 )}
                 {data.mcp && (
-                  <Card size="sm">
-                    <CardHeader>
-                      <CardTitle>MCP tools</CardTitle>
-                      <CardDescription>
+                  <InspectorSection>
+                    <InspectorSectionHeader>
+                      <InspectorSectionTitle>MCP tools</InspectorSectionTitle>
+                      <InspectorSectionDescription>
                         Tools from servers configured on this backend. Calls run
                         with each server’s own permissions.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                      </InspectorSectionDescription>
+                    </InspectorSectionHeader>
+                    <InspectorSectionContent>
                       {data.mcp.invalid && (
                         <p role="alert">
                           The backend MCP configuration is invalid or has unsafe
@@ -413,7 +495,15 @@ export function ConversationInspector({
                         </p>
                       )}
                       {data.mcp.servers.length === 0 && !data.mcp.invalid && (
-                        <p>No MCP servers are configured.</p>
+                        <p>
+                          <Link
+                            className="underline underline-offset-4"
+                            href={`/devices/${encodeURIComponent(deviceId)}/settings/mcp`}
+                          >
+                            Add MCP servers
+                          </Link>{" "}
+                          in machine settings.
+                        </p>
                       )}
                       <p>
                         Reload reads the backend configuration file and closes
@@ -430,8 +520,8 @@ export function ConversationInspector({
                           </li>
                         ))}
                       </ul>
-                    </CardContent>
-                    <CardFooter className="flex-wrap gap-2">
+                    </InspectorSectionContent>
+                    <InspectorSectionActions className="flex-wrap gap-2">
                       <Button
                         size="xs"
                         variant="outline"
@@ -480,21 +570,23 @@ export function ConversationInspector({
                           Reconnect servers
                         </Button>
                       )}
-                    </CardFooter>
-                  </Card>
+                    </InspectorSectionActions>
+                  </InspectorSection>
                 )}
                 {data.managedExtensions && (
-                  <Card size="sm">
-                    <CardHeader>
-                      <CardTitle>Managed extensions</CardTitle>
-                      <CardDescription>
+                  <InspectorSection>
+                    <InspectorSectionHeader>
+                      <InspectorSectionTitle>
+                        Managed extensions
+                      </InspectorSectionTitle>
+                      <InspectorSectionDescription>
                         Trusted backend code, installed in machine settings.
                         Selection enables hooks and makes tools available;
                         existing tool restrictions still apply. Plan mode
                         suspends these extensions.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-2">
+                      </InspectorSectionDescription>
+                    </InspectorSectionHeader>
+                    <InspectorSectionContent className="flex flex-col gap-2">
                       {data.managedExtensions.problem && (
                         <p role="alert">{data.managedExtensions.problem}</p>
                       )}
@@ -550,25 +642,23 @@ export function ConversationInspector({
                       })}
                       {!data.managedExtensions.installed?.length &&
                         !data.managedExtensions.selected.length && (
-                          <p>No managed extensions installed.</p>
+                          <p>
+                            <Link
+                              className="underline underline-offset-4"
+                              href={`/devices/${encodeURIComponent(deviceId)}/settings/extensions`}
+                            >
+                              Manage extensions
+                            </Link>{" "}
+                            in machine settings.
+                          </p>
                         )}
-                    </CardContent>
-                  </Card>
+                    </InspectorSectionContent>
+                  </InspectorSection>
                 )}
-                <InspectorTools
-                  tools={data.tools}
-                  custom={data.toolSource === "conversation"}
-                  working={busy}
-                  saving={saving}
-                  planMode={data.plan?.active}
-                  update={(tools) => void update({ tools })}
-                />
               </div>
-            </ScrollArea>
-          </TabsContent>
-          <TabsContent value="instructions" keepMounted className="min-h-0">
-            <ScrollArea className="h-full">
-              <div className="flex min-w-0 flex-col gap-4 px-1 py-2 pr-3">
+            </InspectorPanel>
+            <InspectorPanel value="instructions" active={activeSection}>
+              <div className="flex min-w-0 flex-col gap-4">
                 <InstructionEditor
                   label="Conversation instructions"
                   scope="Applies to each reply in this conversation, starting with the next model request after you save."
@@ -674,59 +764,10 @@ export function ConversationInspector({
                   </Collapsible>
                 )}
               </div>
-            </ScrollArea>
-          </TabsContent>
-          {data.postRunCommand !== undefined && (
-            <TabsContent value="tasks" keepMounted className="min-h-0">
-              <ScrollArea className="h-full">
-                <div className="flex min-w-0 flex-col gap-4 px-1 py-2 pr-3">
-                  <InspectorTasks
-                    path={path}
-                    request={request}
-                    active={tasksOpen}
-                  />
-                  <InspectorAgents
-                    key={`agents:${path}`}
-                    path={path}
-                    request={request}
-                    active={tasksOpen}
-                  />
-                  <InspectorTaskHistory
-                    key={`task-history:${path}`}
-                    path={path}
-                    request={request}
-                    active={tasksOpen}
-                  />
-                  <ScheduleJob
-                    key={`job:${path}`}
-                    path={path}
-                    request={request}
-                  />
-                  <ScheduleReview
-                    key={`review:${path}`}
-                    canChooseWorktree={
-                      data.worktree !== undefined && !data.remote?.profile
-                    }
-                    path={path}
-                    request={request}
-                    savedModel={savedModel}
-                  />
-                  <PostRunSettings
-                    value={data.postRunCommand}
-                    repairLimit={data.postRunRepairLimit ?? 0}
-                    disabled={disabled}
-                    save={(postRunCommand, postRunRepairLimit) =>
-                      update({ postRunCommand, postRunRepairLimit })
-                    }
-                  />
-                </div>
-              </ScrollArea>
-            </TabsContent>
-          )}
-          {data.context && (
-            <TabsContent value="context" keepMounted className="min-h-0">
-              <ScrollArea className="h-full">
-                <div className="flex min-w-0 flex-col gap-4 px-1 py-2 pr-3">
+            </InspectorPanel>
+            <InspectorPanel value="context" active={activeSection}>
+              {data.context && (
+                <div className="flex min-w-0 flex-col gap-4">
                   <InspectorContext
                     settings={data.context}
                     sessionSettingsHref={scoped ? sessionHref : undefined}
@@ -764,10 +805,168 @@ export function ConversationInspector({
                     />
                   )}
                 </div>
-              </ScrollArea>
-            </TabsContent>
-          )}
-        </Tabs>
+              )}
+            </InspectorPanel>
+            <InspectorPanel value="checks" active={activeSection}>
+              {data.postRunCommand !== undefined && (
+                <div>
+                  <PostRunSettings
+                    value={data.postRunCommand}
+                    repairLimit={data.postRunRepairLimit ?? 0}
+                    disabled={disabled}
+                    save={(postRunCommand, postRunRepairLimit) =>
+                      update({ postRunCommand, postRunRepairLimit })
+                    }
+                  />
+                </div>
+              )}
+            </InspectorPanel>
+            <InspectorPanel value="tasks" active={activeSection}>
+              {(expanded) =>
+                data.postRunCommand !== undefined && (
+                  <div className="flex flex-col gap-6">
+                    <InspectorTasks
+                      path={path}
+                      request={request}
+                      active={active && expanded}
+                    />
+                  </div>
+                )
+              }
+            </InspectorPanel>
+            <InspectorPanel value="agents" active={activeSection}>
+              {(expanded) =>
+                data.postRunCommand !== undefined && (
+                  <div>
+                    <InspectorAgents
+                      path={path}
+                      request={request}
+                      active={active && expanded}
+                    />
+                  </div>
+                )
+              }
+            </InspectorPanel>
+            <InspectorPanel value="review" active={activeSection}>
+              {data.postRunCommand !== undefined && (
+                <div>
+                  <ScheduleReview
+                    canChooseWorktree={
+                      data.worktree !== undefined && !data.remote?.profile
+                    }
+                    path={path}
+                    request={request}
+                    savedModel={savedModel}
+                  />
+                </div>
+              )}
+            </InspectorPanel>
+            <InspectorPanel value="job" active={activeSection}>
+              {data.postRunCommand !== undefined && (
+                <div>
+                  <ScheduleJob path={path} request={request} />
+                </div>
+              )}
+            </InspectorPanel>
+            <InspectorPanel value="history" active={activeSection}>
+              {(expanded) =>
+                data.postRunCommand !== undefined && (
+                  <div>
+                    <InspectorTaskHistory
+                      path={path}
+                      request={request}
+                      active={active && expanded}
+                    />
+                  </div>
+                )
+              }
+            </InspectorPanel>
+            <InspectorPanel value="status" active={activeSection}>
+              <div className="flex min-w-0 flex-col gap-6">
+                <section>
+                  <h2 className="text-base font-semibold">Effective status</h2>
+                  <p className="mt-1 text-xs text-foreground/65">
+                    Backend-confirmed configuration; the next-send selection is
+                    shown separately.
+                  </p>
+                  <dl className="mt-4 flex flex-col gap-3">
+                    {[
+                      [
+                        "Saved model",
+                        data.context?.model
+                          ? `${data.context.model.name} (${data.context.model.provider})`
+                          : "None",
+                      ],
+                      ["Next-send model", selectedModel?.name ?? "Unchanged"],
+                      [
+                        "Mode",
+                        data.plan?.active
+                          ? "Plan — workspace read-only tools"
+                          : "Execution",
+                      ],
+                      [
+                        "Workspace",
+                        data.remote?.profile
+                          ? `SSH: ${data.remote.profile}`
+                          : (data.worktree ??
+                            data.guidance?.directory ??
+                            "Backend workspace"),
+                      ],
+                      [
+                        "Sandbox",
+                        data.sandbox === undefined
+                          ? "Unsupported"
+                          : data.sandbox
+                            ? "Enabled"
+                            : "Disabled",
+                      ],
+                      [
+                        "Tool scripting",
+                        data.codeMode ? "Enabled" : "Disabled",
+                      ],
+                      [
+                        "MCP",
+                        data.mcpSuspended
+                          ? "Suspended"
+                          : data.mcpEnabled
+                            ? "Enabled"
+                            : "Disabled",
+                      ],
+                      [
+                        "Extensions",
+                        data.managedExtensions?.suspended
+                          ? "Suspended"
+                          : data.managedExtensions?.selected.join(", ") ||
+                            "None",
+                      ],
+                      [
+                        "Session budget",
+                        data.context?.tokenBudget ?? "Unlimited",
+                      ],
+                      ["Check command", data.postRunCommand ?? "None"],
+                    ].map(([label, value]) => (
+                      <div key={String(label)}>
+                        <dt className="text-xs text-foreground/60">{label}</dt>
+                        <dd className="mt-1 wrap-anywhere text-sm">
+                          {String(value)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+                {execution && <ExecutionStatus execution={execution} details />}
+                <SettingsDisclosure title="Diagnostic identities">
+                  <dl className="flex flex-col gap-2 font-mono text-xs text-foreground/65">
+                    <dt>Conversation endpoint</dt>
+                    <dd className="wrap-anywhere">{path}</dd>
+                    <dt>Configuration revision</dt>
+                    <dd className="wrap-anywhere">{data.revision}</dd>
+                  </dl>
+                </SettingsDisclosure>
+              </div>
+            </InspectorPanel>
+          </InspectorNavigation>
+        </div>
       )}
     </div>
   );

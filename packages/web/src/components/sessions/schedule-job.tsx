@@ -3,14 +3,6 @@
 import { useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Field,
   FieldDescription,
   FieldError,
@@ -21,8 +13,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { useBackendRequest } from "@/hooks/use-backend-request";
-
 import { AgentProfilePicker } from "./agent-profile-picker";
+import {
+  InspectorSection,
+  InspectorSectionActions,
+  InspectorSectionContent,
+  InspectorSectionDescription,
+  InspectorSectionHeader,
+  InspectorSectionTitle,
+} from "./inspector-section";
 
 export function ScheduleJob({
   path,
@@ -94,16 +93,16 @@ export function ScheduleJob({
     }
   }
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle>Background job</CardTitle>
-        <CardDescription>
+    <InspectorSection>
+      <InspectorSectionHeader>
+        <InspectorSectionTitle>Background job</InspectorSectionTitle>
+        <InspectorSectionDescription>
           Run instructions in a separate worker using this chat’s configuration
           or a saved agent profile, with this chat’s post-run checks. Workers
           share the session token budget.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+        </InspectorSectionDescription>
+      </InspectorSectionHeader>
+      <InspectorSectionContent>
         <FieldGroup>
           <AgentProfilePicker
             request={request}
@@ -217,8 +216,8 @@ export function ScheduleJob({
         {message && (
           <p role={message.error ? "alert" : "status"}>{message.text}</p>
         )}
-      </CardContent>
-      <CardFooter>
+      </InspectorSectionContent>
+      <InspectorSectionActions>
         <Button
           size="xs"
           disabled={saving || invalid || !content.trim()}
@@ -232,7 +231,7 @@ export function ScheduleJob({
                 ? "Start job"
                 : "Schedule job"}
         </Button>
-      </CardFooter>
-    </Card>
+      </InspectorSectionActions>
+    </InspectorSection>
   );
 }

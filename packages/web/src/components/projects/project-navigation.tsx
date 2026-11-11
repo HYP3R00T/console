@@ -1,5 +1,13 @@
 "use client";
-import { Layers, Pencil, Pin, PinOff, SquarePen, X } from "lucide-react";
+import {
+  Layers,
+  Pencil,
+  Pin,
+  PinOff,
+  SquarePen,
+  Workflow,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
@@ -74,6 +82,16 @@ export function ProjectNavigation({
       onSelect: () => void create("session"),
     },
     {
+      id: "workflows",
+      label: "Workflows",
+      icon: Workflow,
+      disabled: !state.connected || !project.available,
+      onSelect: () => {
+        router.push(href);
+        closeMobile();
+      },
+    },
+    {
       id: "toggle-pin",
       label: pinned ? "Unpin" : "Pin to top",
       icon: pinned ? PinOff : Pin,
@@ -91,7 +109,7 @@ export function ProjectNavigation({
     },
     {
       id: "remove",
-      label: "Remove project",
+      label: "Archive project",
       icon: X,
       destructive: true,
       separator: true,

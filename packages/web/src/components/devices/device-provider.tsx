@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { useConnections } from "@/components/connection-provider";
+import { clearBackendToken } from "@/lib/backend/auth";
 import {
   clientConfiguration,
   subscribeConfiguration,
@@ -175,10 +176,13 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
             ),
           );
           disconnect(id);
+          if (replacement.url !== previous.url) clearBackendToken(previous.url);
         },
         remove: (id) => {
+          const device = devices.find((device) => device.id === id);
           save(devices.filter((device) => device.id !== id));
           disconnect(id);
+          if (device) clearBackendToken(device.url);
         },
       }}
     >

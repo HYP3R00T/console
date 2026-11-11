@@ -3,6 +3,7 @@ import test from "node:test";
 import { executeBackendCommand } from "../src/lib/backend/commands.ts";
 import {
   CommandRegistry,
+  slashCommands,
   slashSuggestions,
 } from "../src/lib/command-registry.ts";
 
@@ -44,13 +45,20 @@ test("cleanup of an older handler preserves newer registration", () => {
   assert.equal(registry.invoke("conversation.stop", "/a"), 2);
 });
 test("slash discovery requires a leading slash, ignores composition and never executes text", () => {
-  assert.equal(slashSuggestions("/", false).length, 4);
+  assert.equal(
+    slashSuggestions("/", false).length,
+    Object.keys(slashCommands).length,
+  );
   assert.deepEqual(slashSuggestions("/comp", false), [
     ["/compact", "conversation.compact"],
   ]);
   for (const content of ["hello /stop", " /stop", "/stop now", "\n/stop"])
     assert.deepEqual(slashSuggestions(content, false), []);
   assert.deepEqual(slashSuggestions("/stop", true), []);
+  assert.deepEqual(slashSuggestions("/plan", false), [
+    ["/plan", "conversation.plan"],
+  ]);
+  assert.deepEqual(slashSuggestions("/plan", true), []);
 });
 test("HTTP adapters capture the selected target and reject missing context", async () => {
   const calls: unknown[] = [];

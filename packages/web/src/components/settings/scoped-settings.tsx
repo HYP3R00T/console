@@ -3,7 +3,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useBackendCommands } from "@/components/commands/backend-commands";
 import { useCommands } from "@/components/commands/command-registry";
-import { InspectorRuntimePolicy } from "@/components/sessions/inspector-runtime-policy";
+import { RuntimePolicyFields } from "@/components/sessions/inspector-runtime-policy";
 import type { RuntimePolicy } from "@/components/sessions/runtime-policy-form";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,9 +13,18 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useBackendRequest } from "@/hooks/use-backend-request";
 import type { BackendCommandId } from "@/lib/backend/commands";
+import {
+  type RuntimePolicyDraft,
+  resetRuntimePolicyDraft,
+  runtimePolicyDraftInvalid,
+  runtimePolicyDraftValue,
+} from "@/lib/runtime-policy-draft";
+import { ProjectDefaultTools } from "./project-default-tools";
+import { SettingsDisclosure } from "./settings-presentation";
 
 type Scope = "machine" | "project" | "session";
 type Snapshot = {
@@ -77,6 +86,9 @@ function SettingsForm({
     values: Record<string, unknown>;
   }>();
   const [error, setError] = useState<string>();
+  const [loadError, setLoadError] = useState<string>();
+  const [policyDraft, setPolicyDraft] = useState<RuntimePolicyDraft>();
+  const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
   const generation = useRef(0);
@@ -89,7 +101,7 @@ function SettingsForm({
         ? `/v1/projects/${encodeURIComponent(projectId ?? "")}/agent-settings`
         : `/v1/sessions/${encodeURIComponent(sessionId ?? "")}/runtime-settings`;
   const supported = discovery.supports(command);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refresh explicitly reloads the current scope after discarding edits.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refresh reloads confirmed values while preserving the current draft.
   useEffect(() => {
     if (!client || !supported) return;
     const controller = new AbortController();
@@ -106,11 +118,11 @@ function SettingsForm({
           version === generation.current
         ) {
           setSnapshot(next);
-          setError(undefined);
+          setLoadError(undefined);
         }
       } catch (error) {
         if (!controller.signal.aborted)
-          setError(
+          setLoadError(
             error instanceof Error ? error.message : "Could not load settings.",
           );
       } finally {
@@ -126,7 +138,28 @@ function SettingsForm({
   }, [client, request, path, supported, refresh]);
   const values = draft?.values ?? snapshot?.values ?? {};
   const stale = !!draft && draft.revision !== snapshot?.revision;
+  const policyValue = (snapshot?.values.runtimePolicy ?? {}) as RuntimePolicy;
+  const policyInvalid =
+    scope === "session" && runtimePolicyDraftInvalid(policyValue, policyDraft);
+  const changes = Object.fromEntries(
+    Object.entries(draft?.values ?? {}).filter(
+      ([key, value]) =>
+        JSON.stringify(value) !== JSON.stringify(snapshot?.values[key]),
+    ),
+  );
+  const hasDraft = !!draft || !!policyDraft;
+  function editPolicy(next: RuntimePolicyDraft) {
+    setPolicyDraft(next);
+    edit(
+      "runtimePolicy",
+      runtimePolicyDraftInvalid(policyValue, next)
+        ? (values.runtimePolicy ?? {})
+        : runtimePolicyDraftValue(next),
+    );
+  }
   function edit(key: string, value: unknown) {
+    setSaved(false);
+    setError(undefined);
     if (snapshot)
       setDraft((current) => ({
         revision: current?.revision ?? snapshot.revision,
@@ -146,6 +179,8 @@ function SettingsForm({
       })) as Snapshot;
       setSnapshot(next);
       setDraft(undefined);
+      setPolicyDraft(undefined);
+      setSaved(true);
       return true;
     } catch (error) {
       setError(
@@ -162,6 +197,7 @@ function SettingsForm({
       <Field key={key}>
         <FieldLabel htmlFor={`${scope}-${key}`}>{label}</FieldLabel>
         <Textarea
+          rows={3}
           id={`${scope}-${key}`}
           maxLength={16000}
           value={String(values[key] ?? "")}
@@ -178,25 +214,37 @@ function SettingsForm({
       className="flex w-full min-w-0 flex-col gap-5"
       aria-label={`${scope} settings`}
     >
-      <header>
-        <h2
-          className={
-            embedded ? "text-sm font-semibold" : "text-xl font-semibold"
-          }
+      <header className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <h2
+            className={
+              embedded
+                ? "text-base font-semibold text-foreground"
+                : "text-xl font-semibold text-foreground"
+            }
+          >
+            {scope === "machine"
+              ? "Workspace guidance"
+              : scope === "project"
+                ? "Project guidance"
+                : "Session runtime"}
+          </h2>
+          <p className="mt-1 text-xs leading-relaxed text-foreground/65">
+            {scope === "machine"
+              ? "Backend-owned. Guidance is shared across all projects and conversations on this machine."
+              : scope === "project"
+                ? "Shared across this project’s sessions and conversations."
+                : "Shared by this session’s conversations and workers. Budget changes can apply during work; other runtime changes require an idle session."}
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={busy}
+          onClick={() => setRefresh((value) => value + 1)}
         >
-          {scope === "machine"
-            ? "Workspace guidance"
-            : scope === "project"
-              ? "Project agent settings"
-              : "Session runtime settings"}
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {scope === "machine"
-            ? "Backend-owned. Guidance is shared across all projects and conversations on this machine."
-            : scope === "project"
-              ? "Backend-owned. Instructions and evidence rules apply across this project; default tools apply only to new conversations."
-              : "Backend-owned. Applies to every conversation, fork, reviewer and worker in this session. Token budgets can change during work; other runtime edits require an idle session."}
-        </p>
+          Refresh
+        </Button>
       </header>
       {!client ? (
         <p>Connect this machine first.</p>
@@ -213,179 +261,190 @@ function SettingsForm({
       ) : !snapshot ? (
         <p role="status">Loading settings…</p>
       ) : (
-        <>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!draft || stale) return;
-              const changes = Object.fromEntries(
-                Object.entries(draft.values).filter(
-                  ([key, value]) =>
-                    JSON.stringify(value) !==
-                    JSON.stringify(snapshot.values[key]),
-                ),
-              );
-              if (Object.keys(changes).length) void save(changes);
-            }}
-          >
-            <FieldGroup>
-              {scope === "machine" &&
-                textField(
-                  "workspaceGuidance",
-                  "Machine workspace guidance",
-                  "Blank restores the built-in guidance. Execution facts remain runtime-owned.",
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!draft || stale || policyInvalid) return;
+            if (Object.keys(changes).length) void save(changes);
+          }}
+        >
+          <FieldGroup>
+            {scope === "machine" &&
+              textField(
+                "workspaceGuidance",
+                "Machine workspace guidance",
+                "Blank restores the built-in guidance. Execution facts remain runtime-owned.",
+              )}
+            {scope === "project" && (
+              <>
+                {textField(
+                  "projectInstructions",
+                  "Shared project instructions",
+                  "Separate from AGENTS.md. Blank clears these instructions.",
                 )}
-              {scope === "project" && (
-                <>
-                  {textField(
-                    "projectInstructions",
-                    "Shared project instructions",
-                    "Separate from AGENTS.md. Blank clears these instructions.",
-                  )}
-                  {textField(
-                    "inspectionGuidance",
-                    "Project evidence rules",
-                    "Blank restores built-in evidence guidance.",
-                  )}
-                  <Field>
-                    <FieldLabel htmlFor="project-tools">
-                      Default tool names
-                    </FieldLabel>
-                    <Textarea
-                      id="project-tools"
-                      value={
-                        values.projectTools === null
-                          ? ""
-                          : ((values.projectTools as string[]) ?? []).join("\n")
-                      }
-                      disabled={busy}
-                      onChange={(event) =>
-                        edit(
-                          "projectTools",
-                          event.target.value.trim()
-                            ? event.target.value.split(/\s+/).filter(Boolean)
-                            : null,
-                        )
-                      }
-                    />
-                    <FieldDescription>
-                      One tool per line. Blank enables built-in defaults;
-                      existing conversation selections are unchanged. Available:{" "}
-                      {snapshot.tools?.join(", ")}
-                    </FieldDescription>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="self-start"
-                      disabled={busy}
-                      onClick={() => edit("projectTools", [])}
-                    >
-                      Disable all default tools
-                    </Button>
-                  </Field>
-                </>
-              )}
-              {scope === "session" && (
-                <>
-                  <Field>
-                    <FieldLabel htmlFor="session-budget">
-                      Session token budget
-                    </FieldLabel>
-                    <Input
-                      id="session-budget"
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={(values.tokenBudget as number) ?? ""}
-                      disabled={busy}
-                      onChange={(event) =>
-                        edit(
-                          "tokenBudget",
-                          event.target.value
-                            ? Number(event.target.value)
-                            : null,
-                        )
-                      }
-                    />
-                    <FieldDescription>
-                      Blank clears the shared threshold. In-flight requests can
-                      overshoot it.
-                    </FieldDescription>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="session-compaction">
-                      Automatic compaction
-                    </FieldLabel>
-                    <select
-                      id="session-compaction"
-                      className="rounded-md border border-input bg-background p-2"
-                      value={String(values.automaticCompaction)}
-                      disabled={busy}
-                      onChange={(event) =>
-                        edit(
-                          "automaticCompaction",
-                          event.target.value === "true",
-                        )
-                      }
-                    >
-                      <option value="true">Enabled</option>
-                      <option value="false">Disabled</option>
-                    </select>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="session-retention">
-                      Recent tokens to retain
-                    </FieldLabel>
-                    <Input
-                      id="session-retention"
-                      type="number"
-                      min={1000}
-                      max={32000}
-                      step={1000}
-                      value={(values.keepRecentTokens as number) ?? 1000}
-                      disabled={busy}
-                      onChange={(event) =>
-                        edit("keepRecentTokens", Number(event.target.value))
-                      }
-                    />
-                  </Field>
-                </>
-              )}
-            </FieldGroup>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button type="submit" disabled={busy || !draft || stale}>
-                {busy ? "Saving…" : "Save settings"}
+                {textField(
+                  "inspectionGuidance",
+                  "Project evidence rules",
+                  "Blank restores built-in evidence guidance.",
+                )}
+                <SettingsDisclosure title="Tools for new conversations">
+                  <ProjectDefaultTools
+                    available={snapshot.tools ?? []}
+                    selected={
+                      Array.isArray(values.projectTools)
+                        ? (values.projectTools as string[])
+                        : null
+                    }
+                    disabled={busy}
+                    onChange={(value) => edit("projectTools", value)}
+                  />
+                </SettingsDisclosure>
+              </>
+            )}
+            {scope === "session" && (
+              <>
+                <Field>
+                  <FieldLabel htmlFor="session-budget">
+                    Session token budget
+                  </FieldLabel>
+                  <Input
+                    id="session-budget"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={(values.tokenBudget as number) ?? ""}
+                    disabled={busy}
+                    onChange={(event) =>
+                      edit(
+                        "tokenBudget",
+                        event.target.value ? Number(event.target.value) : null,
+                      )
+                    }
+                  />
+                  <FieldDescription>
+                    Blank clears the shared threshold. In-flight requests can
+                    overshoot it.
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="session-compaction">
+                    Automatic compaction
+                  </FieldLabel>
+                  <Switch
+                    id="session-compaction"
+                    checked={values.automaticCompaction === true}
+                    disabled={busy}
+                    onCheckedChange={(checked) =>
+                      edit("automaticCompaction", checked)
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="session-retention">
+                    Recent tokens to retain
+                  </FieldLabel>
+                  <Input
+                    id="session-retention"
+                    type="number"
+                    min={1000}
+                    max={32000}
+                    step={1000}
+                    value={(values.keepRecentTokens as number) ?? 1000}
+                    disabled={busy}
+                    onChange={(event) =>
+                      edit("keepRecentTokens", Number(event.target.value))
+                    }
+                  />
+                </Field>
+              </>
+            )}
+          </FieldGroup>
+          {scope === "session" && (
+            <section
+              className="mt-8 flex flex-col gap-3"
+              aria-label="Execution policies"
+            >
+              <header>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Execution policies
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-foreground/65">
+                  Retries, queued input, compaction thresholds and memory.
+                  Default values follow the backend.
+                </p>
+              </header>
+              <RuntimePolicyFields
+                value={policyValue}
+                draft={policyDraft}
+                disabled={busy || stale}
+                onChange={editPolicy}
+              />
+              <Button
+                className="self-start"
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={
+                  busy ||
+                  stale ||
+                  (!policyDraft && Object.keys(policyValue).length === 0)
+                }
+                onClick={() => {
+                  setPolicyDraft(resetRuntimePolicyDraft(policyValue));
+                  edit("runtimePolicy", null);
+                }}
+              >
+                Restore policy defaults
               </Button>
+              {policyDraft?.reset && (
+                <p role="status" className="text-xs text-foreground/65">
+                  Policy defaults staged. Save changes to apply.
+                </p>
+              )}
+            </section>
+          )}
+          <div className="mt-6 flex flex-wrap items-center gap-2">
+            <Button
+              type="submit"
+              disabled={
+                busy || !Object.keys(changes).length || stale || policyInvalid
+              }
+            >
+              {busy ? "Saving…" : "Save changes"}
+            </Button>
+            {hasDraft && (
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 disabled={busy}
                 onClick={() => {
                   setDraft(undefined);
-                  setRefresh((value) => value + 1);
+                  setPolicyDraft(undefined);
+                  setError(undefined);
                 }}
               >
-                Discard edits and refresh
+                Discard changes
               </Button>
-            </div>
-          </form>
-          {scope === "session" && (
-            <InspectorRuntimePolicy
-              value={(snapshot.values.runtimePolicy ?? {}) as RuntimePolicy}
-              disabled={busy || !!draft}
-              save={(runtimePolicy) => save({ runtimePolicy })}
-            />
-          )}
-        </>
+            )}
+            <span role="status" className="text-xs text-foreground/65">
+              {Object.keys(changes).length || policyInvalid
+                ? "Unsaved changes"
+                : saved
+                  ? "Changes saved"
+                  : ""}
+            </span>
+          </div>
+        </form>
       )}
       {stale && (
         <p role="alert" className="text-sm text-destructive">
-          Settings changed elsewhere. Discard edits and refresh before saving.
+          Settings changed elsewhere. Discard changes to review the latest
+          values before saving.
         </p>
       )}
-      {error && (
+      {(error || loadError) && (
         <p role="alert" className="text-sm text-destructive">
-          {error}
+          {error ?? loadError}
         </p>
       )}
     </section>

@@ -14,6 +14,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import type { BackendClient } from "@/lib/backend/client";
 import { executeBackendCommand } from "@/lib/backend/commands";
+import { togglePlanMode } from "@/lib/plan-command";
 export function ConversationCommands({
   request,
   sessionId,
@@ -40,6 +41,8 @@ export function ConversationCommands({
   const [error, setError] = useState<string>(),
     [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
+  const planInFlight = useRef(false);
+  const [changingPlan, setChangingPlan] = useState(false);
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
@@ -77,6 +80,30 @@ export function ConversationCommands({
     }
   }
   useRegisterCommands({
+    "conversation.plan": {
+      disabled:
+        discovery.status === "ready" &&
+        !discovery.supports("conversation.configure")
+          ? "Conversation settings are not advertised by this backend."
+          : working || pending || changingPlan || saving
+            ? "Plan mode can change when the conversation is idle."
+            : undefined,
+      run: async () => {
+        if (planInFlight.current)
+          throw new Error("A Plan mode change is pending.");
+        planInFlight.current = true;
+        setChangingPlan(true);
+        try {
+          return await togglePlanMode(
+            { request },
+            { sessionId, conversationId },
+          );
+        } finally {
+          planInFlight.current = false;
+          if (active.current) setChangingPlan(false);
+        }
+      },
+    },
     "conversation.stop": {
       disabled: !working
         ? "This conversation has no active or queued work."

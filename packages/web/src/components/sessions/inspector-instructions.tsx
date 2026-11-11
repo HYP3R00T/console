@@ -4,21 +4,21 @@ import { useId, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Field,
   FieldError,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  InspectorSection,
+  InspectorSectionAction,
+  InspectorSectionActions,
+  InspectorSectionContent,
+  InspectorSectionDescription,
+  InspectorSectionHeader,
+  InspectorSectionTitle,
+} from "./inspector-section";
 import { MessageMarkdown } from "./message-markdown";
 
 export type Guidance = {
@@ -46,24 +46,30 @@ export function InstructionEditor({
   save: (value: string | null) => Promise<boolean>;
 }) {
   const id = useId();
-  const [draft, setDraft] = useState<{ text: string; original: string }>();
+  const [draft, setDraft] = useState<{
+    text: string;
+    original: string;
+    reset?: boolean;
+  }>();
   const [preview, setPreview] = useState(false);
   const changed = !!draft && draft.original !== value;
   const text = draft?.text ?? value;
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle>{label}</CardTitle>
-        <CardDescription id={`${id}-scope`}>{scope}</CardDescription>
+    <InspectorSection>
+      <InspectorSectionHeader>
+        <InspectorSectionTitle>{label}</InspectorSectionTitle>
+        <InspectorSectionDescription id={`${id}-scope`}>
+          {scope}
+        </InspectorSectionDescription>
         {customized !== undefined && (
-          <CardAction>
+          <InspectorSectionAction>
             <Badge variant="secondary">
               {customized ? "Custom" : "Default"}
             </Badge>
-          </CardAction>
+          </InspectorSectionAction>
         )}
-      </CardHeader>
-      <CardContent className="flex min-w-0 flex-col gap-2">
+      </InspectorSectionHeader>
+      <InspectorSectionContent className="flex min-w-0 flex-col gap-2">
         {preview ? (
           <div className="min-h-16 wrap-anywhere rounded-md bg-muted/50 p-3">
             {text.trim() ? (
@@ -96,15 +102,20 @@ export function InstructionEditor({
               />
               {changed && (
                 <FieldError>
-                  Saved guidance changed elsewhere. Reset the draft to review
+                  Saved guidance changed elsewhere. Discard the draft to review
                   it.
                 </FieldError>
               )}
             </Field>
           </FieldGroup>
         )}
-      </CardContent>
-      <CardFooter className="flex-wrap justify-between gap-2">
+      </InspectorSectionContent>
+      {draft?.reset && (
+        <p role="status" className="text-xs text-foreground/65">
+          Default guidance staged. Save to apply.
+        </p>
+      )}
+      <InspectorSectionActions className="flex-wrap justify-between gap-2">
         <Button
           size="xs"
           variant="ghost"
@@ -120,7 +131,7 @@ export function InstructionEditor({
               variant="ghost"
               onClick={() => setDraft(undefined)}
             >
-              Reset draft
+              Discard changes
             </Button>
           ) : (
             customized && (
@@ -128,8 +139,8 @@ export function InstructionEditor({
                 size="xs"
                 variant="ghost"
                 disabled={disabled}
-                onClick={async () => {
-                  if (await save(null)) setDraft(undefined);
+                onClick={() => {
+                  setDraft({ original: value, text: "", reset: true });
                 }}
               >
                 Restore default
@@ -138,16 +149,18 @@ export function InstructionEditor({
           )}
           <Button
             size="xs"
-            disabled={disabled || changed || text.trim() === value}
+            disabled={
+              disabled || changed || (!draft?.reset && text.trim() === value)
+            }
             onClick={async () => {
-              if (await save(text)) setDraft(undefined);
+              if (await save(draft?.reset ? null : text)) setDraft(undefined);
             }}
           >
             Save
           </Button>
         </div>
-      </CardFooter>
-    </Card>
+      </InspectorSectionActions>
+    </InspectorSection>
   );
 }
 
@@ -165,14 +178,16 @@ export function RuntimeGuidance({
     : sections;
   if (!guidance && !other.length) return null;
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle>Environment and permissions</CardTitle>
-        <CardDescription>
+    <InspectorSection>
+      <InspectorSectionHeader>
+        <InspectorSectionTitle>
+          Environment and permissions
+        </InspectorSectionTitle>
+        <InspectorSectionDescription>
           Console reports these facts to the model.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex min-w-0 flex-col gap-4">
+        </InspectorSectionDescription>
+      </InspectorSectionHeader>
+      <InspectorSectionContent className="flex min-w-0 flex-col gap-4">
         {guidance && (
           <>
             <dl className="flex min-w-0 flex-col gap-3">
@@ -210,7 +225,7 @@ export function RuntimeGuidance({
             <MessageMarkdown compact text={text} />
           </div>
         ))}
-      </CardContent>
-    </Card>
+      </InspectorSectionContent>
+    </InspectorSection>
   );
 }

@@ -1,11 +1,11 @@
 # Web
 
-The Tasks inspector manages persistent background agents: create a named agent, send or steer requests, choose display/context/follow-up delivery, inspect its transcript, and stop active and queued work.
+The Background agents inspector manages persistent background agents: create a named agent, send or steer requests, choose display/context/follow-up delivery, inspect its transcript, and stop active and queued work.
 
 The Background review form and reviewer-profile editor expose 1–5 review passes, with one pass as the default for older profiles; the form previews a selected profile's pass count and per-pass turn limit.
 
 Local project reviews can load and select an existing linked worktree without changing the chat workspace; a selected checkout missing from a refreshed list remains selected and blocks scheduling until the user chooses another workspace.
-Agent state refreshes while the Tasks tab is active; request failures retain their admission IDs for safe retry, and each agent keeps an independent message draft until the inspector unmounts.
+Agent state refreshes while Background agents is active; request failures retain their admission IDs for safe retry, and each agent keeps an independent message draft until the inspector unmounts.
 
 The Next.js client runs at `http://127.0.0.1:3001`. It connects directly to selected backends; Next.js does not proxy their APIs. See the [README](../../README.md) for setup and checks.
 
@@ -29,7 +29,7 @@ Paths above are relative to `packages/web`. Backend data remains backend-owned. 
 - Machine icons/colors are browser-local bookmark preferences, shared by the primary rail and Manage devices. Rail tooltips show name, status and URL; right-click offers the same Edit dialog as device management. Icons are labels, not detected hardware or connection methods.
 - Editing a bookmark disconnects it and clears its recorded identity. Explicit reconnect accepts the new identity; duplicate connected aliases and unexpected identity changes are rejected.
 - Disconnect closes that client's requests and streams without stopping backend work. Credentials for AI providers are not stored in the browser.
-- Only loopback URLs are supported today. Remote access, SSH and Console authentication belong at the connection boundary and are not implemented.
+- Loopback HTTP and remote HTTPS URLs are supported. Authenticated backends use owner pairing and bearer headers for requests and SSE; remote execution through SSH remains a separate conversation capability.
 
 ## Layout and navigation
 
@@ -41,20 +41,20 @@ The regression test covers development, production and profiling filters; remove
 - Secondary panel: context for the selected machine or preference category. It is absent on Home/Manage devices, hideable with the bottom-left toggle and resizable while visible. Hidden navigation has no shortcut rail.
 - Workspace: one content region with top and bottom insets; inner panel edges meet their resize boundaries without padding. The shell owns an 8px right-edge gutter outside the resizable group, present with the inspector open, closed or unavailable; sidebar inspectors omit their former outer right padding, and right-side sheets use the same edge inset. The bottom bar shows current conversation identity. User prompts use right-aligned bubbles; assistant replies use unframed Markdown without repeated visible role labels.
 - Each prompt starts a chronological display group. Its tool arguments/results/failures appear in a collapsed Activity sequence before its replies. The latest group shows live work. These are display groups, not independent Durable runs: steering can join an existing run. Partial history without a loaded prompt is labelled as earlier activity. Event counts are real; elapsed durations are not currently recorded or displayed.
-- Ask the assistant to use the workspace reviewer. Show reviewer transcript in the parent call's Activity displays the brief, read results, and reviewer findings. The disclosure refreshes while the reviewer works. The review uses the parent model and workspace, with read-only tools. Disable `review_workspace` in Tools to turn it off for the conversation.
-- The right sidebar has Project, Session and Conversation scope tabs; Conversation contains Tools, Instructions, Context and Tasks with independently scrollable cards. Execution notices remain visible for retries, provider waits, compaction, post-run work and failed or stopped runs.
+- Ask the assistant to use the workspace reviewer. Show reviewer transcript in the parent call's Activity displays the brief, read results, and reviewer findings. The disclosure refreshes while the reviewer works. The review uses the parent model and workspace, with read-only tools. Disable `review_workspace` in Behavior & tool access to turn it off for the conversation.
+- The right sidebar has Project, Session and Conversation scope tabs; Conversation has named destinations with independently scrollable sections; Overview lists every available control. Execution notices remain visible for retries, provider waits, compaction, post-run work and failed or stopped runs.
 - Tasks lists active work and lets you save a shell command for checks after successful file edits. Checks run after the answer, hold queued messages until they settle, and report their outcome under Activity and to the model. Set Automatic repair attempts to 1–5 to let the assistant repair failures and recheck; 0 reports results only. Shell and MCP calls also trigger checks because their file effects are unknown. Stop interrupts the check and withdraws waiting input.
 - In Tasks, start a background review immediately or choose a one-time start in local time. The job keeps its scheduled time across backend restarts and uses the saved conversation model. Stop review cancels that job. Findings appear under Activity and include a reviewer transcript. Result delivery offers Display (UI only), Context (available to the next model request without starting work), or Follow up (start or queue a parent response). Context is the default for new reviews.
-- Tools controls access to Durable's read, write, edit and bash for the current conversation. In an idle chat, Enter Plan mode switches to workspace reads and plan submission. The saved plan appears in Tools. Exit restores the previous tool selection and keeps the plan.
+- Behavior & tool access controls access to Durable's read, write, edit and bash for the current conversation. In an idle chat, the Plan mode switch changes to workspace reads and plan submission. The saved plan appears beside the Plan switch. Exit restores the previous tool selection and keeps the plan.
 - Expand a tool for its description, typed parameters and optional scrollable JSON schema.
 - Instructions edits conversation guidance, opens Project in the same sidebar for shared project guidance and links machine guidance to Preferences; older backends retain the shared inspector editors. Shared project instructions are stored in Console, separate from repository files such as `AGENTS.md`. Built-in guidance and environment details are behind a disclosure. Guidance overrides can restore their defaults. Unsaved drafts survive tab changes and background refreshes.
 - Continue run is available after eligible failures and uses the saved model without sending the composer draft.
-- In project and standalone chats, Fork from here creates a conversation from a saved prompt or completed reply and shows a link to it. The fork links back to its source while that conversation is available and inherits its current SSH profile, if selected. Branch links show the parent, siblings and direct children. Standalone forks have independent Recents/pinned destinations; old root bookmarks remain valid. Forks share their session’s workspace and token budget.
-- In Tools, Execution workspace can attach an existing linked Git worktree to an idle project chat. The checkout becomes the working directory for tools, checks and reviewers, and the attachment persists across restarts.
+- In project and standalone chats, Fork conversation creates a conversation from a saved prompt or completed reply and shows a link to it. The fork links back to its source while that conversation is available and inherits its current SSH profile, if selected. Branch links show the parent, siblings and direct children. Standalone forks have independent Recents/pinned destinations; old root bookmarks remain valid. Forks share their session’s workspace and token budget.
+- In Workspace & isolation, Execution workspace can attach an existing linked Git worktree to an idle project chat. The checkout becomes the working directory for tools, checks and reviewers, and the attachment persists across restarts.
 - On Linux, Workspace sandbox can mount the checkout at `/workspace` with a separate filesystem and network namespace. It applies to file tools, commands and post-run checks. Plan mode and owned reviewers receive a read-only workspace mount.
-- Remote execution in Tools selects a backend-configured SSH workspace for the chat's tools, checks and reviewers. Stop or finish session work before switching destinations. The selector also lets you return to local execution if the saved profile is unavailable.
-- Enable Code Mode in Tools to let the assistant compose permitted tools in sandboxed JavaScript. Tool Search reveals deferred tools for later model requests. Completed scripts list nested calls under Activity. Nested tools use the selected execution workspace.
-- When the backend has configured MCP servers, Tools shows their connection status and an Enable MCP action for the current chat. Discover enabled MCP tools through Tool Search or Code Mode. Reconnect servers retries disconnected connections.
+- Remote execution in Workspace & isolation selects a backend-configured SSH workspace for the chat's tools, checks and reviewers. Stop or finish session work before switching destinations. The selector also lets you return to local execution if the saved profile is unavailable.
+- Enable Code Mode in Integrations to let the assistant compose permitted tools in sandboxed JavaScript. Tool Search reveals deferred tools for later model requests. Completed scripts list nested calls under Activity. Nested tools use the selected execution workspace.
+- When the backend has configured MCP servers, Integrations shows their connection status and an Enable MCP action for the current chat. Discover enabled MCP tools through Tool Search or Code Mode. Reconnect servers retries disconnected connections.
 - Context shows recorded usage and cost separately from estimated active context. An idle conversation can set a tool-round limit for each run.
 - Context shows the shared session token budget and opens Session in the same sidebar; older backends retain the inspector editor. The budget stops new model requests once recorded usage reaches the threshold. Raise or clear it to continue work.
 - Context identifies the saved conversation model and its catalog window. A different composer selection appears with its own limit under Selected for next send. Manual compaction uses the saved model. Automatic compaction and the recent-token retention target apply to the session. Manual compaction targets one conversation with optional summary guidance and preserves its transcript.
@@ -67,7 +67,7 @@ Machine workspace navigation starts with New conversation, opening an unsaved dr
 
 ## Row actions
 
-- Project: click its icon/name to expand; menu actions create a conversation/session, edit, pin/unpin or remove. Project compose targets Session 1; a session's compose action targets that session.
+- Project: click its icon/name to expand; menu actions create a conversation/session, edit, pin/unpin or archive. Project compose targets Session 1; a session's compose action targets that session.
 - Conversation: click to open; menu actions rename or pin/unpin. Archive runs immediately and reports progress/result in the shared toast area; busy work still requires Stop and archive. Machine settings → Archives provides restore and confirmed permanent history deletion.
 - Sections: Projects offers Add project; Recents offers New conversation; all sections expand/collapse.
 - Dots menus, right-click menus and inline shortcuts use the same definitions in `src/lib/navigation-actions.ts` and layout wrappers. Do not duplicate handlers or expose unsupported actions.
@@ -116,8 +116,9 @@ Machine settings → Runtime defaults saves the model and optional thinking leve
 
 Session runtime settings groups tool/queue behavior, retries/deadlines, compaction thresholds and progress/memory limits; each group expands independently, and older backends retain these controls in Context.
 Blank numeric fields and Default selections inherit backend defaults; per-model compaction overrides use the exact provider/model ID and take precedence over basic session compaction controls.
-Saving replaces the session policy for all sibling conversations and reviewers and requires the whole session to be idle; conflicting refreshes preserve the draft and require Reset draft before saving.
-Restore defaults clears the saved policy, and individual model overrides can be removed without changing the rest.
+Budget, automatic compaction, retention and execution policies share one session draft and Save changes action; policy and compaction changes require the whole session to be idle, while budget-only changes may apply during work.
+Restore policy defaults stages removal of policy overrides and model overrides; Save changes applies it, Discard changes abandons it, and Refresh updates confirmed values without discarding edits.
+Conflicting revisions preserve the draft and block saving until Discard changes; invalid raw policy values remain editable and prevent submission.
 
 ## Background review settings
 
@@ -126,9 +127,9 @@ A review can run for 1–50 model rounds (default 6); the choice applies only to
 
 ## Completed task history
 
-Tasks → Completed tasks lists persisted task outcomes, ownership, start/end times and consecutive interrupted attempts; Refresh history reloads the latest page, and Load older tasks appends earlier receipts.
+Task history & recovery → Completed tasks lists persisted task outcomes, ownership, start/end times and consecutive interrupted attempts; Refresh history reloads the latest page, and Load older tasks appends earlier receipts.
 Review receipts open their transcript or their owned task history; Back to conversation tasks returns to the parent scope.
-History excludes raw task inputs, results and provider diagnostics and loads only while the Tasks panel is active.
+History excludes raw task inputs, results and provider diagnostics and loads only while Task history & recovery is active.
 Failed or cancelled background reviews offer Retry review, which starts a new job with the original settings in the current workspace and retains the original receipt; ambiguous retries reuse their request identity.
 
 ## Reviewer profiles
@@ -144,14 +145,14 @@ Active tasks labels backend-created recurring reviews and exposes Stop for their
 Background review → Total reviews defaults to one; 2–1000 reveals an interval in whole minutes (1–525600), measured after each successful completion.
 The form explains failure, overlap, missed-interval and shared-budget behavior; invalid values block scheduling, and retries retain the same request identity.
 
-Tools shows MCP and remote-execution status even when no servers or profiles are configured, with explicit Reload MCP configuration and Reload SSH profiles actions.
+Integrations and Workspace & isolation show MCP and remote-execution status even when no servers or profiles are configured, with explicit Reload MCP configuration and Reload SSH profiles actions.
 Reload is disabled while this chat is busy or a settings change is pending; its description explains that shared backend connections close and calls in other chats may be interrupted.
 The result refreshes the configuration and reports success or invalid configuration without exposing backend commands or credentials.
 
 Background jobs appear in Activity, active tasks and completed history; context/follow-up delivery records are hidden to avoid duplicate result display.
 Stop job cancels a pending job or recurring schedule, and Show job transcript displays its worker request, responses, tool output and execution state; open active transcripts follow progress.
 
-Tasks → Background job schedules self-contained instructions with an optional local start time, 1–1000 total runs, a repeat interval and display/context/follow-up delivery.
+Schedule job schedules self-contained instructions with an optional local start time, 1–1000 total runs, a repeat interval and display/context/follow-up delivery.
 The form captures the backend-saved model and tool settings, rejects invalid counts and intervals, and retains its request identity when submission has an ambiguous outcome.
 Its description states that workers start fresh, share the session budget, can modify files through selected tools and capture the parent workspace policy; changed settings stop the job, and sandboxed workers can write inside their workspace.
 
@@ -186,7 +187,7 @@ Post-run check history shows the check result separately from task completion, i
 ## Managed extensions
 
 Machine settings → Extensions manages owner-provisioned bundles and shows the hashes actually loaded; drafts require Save and activate, and Reload saved definitions revalidates the pinned manifest.
-Tools → Managed extensions selects installed definitions for the current idle conversation, preserves tool restrictions and identifies unavailable saved selections.
+Integrations → Managed extensions selects installed definitions for the current idle conversation, preserves tool restrictions and identifies unavailable saved selections.
 Plan mode suspends managed extensions; sandbox and remote execution require deselecting them first.
 Blocked managed tasks link directly to extension settings for compatible-definition recovery; see the [bundle contract](../extensions.md).
 
@@ -199,7 +200,7 @@ New conversation continues to open a draft and creates backend state only on fir
 The client discovers supported backend commands on connection, uses explicit adapters for known operations and ignores unknown IDs.
 A catalog 404 retains legacy controls; discovery failures show a retry action rather than implying an older backend.
 Stop and Continue use the current conversation state; compaction opens a focus dialog unless invoked with form input.
-Leading-slash suggestions expose `/stop`, `/continue`, `/compact` and `/settings` outside IME composition; only explicit suggestion selection executes a command, and ordinary text submission is preserved.
+Leading-slash suggestions expose execution, model, theme, scoped configuration, automation and help entry points outside IME composition; only explicit suggestion selection executes a command, and ordinary text submission is preserved. Successful selections clear the unchanged command text; failures and text typed while a command is pending are retained.
 Skills are not part of this command milestone.
 
 Settings identify ownership: client and machine configuration use Preferences; project, session and conversation configuration use the right sidebar.
@@ -252,10 +253,62 @@ Extensions expose available bundles and an editable exported name beside an inst
 ## Workspace configuration sidebar
 
 Project, Session and Conversation tabs switch configuration in the right sidebar without leaving the chat; standalone sessions omit Project, and Session represents the harness rather than adding another scope.
-Project exposes metadata, repository inspection, shared guidance, evidence rules and default tools; Session exposes shared token budgets, compaction and runtime policies; Conversation retains its existing Tools, Instructions, Context and Tasks controls.
+Project starts with identity and directory status, collapsible name/icon customization and a compact current-branch summary; branch and worktree lists start collapsed in the sidebar.
+Project removal belongs to the project navigation menu and is absent from settings editors.
+Shared project guidance and evidence rules remain directly editable; default tools use a collapsible checklist that distinguishes built-in defaults, explicit selections and no tools, and retains unavailable selected names for removal.
+Session exposes shared token budgets, compaction and execution policies in one form; Conversation lists every section directly in one Scroll Area, with inline expandable controls and no section dropdown.
+Scope tabs use icons and text labels, and shared-control descriptions identify the affected entities.
 Scope descriptions identify affected conversations and workers, and existing backend validation, idle requirements, revisions and confirmed responses remain authoritative.
 Command-palette project/session settings actions select the corresponding sidebar tab; conversation configuration selects Conversation and opens the panel.
 
 The selected scope and conversation subsection are remembered independently for each backend identity, session and conversation in browser configuration, restored after closing or reloading and included in navigation backups.
 Scope panels stay mounted during tab changes so dirty form drafts survive switching scopes and background refreshes; drafts are not persisted across reloads.
-Older backends keep their conversation-based shared editors, and unsupported restored subsections fall back to Tools.
+Older backends keep their conversation-based shared editors, and unsupported restored subsections fall back to Overview with an explicit unavailable notice.
+
+Behavior & tool access contains the confirmed-state Plan switch and tool permissions; Workspace & isolation contains worktree, sandbox and SSH controls; Integrations contains Code Mode, MCP and extension selections.
+Controls use semantic sections with stronger headings and smaller supporting text rather than boxed Card footers or decorative separators; unavailable and suspended features retain explanations.
+Plan mode reads workspace files and saves a proposed plan without editing workspace files; turn it off to implement.
+The sidebar switch, palette Toggle Plan mode action and explicitly selected `/plan` suggestion share `conversation.plan`, with a fresh configuration read and revision-protected write to the captured conversation target.
+Unsupported backends, idle conflicts and write failures retain confirmed state; the command has no default keybinding.
+
+## Capability directory and focused controls
+
+Explore capabilities and settings opens a searchable, owner-filtered directory from the palette, the inspector or an explicitly selected `/help` suggestion.
+[`src/lib/capabilities.ts`](../../packages/web/src/lib/capabilities.ts) is the shared catalog of settings, actions and information, with stable identities, ownership, intent, canonical location, propagation and command entry points; it also supplies palette search vocabulary.
+The directory distinguishes installation definitions from conversation access, saved state from next-send drafts, and navigation lifecycle actions from customization.
+Machine selection in the directory targets machine settings only; project, session and conversation entry points retain the current conversation context.
+Read-only information and actions without a palette adapter identify their existing location instead of pretending to execute unsupported operations.
+
+- Client: appearance, all supported theme roles, keybindings, backups, bookmarks, pins and navigation memory remain browser-owned.
+- Machine: providers, model favorites, new-chat defaults, shared guidance, projects folder, reusable profiles, MCP/SSH definitions, extensions and archives remain backend-owned.
+- Project: identity and shared guidance are editable in Project; tool defaults are copied only into new conversations, and Git metadata is read-only.
+- Session: budget, compaction and execution policies apply across sibling conversations and owned workers; blank/Default fields inherit backend policy.
+- Conversation: behavior, tool access, workspace/isolation, integrations, instructions, context/usage and post-run checks have separate named destinations.
+- Work: persistent agents, review/job schedules, active work and task history/recovery keep their existing admission, capture, cancellation and retry semantics.
+
+Conversation section headings remain visible in the scrollable list; multiple sections can stay open, and collapsed contents remain mounted so drafts survive closing and reopening.
+The last selected section is remembered alongside its scope; palette and slash navigation opens and scrolls to its inline controls, including a previously collapsed selection.
+Automation shows active tasks; Background agents, Schedule review, Schedule job, Task history & recovery and Post-run checks follow as separate inline sections with their existing forms and handlers.
+Effective status shows confirmed model, workspace, modes, integrations, budget and execution, identifying next-send model selection separately.
+Project archive remains in navigation; archived records are recovered in Machine → Archives, and source files are preserved.
+
+Slash entry points open existing controls unless the action explicitly expresses execution intent:
+
+- `/help`, `/settings`, `/theme`, `/shortcuts`, `/model` open focused client/help/model controls.
+- `/project`, `/session`, `/budget`, `/policies` select the owning sidebar scope.
+- `/tools`, `/workspace`, `/sandbox`, `/instructions`, `/context`, `/mcp`, `/extensions`, `/checks`, `/status` select conversation destinations.
+- `/tasks`, `/agents`, `/review`, `/job` open automation controls; `/fork` opens an explicit message picker.
+- `/plan` toggles confirmed Plan state; `/stop` and `/continue` use existing execution handlers; `/compact` opens the compaction form.
+
+The suggestion list uses the shared Scroll Area, displays command purpose and availability, and supports ArrowDown from the composer followed by explicit button selection; ordinary Enter in the composer still submits text.
+New commands have no default keybinding; unsupported context shows availability reasons, and no new generic execution endpoint is introduced.
+The fork picker requires a loaded message and confirmation before using the existing fork operation; message actions still fork from their exact entry, and neither path silently chooses the latest point or creates an isolated checkout.
+
+## Project workflow editor
+
+Open a project's Workflows menu action to create and edit agent steps, output conditions and approval gates, choose an execution conversation, configure cron or GitHub triggers and save an immutable version.
+Manual runs accept JSON string inputs; the page polls run receipts, shows step outputs and approval history, and offers explicit approve, reject, invalidate and Stop actions.
+The GitHub merge gate displays its exact repository, PR and head SHA before approval.
+
+Add device and Edit connection accept a one-time pairing code from the backend host; paired credentials remain scoped to their backend origin in browser tab-session storage.
+HTTPS remote connections authenticate requests and SSE using bearer headers; device bookmarks and configuration exports contain no access credentials, and Forget clears the origin’s stored credential.

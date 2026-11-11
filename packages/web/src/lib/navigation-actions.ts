@@ -3,6 +3,7 @@ export const navigationActions = {
   project: [
     "create-conversation",
     "create-session",
+    "workflows",
     "toggle-pin",
     "edit",
     "remove",

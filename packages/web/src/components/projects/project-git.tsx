@@ -6,6 +6,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 import type { useMachineProjects } from "./projects-provider";
 
 type GitMetadata =
@@ -30,10 +31,12 @@ type GitMetadata =
 
 export function ProjectGit({
   projectId,
+  compact = false,
   path,
   request,
   onLoadingChange,
 }: {
+  compact?: boolean;
   onLoadingChange: (loading: boolean) => void;
   projectId: string;
   path: string;
@@ -67,9 +70,12 @@ export function ProjectGit({
     return () => controller.abort();
   }, [projectId, request, onLoadingChange]);
   return (
-    <section className="space-y-4 pt-4" aria-label="Git metadata">
+    <section className="flex min-w-0 flex-col gap-3" aria-label="Git metadata">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-medium">Git</h2>
+        <h2 className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <GitBranch className="size-3.5" aria-hidden="true" />
+          Repository
+        </h2>
       </header>
       {!data ? (
         <p className="text-xs text-muted-foreground">Reading Git…</p>
@@ -81,6 +87,12 @@ export function ProjectGit({
         </p>
       ) : (
         <>
+          {compact && (
+            <p className="wrap-anywhere text-xs font-medium">
+              {data.currentBranch ??
+                (data.bare ? "Bare repository" : "Detached HEAD")}
+            </p>
+          )}
           {data.bare && (
             <p className="text-xs text-muted-foreground">Bare repository</p>
           )}
@@ -100,7 +112,13 @@ export function ProjectGit({
             </p>
           )}
           <div className="grid items-start gap-4 @3xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-            <Collapsible defaultOpen className="min-w-0 bg-muted/20 p-4">
+            <Collapsible
+              defaultOpen={!compact}
+              className={cn(
+                "min-w-0 rounded-lg",
+                compact ? "bg-transparent" : "bg-muted/20 p-4",
+              )}
+            >
               <CollapsibleTrigger className="group flex w-full items-center gap-2 text-left text-sm font-medium">
                 <GitBranch className="size-3.5" />
                 Local branches
@@ -113,7 +131,7 @@ export function ProjectGit({
                 />
               </CollapsibleTrigger>
               <CollapsibleContent className="overflow-hidden">
-                <ul className="space-y-1 pt-4">
+                <ul className="flex flex-col gap-1 pt-3">
                   {data.branches.map((branch) => (
                     <li
                       key={branch}
@@ -142,7 +160,13 @@ export function ProjectGit({
                 )}
               </CollapsibleContent>
             </Collapsible>
-            <Collapsible defaultOpen className="min-w-0 bg-muted/20 p-4">
+            <Collapsible
+              defaultOpen={!compact}
+              className={cn(
+                "min-w-0 rounded-lg",
+                compact ? "bg-transparent" : "bg-muted/20 p-4",
+              )}
+            >
               <CollapsibleTrigger className="group flex w-full items-center gap-2 text-left text-sm font-medium">
                 <GitFork className="size-3.5" />
                 Worktrees
@@ -155,7 +179,7 @@ export function ProjectGit({
                 />
               </CollapsibleTrigger>
               <CollapsibleContent className="overflow-hidden">
-                <ul className="space-y-4 pt-4">
+                <ul className="flex min-w-0 flex-col gap-3">
                   {data.worktrees.map((tree, index) => (
                     <li
                       key={tree.path}

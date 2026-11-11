@@ -47,7 +47,7 @@ test("corrupt pin storage and invalid backend keys are rejected", () => {
     '{"http://127.0.0.1:3000":[null]}',
     '{"http://127.0.0.1:3000":[""]}',
     '{"http://127.0.0.1:3000":{}}',
-    '{"https://example.com":["id"]}',
+    '{"http://example.com":["id"]}',
     '{"__proto__":["id"]}',
   ])
     assert.throws(() => parseProjectPins(value));

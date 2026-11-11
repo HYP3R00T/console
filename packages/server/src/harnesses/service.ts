@@ -1107,6 +1107,58 @@ export class HarnessService {
     };
   }
 
+  async captureWorkflowJob(
+    sessionId: string,
+    id: string,
+  ): Promise<BackgroundJobInput> {
+    return this.serial(sessionId, async () => {
+      const { record, harness, conversation } = await this.conversation(
+        sessionId,
+        id,
+      );
+      const agent = captureJobAgent(await conversation.agent(context));
+      if (!agent.model || !this.availableModel(agent.model))
+        throw new HarnessError(
+          409,
+          "Choose an available conversation model first.",
+        );
+      if (await exceedsBudget(harness, this.store.tokenBudget(sessionId)))
+        throw new HarnessError(409, budgetReached);
+      return conversation.commit(async (tx) => {
+        const remoteProfile = (
+          await tx.doc(RemoteWorkspaceDoc, conversation.id)
+        ).profile;
+        if (remoteProfile && !this.runtime.remote.identity(remoteProfile))
+          throw new HarnessError(
+            409,
+            "The selected SSH workspace is unavailable.",
+          );
+        return {
+          content: "Workflow step",
+          at: Date.now(),
+          agent,
+          delivery: "display",
+          postRun: { ...(await tx.doc(PostRunDoc, conversation.id)) },
+          environment: {
+            directory:
+              record.projectId === standaloneOwner
+                ? await this.runtime.standaloneWorkspace(sessionId)
+                : (await this.project(record.projectId)).path,
+            worktree:
+              record.projectId === standaloneOwner
+                ? null
+                : this.store.worktree(sessionId, conversation.id),
+            sandbox: (await tx.doc(SandboxDoc, conversation.id)).enabled,
+            remoteProfile,
+            remoteIdentity: remoteProfile
+              ? this.runtime.remote.identity(remoteProfile)
+              : null,
+          },
+        };
+      }, context);
+    });
+  }
+
   scheduleJob(
     sessionId: string,
     id: string,

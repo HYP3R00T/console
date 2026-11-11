@@ -5,15 +5,6 @@ import { useId, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Field,
   FieldDescription,
   FieldError,
@@ -24,6 +15,15 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  InspectorSection,
+  InspectorSectionAction,
+  InspectorSectionActions,
+  InspectorSectionContent,
+  InspectorSectionDescription,
+  InspectorSectionHeader,
+  InspectorSectionTitle,
+} from "./inspector-section";
 import type { ChatModel } from "./use-chat-models";
 
 export type ContextSettings = {
@@ -90,11 +90,11 @@ export function InspectorContext({
       : undefined;
   return (
     <>
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle>Model context window</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <InspectorSection>
+        <InspectorSectionHeader>
+          <InspectorSectionTitle>Model context window</InspectorSectionTitle>
+        </InspectorSectionHeader>
+        <InspectorSectionContent>
           <dl className="flex min-w-0 flex-col gap-2">
             <div>
               <dt className="text-muted-foreground">Current model</dt>
@@ -129,17 +129,17 @@ export function InspectorContext({
               </div>
             )}
           </dl>
-        </CardContent>
-      </Card>
+        </InspectorSectionContent>
+      </InspectorSection>
       {settings.usage !== undefined && (
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>Recorded usage</CardTitle>
-            <CardDescription>
+        <InspectorSection>
+          <InspectorSectionHeader>
+            <InspectorSectionTitle>Recorded usage</InspectorSectionTitle>
+            <InspectorSectionDescription>
               Across all runs in this conversation, including compaction.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </InspectorSectionDescription>
+          </InspectorSectionHeader>
+          <InspectorSectionContent>
             {settings.usage ? (
               <dl className="flex flex-col gap-2">
                 <div>
@@ -154,8 +154,8 @@ export function InspectorContext({
             ) : (
               "No usage recorded yet."
             )}
-          </CardContent>
-        </Card>
+          </InspectorSectionContent>
+        </InspectorSection>
       )}
       {settings.maxTurns !== undefined && (
         <IntegerLimit
@@ -199,14 +199,14 @@ export function InspectorContext({
           )}
         </div>
       ) : (
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>Compaction settings</CardTitle>
-            <CardDescription>
+        <InspectorSection>
+          <InspectorSectionHeader>
+            <InspectorSectionTitle>Compaction settings</InspectorSectionTitle>
+            <InspectorSectionDescription>
               Shared by every conversation in this session.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </InspectorSectionDescription>
+          </InspectorSectionHeader>
+          <InspectorSectionContent>
             <FieldGroup className="gap-3">
               {settings.automatic !== undefined && (
                 <Field orientation="horizontal" data-disabled={disabled}>
@@ -269,15 +269,15 @@ export function InspectorContext({
                 )}
               </Field>
             </FieldGroup>
-          </CardContent>
+          </InspectorSectionContent>
           {draft && (tokens !== settings.keepRecentTokens || changed) && (
-            <CardFooter className="justify-end gap-2">
+            <InspectorSectionActions className="justify-end gap-2">
               <Button
                 variant="ghost"
                 size="xs"
                 onClick={() => setDraft(undefined)}
               >
-                Reset draft
+                Discard changes
               </Button>
               <Button
                 size="xs"
@@ -288,24 +288,26 @@ export function InspectorContext({
               >
                 Save size
               </Button>
-            </CardFooter>
+            </InspectorSectionActions>
           )}
-        </Card>
+        </InspectorSection>
       )}
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle>Summarize older messages</CardTitle>
-          <CardDescription>
+      <InspectorSection>
+        <InspectorSectionHeader>
+          <InspectorSectionTitle>
+            Summarize older messages
+          </InspectorSectionTitle>
+          <InspectorSectionDescription>
             Free space in the current model’s context. The full transcript stays
             visible.
-          </CardDescription>
+          </InspectorSectionDescription>
           {compacting && (
-            <CardAction>
+            <InspectorSectionAction>
               <Badge variant="secondary">Compacting</Badge>
-            </CardAction>
+            </InspectorSectionAction>
           )}
-        </CardHeader>
-        <CardContent>
+        </InspectorSectionHeader>
+        <InspectorSectionContent>
           <FieldGroup className="gap-3">
             <Field data-disabled={!canCompact}>
               <FieldLabel htmlFor={`${id}-focus`}>
@@ -325,8 +327,8 @@ export function InspectorContext({
               />
             </Field>
           </FieldGroup>
-        </CardContent>
-        <CardFooter className="flex-wrap justify-between gap-2">
+        </InspectorSectionContent>
+        <InspectorSectionActions className="flex-wrap justify-between gap-2">
           <p role="status" className="min-w-0 flex-1 text-muted-foreground">
             {!settings.modelWindow
               ? "An available model is required."
@@ -351,8 +353,8 @@ export function InspectorContext({
           >
             Compact now
           </Button>
-        </CardFooter>
-      </Card>
+        </InspectorSectionActions>
+      </InspectorSection>
     </>
   );
 }
@@ -384,12 +386,12 @@ function IntegerLimit({
     (!/^\d+$/.test(text) || !Number.isSafeInteger(limit) || limit < 1);
   const stale = !!draft && draft.original !== value;
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <InspectorSection>
+      <InspectorSectionHeader>
+        <InspectorSectionTitle>{title}</InspectorSectionTitle>
+        <InspectorSectionDescription>{description}</InspectorSectionDescription>
+      </InspectorSectionHeader>
+      <InspectorSectionContent>
         <Field data-disabled={disabled} data-invalid={invalid || stale}>
           <FieldLabel htmlFor={id}>{label}</FieldLabel>
           <Input
@@ -412,17 +414,17 @@ function IntegerLimit({
           </FieldDescription>
           {stale ? (
             <FieldError>
-              The limit changed elsewhere. Reset your draft.
+              The limit changed elsewhere. Discard your draft.
             </FieldError>
           ) : (
             invalid && <FieldError>Enter a positive whole number.</FieldError>
           )}
         </Field>
-      </CardContent>
+      </InspectorSectionContent>
       {draft && (limit !== value || stale) && (
-        <CardFooter className="justify-end gap-2">
+        <InspectorSectionActions className="justify-end gap-2">
           <Button variant="ghost" size="xs" onClick={() => setDraft(undefined)}>
-            Reset draft
+            Discard changes
           </Button>
           <Button
             size="xs"
@@ -433,8 +435,8 @@ function IntegerLimit({
           >
             Save limit
           </Button>
-        </CardFooter>
+        </InspectorSectionActions>
       )}
-    </Card>
+    </InspectorSection>
   );
 }

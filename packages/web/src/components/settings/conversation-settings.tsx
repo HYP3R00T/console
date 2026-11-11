@@ -9,6 +9,7 @@ import type { Session } from "@/components/sessions/use-project-sessions";
 import { WorkspaceInspector } from "@/components/sessions/workspace-inspector";
 import { useBackendRequest } from "@/hooks/use-backend-request";
 import { executeBackendCommand } from "@/lib/backend/commands";
+import { inspectorSections } from "@/lib/inspector-preferences";
 
 export function ConversationSettings() {
   const { deviceId, sessionId, conversationId } = useParams<{
@@ -79,6 +80,17 @@ export function ConversationSettings() {
     !!projectId,
   );
   useRegisterCommands({
+    ...Object.fromEntries(
+      inspectorSections.map((section) => [
+        `inspector.${section}`,
+        {
+          run: () => inspectorSelection.openSection(section),
+        },
+      ]),
+    ),
+    "inspector.session": {
+      run: () => inspectorSelection.selectScope("session"),
+    },
     "conversation.configure": {
       disabled: !client ? "Connect this machine first." : undefined,
       run: (input) =>

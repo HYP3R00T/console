@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { pairBackend } from "@/lib/backend/auth";
 import {
   type Device,
   type DeviceAppearance,
@@ -38,6 +39,8 @@ export function EditDeviceDialog({
   const [color, setColor] = useState<DeviceAppearance["color"]>(
     device.color ?? "neutral",
   );
+  const [pairingCode, setPairingCode] = useState("");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   return (
     <Dialog
@@ -52,10 +55,12 @@ export function EditDeviceDialog({
         </DialogHeader>
         <form
           className="space-y-4"
-          onSubmit={(event) => {
+          onSubmit={async (event) => {
             event.preventDefault();
 
+            setBusy(true);
             try {
+              if (pairingCode.trim()) await pairBackend(url, pairingCode, name);
               registry.edit(device.id, name, url, { icon, color });
               onClose();
               setError(undefined);
@@ -65,6 +70,8 @@ export function EditDeviceDialog({
                   ? cause.message
                   : "Could not save device.",
               );
+            } finally {
+              setBusy(false);
             }
           }}
         >
@@ -131,6 +138,18 @@ export function EditDeviceDialog({
               type="url"
             />
           </Field>
+          <Field>
+            <FieldLabel htmlFor="edit-pairing-code">
+              Pairing code (authenticated backends)
+            </FieldLabel>
+            <Input
+              id="edit-pairing-code"
+              type="password"
+              autoComplete="off"
+              value={pairingCode}
+              onChange={(event) => setPairingCode(event.target.value)}
+            />
+          </Field>
           <p className="text-xs text-muted-foreground">
             Saving disconnects this device. Reconnect to verify its identity.
           </p>
@@ -143,7 +162,9 @@ export function EditDeviceDialog({
             <Button variant="ghost" type="button" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit">Save changes</Button>
+            <Button type="submit" disabled={busy}>
+              Save changes
+            </Button>
           </div>
         </form>
       </DialogContent>
