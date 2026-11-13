@@ -88,7 +88,7 @@ function ProjectWorkspace({
           size="icon"
           aria-label={`New conversation in ${project.name}`}
           disabled={busy || !project.available}
-          onClick={() => void create("conversation")}
+          onClick={() => void create()}
         >
           <SquarePen className="size-4" />
         </Button>
@@ -103,9 +103,7 @@ function ProjectWorkspace({
         projectId={project.id}
         sessions={state.sessions}
         busy={busy}
-        createConversation={(sessionId) =>
-          void create("conversation", sessionId)
-        }
+        createConversation={(sessionId) => void create(sessionId)}
       />
       <ProjectWorkflows
         projectId={project.id}

@@ -1,5 +1,7 @@
 # Web
 
+The [client baseline](../designs/web-client.md) maps component/service contracts and route entry points; [project harness](../designs/project-harness.md) and [workflow execution](../designs/workflow-execution.md) explain implemented cross-package boundaries.
+
 The Background agents inspector manages persistent background agents: create a named agent, send or steer requests, choose display/context/follow-up delivery, inspect its transcript, and stop active and queued work.
 
 The Background review form and reviewer-profile editor expose 1–5 review passes, with one pass as the default for older profiles; the form previews a selected profile's pass count and per-pass turn limit.
@@ -7,7 +9,7 @@ The Background review form and reviewer-profile editor expose 1–5 review passe
 Local project reviews can load and select an existing linked worktree without changing the chat workspace; a selected checkout missing from a refreshed list remains selected and blocks scheduling until the user chooses another workspace.
 Agent state refreshes while Background agents is active; request failures retain their admission IDs for safe retry, and each agent keeps an independent message draft until the inspector unmounts.
 
-The Next.js client runs at `http://127.0.0.1:3001`. It connects directly to selected backends; Next.js does not proxy their APIs. See the [README](../../README.md) for setup and checks.
+The Next.js client runs at `http://127.0.0.1:3001`. It connects directly to selected backends; Next.js does not proxy their APIs. See [Development](../development.md) for setup and checks.
 
 ## Ownership
 
@@ -63,7 +65,7 @@ The regression test covers development, production and profiling filters; remove
 - Markdown supports lists, tables, links and fenced code blocks; embedded HTML is not executed, and Markdown images appear as links. Display modes and split panes are not implemented.
 - Mobile: a compact primary rail remains visible; contextual navigation and populated details views use dismissible sheets. Layout changes must preserve the mounted conversation and unsent draft.
 
-Machine workspace navigation starts with New conversation, opening an unsaved draft with machine/project selectors, followed by collapsible Pinned, Projects and Recents sections. A single project session is visually flattened; multiple sessions show numbered groups. Recents opens a draft outside projects. Project/session compose opens a draft in that scope; clicking or typing creates no backend entities. First send creates the conversation and submits the prompt, retaining stable creation/message identities for retries. Explicit New session still creates a session. Configuration destinations replace the workspace tree with the shared Preferences navigation, including client categories and the selected machine’s categories.
+Machine workspace navigation starts with New conversation, opening an unsaved draft with machine/project selectors, followed by collapsible Pinned, Projects and Recents sections. Project conversations appear directly beneath their project; legacy projects with multiple sessions retain numbered groups. Recents opens a draft outside projects. Project/session compose opens a draft in that scope; clicking or typing creates no backend entities. First send creates the conversation and submits the prompt, retaining stable creation/message identities for retries. New conversation reuses the project’s harness; the New session action is removed. Existing session URLs and legacy groups remain accessible. Configuration destinations replace the workspace tree with the shared Preferences navigation, including client categories and the selected machine’s categories.
 
 ## Row actions
 
@@ -104,7 +106,7 @@ Machine settings → Runtime defaults saves the model and optional thinking leve
 - Search ranks exact names, aliases, word prefixes and bounded fuzzy/typo matches; aliases include left/right panel, inspector, keybindings, themes and resume. Target names disambiguate navigation but do not make unrelated actions match. Unavailable conversation/panel commands explain their required context when searched. Empty search prioritizes usable quick actions instead of disabled Stop/Continue rows.
 - Commands retain their current view’s displayed execution target. Settings have one section with owning scopes shown per result; known forms reuse registered handlers, while other editor destinations use `settings.open` with a captured target. Large editors open the existing sidebar/page rather than duplicating forms inside the palette. Route, query or owning-client changes cancel deferred selections.
 - Appearance: Change theme, Set light theme, Set dark theme and Change display mode are registered commands without default shortcuts. Their focused pickers stay inside the palette, with Back restoring the root query. Themes include built-ins and labeled imports; arrow/pointer selection previews only the active appearance mode, Enter saves through validated browser configuration, and Back/Escape restores the latest confirmed appearance. Preview state is local to its tab, never enters backups and never writes preferences. Display-mode choices save explicitly; choosing an inactive theme default preserves System mode and the current visible appearance. Save failures retain confirmed preferences and report an error in the picker.
-- The palette reads existing project, session and standalone metadata APIs only while open, limits concurrent reads and cancels stale requests. Partial failures retain other destinations and client commands with a retry action; older backends need no new search endpoint. Backend conversation listings currently expose at most 200 conversations per session, and the palette reports that limit when present.
+- The palette reads existing project, session and standalone metadata APIs only while open, limits concurrent reads and cancels stale requests. Partial failures retain other destinations and client commands with a retry action; older backends need no new search endpoint. Current backend conversation listings scan all metadata pages; the palette still reports truncation when an older backend returns it.
 - Recent workspace paths are deduplicated, bounded to 30 and stored through the browser configuration service; they migrate from the prior per-machine route memory and participate in backup validation. Unresolved saved routes use scope IDs until metadata loads, without persisting transcripts or backend credentials.
 - Selected commands run after the palette finishes closing, so popup cleanup can finish before route transitions begin.
 - Client preferences → Keyboard shortcuts provides a full-width searchable table with Command, Keybinding and Source columns; Source distinguishes built-in defaults from browser overrides. Hover/focus controls, Enter and double-click open the recorder; right-click, Shift+F10 and the row menu offer copy, change, add, remove and reset actions. Each alternative binding gets its own row; removing affects only that binding and resetting restores the command’s defaults. Edits validate against the latest saved configuration and preserve alternatives added elsewhere.
@@ -189,7 +191,7 @@ Post-run check history shows the check result separately from task completion, i
 Machine settings → Extensions manages owner-provisioned bundles and shows the hashes actually loaded; drafts require Save and activate, and Reload saved definitions revalidates the pinned manifest.
 Integrations → Managed extensions selects installed definitions for the current idle conversation, preserves tool restrictions and identifies unavailable saved selections.
 Plan mode suspends managed extensions; sandbox and remote execution require deselecting them first.
-Blocked managed tasks link directly to extension settings for compatible-definition recovery; see the [bundle contract](../extensions.md).
+Blocked managed tasks link directly to extension settings for compatible-definition recovery; see the [bundle contract](server.md#managed-extensions).
 
 ## Unified commands and settings
 

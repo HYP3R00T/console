@@ -1,12 +1,12 @@
 # Server
 
-The [Durable delivery checklist](../durable-delivery.md) records completed capabilities and remaining work from the feature audit.
+The [runtime baseline](../designs/server-runtime.md) maps source interfaces; [project harness](../designs/project-harness.md) and [workflow execution](../designs/workflow-execution.md) record implemented decisions.
 
 The backend owns provider credentials, registered projects and durable conversations. The browser is a client, not the execution host. See the [README](../../README.md) for setup and checks.
 
 ## Ownership
 
-- `src/main.ts`: composes services, claims startup ownership, listens on `127.0.0.1:3000` and closes services on shutdown.
+- `src/main.ts`: composes services, claims startup ownership, loads startup HTTP policy (loopback by default), listens on the configured address and closes services on shutdown.
 - `src/app.ts`: creates Fastify and registers services and HTTP policy. Tests can supply isolated services and storage.
 - `src/http/connection.ts`: liveness, protocol handshake, browser-origin restrictions and the authorization integration point.
 - `src/providers/`: Pi AI catalog, API-key/OAuth login, enabled state, credentials and model favorites.
@@ -22,13 +22,15 @@ Paths above are relative to `packages/server`. Feature routes live with their ow
 ```text
 Backend
 ├── Providers and machine defaults
-├── Projects → numbered sessions → conversations
+├── Projects → one Harness (stable session ID) → conversations
 └── Standalone sessions → root conversation and forks
 ```
 
-- Each Console session opens one internal Durable Harness. The UI calls this a session; it does not display a separate harness level.
-- A project starts with Session 1/Main. Additional sessions and conversations receive automatic names.
+- Each project uses one internal Durable Harness with a stable session ID retained in existing URLs and storage. Conversations have independent histories, inboxes, models and tasks within that runtime.
+- A project starts with Main. New conversations and forks reuse its harness; repeated or concurrent project-session creation requests return the existing session without resetting its settings or conversations. There is no application limit on conversation count; listings scan all metadata pages without loading transcripts.
+- Legacy installations with multiple sessions retain those databases and routes unchanged; automatic checkpoint consolidation is not implemented. New session creation reuses the first session and cannot add another harness.
 - Console owns project/session associations. Durable owns conversation history, inbox, tasks and checkpoints.
+- Project conversations share the harness token budget, compaction policy and runtime settings; their transcripts and model selections remain separate. A conversation stop targets that conversation; an explicit session stop stops all project work.
 - Standalone sessions retain private working directories. Forks share their session’s workspace and token budget; branching does not copy or isolate files.
 
 Data is created automatically under `~/.local/share/console`: `providers.sqlite`, `projects.sqlite`, `harnesses.sqlite` and `sessions/`. Provider credentials are plaintext in the private provider database, protected by filesystem permissions. Do not commit or expose these files. No environment-file configuration is used.
@@ -42,7 +44,7 @@ HTTP commands mutate state; SSE observes conversation updates. Route files conta
 - Connection: `GET /health` checks liveness; `GET /v1/connection` returns product/API version and persistent backend installation ID. The ID detects alias/mismatch problems; it is not authentication.
 - Providers: `src/providers/routes.ts` exposes `/v1/providers`, `/v1/provider-logins/:id` and `/v1/models/favorites`. Login prompts are answered through HTTP; credentials never return to the browser. Enabled/configured does not prove upstream entitlement or a successful inference call.
 - Projects: `src/projects/routes.ts` exposes `/v1/projects`, creation/clone, per-project metadata/Git, archive/restore and `/v1/machine/settings` for the projects root.
-- Sessions: `src/harnesses/routes.ts` exposes project session creation/listing, `/v1/standalone` and session conversation routes.
+- Sessions: `src/harnesses/routes.ts` exposes idempotent project session lookup/creation and listing, `/v1/standalone` and session conversation routes.
   - `GET /v1/standalone` lists each visible root and fork separately. `GET /v1/standalone/:sessionId` retains the original root lookup; `/v1/standalone/:sessionId/:conversationId` opens a specific branch and includes visible session branches. Archiving a root does not hide its forks.
   - Conversation messages: `POST /v1/sessions/:sessionId/conversations/:conversationId/messages` admits `{content, requestId, model?, thinkingLevel?, attachments?, whenBusy?}`.
   - Conversation observation uses the same base path with `/events` for SSE, `/history` for older entries and `/submissions` for completion state. Snapshots and history pages include ascending raw entry IDs and their predecessor, including entries without visible messages. `/history?before=<entryId>` returns up to 50 earlier entries to fill a particular gap; it cannot be combined with a cursor. Legacy cursor pagination remains supported.
@@ -70,11 +72,11 @@ HTTP commands mutate state; SSE observes conversation updates. Route files conta
   - Automatic compaction and the recent-token retention target are shared by conversations in one session. Changes require an idle session. `POST /compact` admits a Durable compaction task for an idle conversation with an available model, optionally focusing the summary. Compaction preserves chat history.
   - Rename preserves IDs/history. `POST /v1/sessions/:sessionId/stop` stops the whole session, including sibling conversations, background reviews, and queued input. Conversation Stop leaves its background reviews running.
 
-The current connection policy permits the local website origins and rejects other browser origins. API access is unauthenticated; CORS is not authentication. Feature services must stay independent of future reachability/authentication adapters.
+Default startup permits the local website origins without bearer authentication; owner-provisioned HTTP policy can enable authenticated remote access with explicit browser origins. CORS and bearer authorization remain independent; see [Authenticated remote clients](#authenticated-remote-clients).
 
 ## Behavior that must stay explicit
 
-- Message retries reuse the same UUID request ID. Admission is deduplicated; external effects and provider billing are not guaranteed exactly once. Explicit session creation is not idempotent; conversation creation can reuse `creationId`.
+- Message retries reuse the same UUID request ID. Admission is deduplicated; external effects and provider billing are not guaranteed exactly once. Project-session creation reuses the project’s existing harness; conversation creation can reuse `creationId`.
 - Closing a browser detaches observation without cancelling admitted work. Startup resumes standalone and available-project sessions; archived sessions remain inactive.
 - New messages require an enabled, available favorite model and a supported thinking level. Model changes are rejected while the conversation is working or queued. Native follow-up and steer inputs use the active configuration; per-message model scheduling is not implemented.
 - Project Remove archives the registration and its histories without deleting source files. Busy projects require explicit Stop all and archive; work must settle before archival. Restore retains identities/history without restarting interrupted work.
@@ -99,7 +101,7 @@ SSE snapshots include an allowlisted execution projection: running/idle/finishin
 
 ## Limits and verification
 
-- Conversation lists return at most 200 entries; SSE snapshots include recent bounded history, with older records available through pagination. Streaming has connection/frame/slow-client bounds; it is not an unbounded log feed.
+- Conversation listings scan all metadata pages without a 200-conversation application cap; SSE snapshots include recent bounded history, with older records available through pagination. Streaming has connection/frame/slow-client bounds; it is not an unbounded log feed.
 - Tests in `test/` cover provider lifecycle, project setup/archive, session isolation, message deduplication, HTTP policy, reconnect and abrupt-crash recovery using fake providers. Read the relevant tests when changing a contract.
 - Live-provider entitlement, remote deployment, production scale, full backup/restore and OS confinement are not established by these tests.
 - Project and standalone forks, foreground reviewers, one-time scheduled reviews and persistent-agent controls are implemented. Bounded recurring jobs are implemented; permanent project deletion remains unimplemented.
@@ -310,7 +312,7 @@ The original receipt remains unchanged, the replacement check records `retryOf`,
 
 ## Managed extensions
 
-The [managed extension contract](../extensions.md) defines trusted bundle provisioning, revision-protected installation and replacement, removal, restart behavior and blocked-task recovery.
+The [harness contract](../designs/server-runtime.md#harnesses) covers trusted bundle provisioning, revision-protected installation and replacement, removal, restart behavior and blocked-task recovery.
 Managed definitions are composed with each Harness registry; installation does not automatically select their tools or hooks for conversations.
 
 Conversation configuration accepts a separate `managedExtensions` selection and includes the active catalog in its revision, so replacement invalidates stale edits.
@@ -357,4 +359,4 @@ Run `pnpm --filter @console/server access invite` on the backend host to generat
 The exchange returns a random bearer credential once; `access.sqlite` stores hashes, and the web client keeps the credential in tab-session storage, scoped to its backend origin.
 Authenticated clients have owner-level access to that backend, including workflows and approvals; API requests, connection probes and SSE carry the bearer header.
 `access list` and `access revoke <client-id>` manage credentials locally; authenticated `/v1/access/clients` supports listing and revocation through HTTP, and revocation closes active streams within one second.
-Pairing attempts are throttled, browser origins are checked independently, and health checks and signed webhook admission remain reachable without bearer authentication.
+Pairing admits at most ten attempts per IP in a fixed 60-second window and rejects new IPs when the 1,000-entry tracking map remains full after expiry cleanup; browser origins are checked independently, and health checks and signed webhook admission remain reachable without bearer authentication.

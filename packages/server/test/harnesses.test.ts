@@ -89,6 +89,9 @@ test("project -> harness -> one persistent session -> multiple independent conve
     ).json().id,
     project.id,
   );
+  const reused = await f.service.create(project.id);
+  assert.equal(reused.sessionId, harness.sessionId);
+  assert.equal(f.service.store.list(project.id).length, 1);
   list = (await f.app.inject(base)).json();
   assert.equal(list.conversations.length, 2);
   assert.ok(
@@ -161,7 +164,7 @@ test("SSE detach leaves generation running; reconnect supplies the current snaps
   const f = await fixture(directory);
   t.after(() => f.app.close());
   const project = await f.projects.register("Project", directory);
-  const h = await f.service.create(project.id, model);
+  const h = await f.service.create(project.id);
   const list = await f.service.conversations(h.sessionId);
   const main = list.conversations[0].id;
   const other = await f.service.addConversation(h.sessionId);
@@ -194,6 +197,7 @@ test("SSE detach leaves generation running; reconnect supplies the current snaps
     String(main),
     "Continue without browser",
     randomUUID(),
+    { model },
   );
   const deadline = setTimeout(() => void reader.cancel(), 3000);
   let live = "";
@@ -248,6 +252,7 @@ test("SSE detach leaves generation running; reconnect supplies the current snaps
     String(other.id),
     "Two",
     randomUUID(),
+    { model },
   );
   assert.equal(
     (
@@ -324,10 +329,10 @@ test("abrupt process loss releases ownership and recovers an admitted run withou
       process.send(descriptor); await new Promise(() => {});
     }]));
     const project = await f.projects.register('Crash test',${JSON.stringify(directory)});
-    const h = await f.service.create(project.id,${JSON.stringify(model)});
+    const h = await f.service.create(project.id);
     const list = await f.service.conversations(h.sessionId);
     descriptor = {sessionId:h.sessionId,id:list.conversations[0].id,projectId:project.id};
-    await f.service.submit(h.sessionId,String(descriptor.id),'Recover this input',${JSON.stringify(randomUUID())});`;
+    await f.service.submit(h.sessionId,String(descriptor.id),'Recover this input',${JSON.stringify(randomUUID())},{model:${JSON.stringify(model)}});`;
   const child = spawn(process.execPath, ["--input-type=module", "-e", source], {
     stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
@@ -427,7 +432,7 @@ test("failed input has an explicit completion status without leaking provider di
   const f = await fixture(directory);
   t.after(() => f.app.close());
   const project = await f.projects.register("Project", directory);
-  const h = await f.service.create(project.id, model);
+  const h = await f.service.create(project.id);
   const { harness } = await f.service.session(h.sessionId);
   const root = await harness.root(context);
   const diagnostic = "private-provider-diagnostic-must-not-leak";
@@ -441,6 +446,7 @@ test("failed input has an explicit completion status without leaking provider di
     String(root.id),
     "Hello",
     randomUUID(),
+    { model },
   );
   await harness.waitForIdle(context);
   const base = `/v1/sessions/${h.sessionId}/conversations/${root.id}`;
@@ -458,7 +464,7 @@ test("failed input has an explicit completion status without leaking provider di
   }
 });
 
-test("projects receive Session 1 without providers; session and conversation numbers are allocated concurrently", async (t) => {
+test("projects reuse one harness without providers; concurrent requests create independent conversations", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "console-default-session-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const f = await fixture(directory);
@@ -490,9 +496,16 @@ test("projects receive Session 1 without providers; session and conversation num
   );
   assert.ok(responses.every((response) => response.statusCode === 201));
   assert.deepEqual(
-    responses.map((response) => response.json().number).sort(),
-    [2, 3, 4],
+    responses.map((response) => response.json().sessionId),
+    Array(3).fill(initial[0].sessionId),
   );
+  assert.equal(f.service.store.list(project.id).length, 1);
+  const runtime = (await f.service.session(initial[0].sessionId)).harness;
+  for (const response of responses)
+    assert.equal(
+      (await f.service.session(response.json().sessionId)).harness,
+      runtime,
+    );
   const chats = await Promise.all([
     f.service.addConversation(initial[0].sessionId),
     f.service.addConversation(initial[0].sessionId),
@@ -599,7 +612,8 @@ test("session numbering migration preserves existing session identities", async 
       number: index + 1,
     })),
   );
-  assert.equal(store.insert("project").number, 3);
+  assert.equal(store.insert("project").sessionId, sessionIds[0]);
+  assert.equal(store.list("project").length, 2);
 });
 
 test("switching models clears unsupported thinking preferences", async (t) => {
@@ -763,4 +777,30 @@ test("submitted thinking levels survive view recreation and restart independentl
   f = await fixture(directory);
   assert.equal(await read(root.id), "low");
   assert.equal(await read(sibling.id), "low");
+});
+
+test("project conversations remain discoverable beyond 200 without opening another harness", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "console-many-conversations-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const f = await fixture(directory);
+  t.after(() => f.app.close());
+  const project = await f.projects.register("Many conversations", directory);
+  const session = await f.service.create(project.id);
+  const { harness } = await f.service.session(session.sessionId);
+  const ids: number[] = [];
+  for (let index = 0; index < 205; index++)
+    ids.push((await f.service.addConversation(session.sessionId)).id);
+  const list = await f.app.inject(
+    `/v1/sessions/${session.sessionId}/conversations`,
+  );
+  assert.equal(list.statusCode, 200, list.body);
+  assert.equal(list.json().conversations.length, 206);
+  assert.equal(list.json().more, false);
+  assert.ok(
+    list
+      .json()
+      .conversations.some((chat: { id: number }) => chat.id === ids.at(-1)),
+  );
+  assert.equal(f.service.store.list(project.id).length, 1);
+  assert.equal((await f.service.session(session.sessionId)).harness, harness);
 });

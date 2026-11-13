@@ -1145,12 +1145,6 @@ export const capabilities: Capability[] = [
         "action",
       ],
       [
-        "session",
-        "New session",
-        "Create a new shared runtime boundary.",
-        "action",
-      ],
-      [
         "conversation",
         "New project conversation",
         "Open a draft; create backend state on first send.",

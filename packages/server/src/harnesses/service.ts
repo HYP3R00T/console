@@ -504,14 +504,8 @@ export class HarnessService {
     };
   }
 
-  private async insertSession(
-    projectId: string,
-    creationId?: string,
-    model?: ModelRef,
-  ) {
-    const defaults = model
-      ? { model, thinkingLevel: undefined }
-      : await this.availableDefaults();
+  private async insertSession(projectId: string, creationId?: string) {
+    const defaults = await this.availableDefaults();
     if (projectId !== standaloneOwner) this.projects.assertWritable(projectId);
     return this.store.insert(
       projectId,
@@ -531,16 +525,8 @@ export class HarnessService {
     await this.initialize(record, project.path);
     return record;
   }
-  create(projectId: string, model?: ModelRef) {
-    return this.serial(projectId, () => this.createSession(projectId, model));
-  }
-  private async createSession(projectId: string, model?: ModelRef) {
-    const project = await this.project(projectId);
-    if (model) await this.model(model);
-    await this.ensureDefault(projectId);
-    const record = await this.insertSession(projectId, undefined, model);
-    await this.initialize(record, project.path);
-    return record;
+  create(projectId: string) {
+    return this.serial(projectId, () => this.ensureDefault(projectId));
   }
   private async initialize(record: HarnessRecord, cwd: string) {
     const harness = await this.runtime.open(record.sessionId);
@@ -594,8 +580,8 @@ export class HarnessService {
         const page = await tx.scanConversations({}, 200, cursor);
         visible.push(...page.items.filter((item) => !item.owner));
         cursor = page.next;
-      } while (cursor && visible.length <= 200);
-      return { items: visible.slice(0, 200), more: visible.length > 200 };
+      } while (cursor);
+      return { items: visible, more: false };
     }, context);
     const conversations = await Promise.all(
       records.items.map(async (row) => {
