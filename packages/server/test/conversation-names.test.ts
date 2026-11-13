@@ -90,7 +90,12 @@ test("renaming project and standalone conversations preserves identity/history a
       400,
     );
   }
-  const second = await f.service.create(project.id);
+  mkdirSync(join(directory, "other"));
+  const secondProject = await f.projects.register(
+    "Other project",
+    join(directory, "other"),
+  );
+  const second = await f.service.create(secondProject.id);
   const extra = await f.service.addConversation(session.sessionId);
   assert.equal(
     (

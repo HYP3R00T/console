@@ -1,13 +1,5 @@
 "use client";
-import {
-  Layers,
-  Pencil,
-  Pin,
-  PinOff,
-  SquarePen,
-  Workflow,
-  X,
-} from "lucide-react";
+import { Pencil, Pin, PinOff, SquarePen, Workflow, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
@@ -72,14 +64,7 @@ export function ProjectNavigation({
       label: "New conversation",
       icon: SquarePen,
       disabled,
-      onSelect: () => void create("conversation"),
-    },
-    {
-      id: "create-session",
-      label: "New session",
-      icon: Layers,
-      disabled,
-      onSelect: () => void create("session"),
+      onSelect: () => void create(),
     },
     {
       id: "workflows",
@@ -183,9 +168,7 @@ export function ProjectNavigation({
                   projectId={project.id}
                   sessions={state.sessions}
                   busy={busy}
-                  createConversation={(sessionId) =>
-                    void create("conversation", sessionId)
-                  }
+                  createConversation={(sessionId) => void create(sessionId)}
                   closeMobile={closeMobile}
                 />
               )}

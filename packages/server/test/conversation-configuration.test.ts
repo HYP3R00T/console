@@ -645,24 +645,12 @@ test("project defaults and guidance have separate scopes from session compaction
     1000,
   );
 
-  const secondSession = await f.service.create(project.id);
-  const secondHarness = (await f.service.session(secondSession.sessionId))
-    .harness;
-  const secondRoot = await secondHarness.root(context);
-  const secondConfig = await f.service.configuration(
-    secondSession.sessionId,
-    String(secondRoot.id),
-  );
-  assert.deepEqual(
-    secondConfig.tools.filter((tool) => tool.enabled).map((tool) => tool.name),
-    ["read"],
-  );
-  assert.equal(
-    secondConfig.context.keepRecentTokens,
-    initial.context.keepRecentTokens,
-  );
+  const reusedSession = await f.service.create(project.id);
+  assert.equal(reusedSession.sessionId, sessionId);
+  const reusedConfig = await f.service.configuration(sessionId, id);
+  assert.equal(reusedConfig.context.keepRecentTokens, 1000);
+  assert.equal(reusedConfig.context.automatic, false);
 
-  assert.equal(secondConfig.context.automatic, true);
   const standalone = await f.service.createStandalone();
   const standaloneId = String(
     (await f.service.standalone(standalone.sessionId)).conversationId,

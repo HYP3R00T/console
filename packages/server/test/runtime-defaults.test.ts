@@ -71,11 +71,11 @@ test("machine defaults are validated, persisted, and copied only on creation", a
   for (const state of [
     await agent(standalone.json().sessionId),
     await agent(initialSession.sessionId, childId),
-    await agent(extraSession.sessionId),
   ]) {
     assert.deepEqual(state?.model, model);
     assert.equal(state?.thinkingLevel, thinkingLevel);
   }
+  assert.equal(extraSession.sessionId, initialSession.sessionId);
   assert.deepEqual(await agent(initialSession.sessionId), original);
 
   const secondModel = { provider: "test", modelId: "test-model" };

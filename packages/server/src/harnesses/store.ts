@@ -169,6 +169,13 @@ export class HarnessStore {
   ) {
     this.db.exec("BEGIN IMMEDIATE");
     try {
+      // Project registrations have one runtime. Retain its identity and settings
+      // when older clients retry session creation or race project initialization.
+      const existing = projectId !== standaloneOwner && this.list(projectId)[0];
+      if (existing) {
+        this.db.exec("COMMIT");
+        return existing;
+      }
       const number = Number(
         this.db
           .prepare(

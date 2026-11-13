@@ -1,11 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import {
-  type SessionRecord,
-  sessionsChanged,
-  useProjectSessions,
-} from "./use-project-sessions";
+import { useProjectSessions } from "./use-project-sessions";
 export function useProjectNavigation(
   deviceId: string,
   projectId: string,
@@ -26,21 +22,12 @@ export function useProjectNavigation(
   }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  async function create(kind: "conversation" | "session", target?: string) {
+  async function create(target?: string) {
     if (pending.current || busy || !state.connected || !available) return;
     pending.current = true;
     setBusy(true);
     setError(undefined);
     try {
-      if (kind === "session") {
-        await state.request<SessionRecord>(
-          `/v1/projects/${projectId}/sessions`,
-          { method: "POST", body: "{}" },
-        );
-        sessionsChanged();
-        if (active.current) onCreated?.();
-        return;
-      }
       onCreated?.();
       router.push(
         target
