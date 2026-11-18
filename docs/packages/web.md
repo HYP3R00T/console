@@ -33,9 +33,11 @@ Paths above are relative to `packages/web`. Backend data remains backend-owned. 
 - Disconnect closes that client's requests and streams without stopping backend work. Credentials for AI providers are not stored in the browser.
 - Loopback HTTP and remote HTTPS URLs are supported. Authenticated backends use owner pairing and bearer headers for requests and SSE; remote execution through SSH remains a separate conversation capability.
 
+Next.js security-upgrade guidance is enabled through `experimental.agentUpgrade: "security"`; automatic agent rules remain disabled.
+
 ## Layout and navigation
 
-Next.js 16.4.3's bundled React runtimes use a pnpm patch to recognize Chromium's `InvalidStateError` with the `. Document hidden` suffix as a skipped view transition; updates still complete, and other errors remain reportable.
+Next.js 16.4.6's bundled React runtimes use a pnpm patch to recognize Chromium's `InvalidStateError` with the `. Document hidden` suffix as a skipped view transition; updates still complete, and other errors remain reportable.
 The regression test covers development, production and profiling filters; remove the patch when a Next.js upgrade includes the upstream correction.
 
 - Primary rail: Home, all saved machines, Manage devices and Client preferences. It stays visible as a fixed 56px rail, without its own expand/collapse toggle.
