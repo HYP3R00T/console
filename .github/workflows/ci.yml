@@ -48,11 +48,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes bubblewrap apparmor
-          # Permit only Bubblewrap to create namespaces on the disposable runner.
+          # Replace Ubuntu's bwrap profile instead of adding a competing attachment.
+          # This exception is limited to /usr/bin/bwrap on the disposable runner.
           sudo tee /etc/apparmor.d/console-ci-bwrap >/dev/null <<'PROFILE'
           abi <abi/4.0>,
           include <tunables/global>
-          profile console-ci-bwrap /usr/bin/bwrap flags=(unconfined) {
+          profile bwrap /usr/bin/bwrap flags=(unconfined) {
             userns,
           }
           PROFILE
