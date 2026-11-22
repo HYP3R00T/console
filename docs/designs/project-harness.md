@@ -2,7 +2,7 @@
 
 - Status: Implemented in the working tree; reconstructed design record, not release/deployment evidence.
 - Recorded: 2026-11-14.
-- Evidence: [server guide](../packages/server.md#data-and-hierarchy), [runtime baseline](server-runtime.md#harnesses), current source and associated tests.
+- Evidence: [harness service](../../packages/server/src/harnesses/service.ts) and [harness tests](../../packages/server/test/harnesses.test.ts).
 
 ## Problem and scope
 
@@ -59,4 +59,4 @@ A future consolidation would need a separate design covering identity references
 
 [Harness tests](../../packages/server/test/harnesses.test.ts) cover project-session reuse, competing creation and retained state; [conversation creation](../../packages/server/test/conversation-creation.test.ts), [configuration](../../packages/server/test/conversation-configuration.test.ts), [names](../../packages/server/test/conversation-names.test.ts) and [runtime defaults](../../packages/server/test/runtime-defaults.test.ts) cover related boundaries.
 These are verification entry points, not a claim that application tests ran during this documentation refactor.
-Application changes require the checks in [Development](../development.md); update this record and the package guides when ownership or compatibility changes.
+Update this design when ownership or compatibility changes. Run the relevant checks in [Development](../development.md).

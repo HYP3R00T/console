@@ -1,20 +1,21 @@
 # Development
 
-Run these commands from the repository root. [AGENTS.md](../AGENTS.md) defines working rules and permissions.
+Run these commands from the repository root. [AGENTS.md](../AGENTS.md) defines agent permissions, including control of the owner's development servers.
 
 ## Mise
 
-Mise installs the repository's shared tools and exposes development tasks. Tool versions and tasks are defined in `mise.toml` and `mise.lock`.
+Mise installs the repository's shared tools and exposes development tasks. See [mise.toml](../mise.toml) for tool requirements and task definitions and [mise.lock](../mise.lock) for resolved versions. Use a Mise-activated shell or prefix a tool command with `mise exec --` to use configured tools.
 
+- `bash scripts/setup.sh` trusts the repository's Mise configuration and installs its tools. Review the configuration before trusting it.
 - `mise install`: install the configured tools.
 - `mise run dev:server`: run the backend on `127.0.0.1:3000`.
 - `mise run dev:web`: run the website on `127.0.0.1:3001` in a separate terminal.
 
-**Important:** The owner runs the development servers. Agents must not start, stop or restart them without permission.
+The configured enter hook runs [scripts/enter_project.sh](../scripts/enter_project.sh). It can install the Commitizen CLI when `uv` is available and replace missing or non-Prek Git hooks. Setup and hook installation change local tooling and are separate from running checks.
 
 ## pnpm
 
-pnpm manages workspace dependencies and application scripts. Root scripts run checks across both packages; package scripts define each application's commands.
+pnpm manages workspace dependencies and runs the scripts defined in the [root](../package.json), [server](../packages/server/package.json) and [web](../packages/web/package.json) manifests. Use the configured Node.js version, which must satisfy the server's engine requirement.
 
 - `pnpm install --frozen-lockfile`: install dependencies without changing the lockfile.
 - `pnpm typecheck`: check application types.
@@ -23,7 +24,7 @@ pnpm manages workspace dependencies and application scripts. Root scripts run ch
 - `pnpm --filter @console/server start`: run the built backend.
 - `pnpm --filter @console/web start`: run the built website.
 
-**Important:** Application changes require type checks, tests and a production build. Production start commands require a completed build and must not replace the owner's running development processes.
+Type checks can generate Next.js route types. Tests use temporary state, and builds write application output. The production start commands require the corresponding build and available ports.
 
 Sandbox integration tests require Linux Bubblewrap and permitted unprivileged namespaces; unsupported local hosts report explicit skips.
 CI installs Bubblewrap and replaces Ubuntu's `bwrap` AppArmor profile with a user-namespace allowance scoped to `/usr/bin/bwrap` on the disposable runner; using the same profile name avoids competing executable attachments.
@@ -36,7 +37,7 @@ Biome formats and lints JS/TS, JSON, CSS and GraphQL using `biome.json`.
 - `pnpm check:fix`: format code and apply safe lint fixes.
 - `pnpm check`: report remaining issues without changing files.
 
-**Important:** Run during development after code edits, not just at commit time. Review generated edits and preserve unrelated work. Biome does not replace type checks, tests or builds.
+Run after code edits and review any automatic fixes for unrelated changes.
 
 ## RumDL
 
@@ -45,21 +46,17 @@ RumDL checks and formats Markdown using `rumdl.toml`.
 - `rumdl check docs/development.md`: check a Markdown file; substitute the paths you edited.
 - `rumdl fmt docs/development.md`: apply Markdown fixes.
 
-**Important:** Keep one source line per paragraph. Inspect formatting changes; avoid unrelated rewrites and oversized table padding. The Markdown commit hook checks files but does not format them.
+The Markdown commit hook runs in check mode. Inspect formatter changes for unrelated rewrites.
 
 ## Prek
 
 Prek runs repository checks and Git hooks configured in `.pre-commit-config.yaml`. These include Biome, RumDL, ShellCheck, file hygiene checks and Commitizen commit-message validation.
 
-- `prek install`: install the configured Git hooks; normally handled by the Mise enter hook.
-- `prek run --all-files`: check all tracked files during development.
+- `prek install`: install the configured Git hooks. The Mise enter hook normally handles this.
+- `prek run --all-files`: run repository checks on all tracked files.
 - `prek run --files docs/development.md`: check explicit paths, including untracked files; substitute each new file's path.
 
-**Important:**
-
-- Run repository checks before reporting work ready. New files need explicit-path checks; no staging is required. Documentation-only work also needs local-link checks.
-- Installed pre-commit and commit-msg hooks trigger automatically on an authorized commit. They do not run application type checks, tests or builds.
-- Hooks may rewrite code, whitespace and line endings. Inspect edits and rerun failed checks. Never bypass hooks or report skipped checks as passed.
+Hooks may rewrite code, whitespace and line endings. Inspect edits and rerun failed checks. Installed hooks run automatically on commit, including Commitizen validation of the Conventional Commit message. Application verification runs separately.
 
 ## ShellCheck
 
@@ -74,7 +71,7 @@ Tombi formats and lints TOML. Mise installs it for direct use.
 - `tombi lint`: lint TOML files across the repository.
 - `tombi format`: format TOML files across the repository.
 
-**Important:** Run from the repository root. Both commands discover TOML files recursively, including `mise.toml` and `rumdl.toml`. Tombi is not a configured Git hook; the pre-commit TOML check validates syntax only.
+Both commands discover TOML files recursively, including `mise.toml` and `rumdl.toml`. Run Tombi directly for linting and formatting. The Git hook checks TOML syntax.
 
 ## Changesets
 
@@ -84,4 +81,24 @@ Changesets records package changes and prepares version/changelog updates for th
 - `pnpm changeset status`: inspect pending changes relative to `main`.
 - `pnpm changeset version`: apply pending version/changelog updates.
 
-**Important:** Documentation-only changes do not need an entry. Run version preparation only for an authorized release. Changesets does not commit or publish automatically; publishing and deployment are not configured.
+The [Changesets configuration](../.changeset/config.json) uses `main` as its base and enables versioning for private packages. Documentation-only changes need no entry. Run version preparation only for an authorized release. Changesets does not commit or publish automatically.
+
+## Verification
+
+- Run repository checks before reporting work ready. Check new files by explicit path since `--all-files` only sees tracked files.
+- For documentation changes, run RumDL and check local link paths and heading fragments, including design index entries.
+- For application changes, also run `pnpm check`, `pnpm typecheck`, `pnpm test` and `pnpm build`. The [CI workflow](../.github/workflows/ci.yml) runs repository and application checks in separate jobs.
+- Report failures and unavailable checks. Keep verification evidence scoped to what actually ran.
+
+## Documentation and designs
+
+Use the [design sitemap](designs/SITEMAP.md) to find feature decisions. Check the relevant source and targeted tests for current behavior.
+
+Keep prose concise and use one source line per paragraph, including list items. Preserve structural line breaks in tables, code blocks and quotations.
+
+1. For a change that needs a design, describe the problem, acceptance criteria and boundaries in a stable `docs/designs/<feature>.md` file.
+2. Record architecture, considered alternatives, decisions and rationale, consequences and verification criteria in the owning design. Identify the affected files and plan reviewable implementation phases. Link to the owning decisions from dependent designs.
+3. Use fresh-context review for consequential or uncertain designs. Resolve material findings in the design and record approval explicitly. Keep proposal, approval and implementation status distinct in the design and the sitemap.
+4. Run the relevant checks during implementation. Record verified behavior and accepted deviations in the owning design, and synchronize its status in the sitemap. Keep a superseded design at its stable path and link its replacement.
+
+Keep unresolved audit findings visible and record their dispositions before archiving resolved reports. Incorporate lasting decisions from working drafts into their owning designs.

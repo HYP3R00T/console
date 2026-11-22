@@ -2,7 +2,7 @@
 
 - Status: Implemented in the working tree; reconstructed design record, not release/deployment evidence.
 - Recorded: 2026-11-14.
-- Evidence: [server workflow contract](../packages/server.md#project-workflows), [web workflow editor](../packages/web.md#project-workflow-editor) and [source baseline](server-runtime.md#workflows).
+- Evidence: [workflow service](../../packages/server/src/workflows/service.ts) and [web workflow editor](../../packages/web/src/components/projects/project-workflows.tsx).
 
 ## Problem and scope
 
@@ -56,6 +56,5 @@ Future changes to those boundaries need a new proposal and migration/recovery an
 ## Verification and maintenance
 
 [Workflow tests](../../packages/server/test/workflows.test.ts) cover definition validation, versioning, admission, approvals and triggers; [background-job](../../packages/server/test/background-jobs.test.ts) and [job-environment tests](../../packages/server/test/job-environment.test.ts) cover the underlying worker contracts.
-[Shared schema](shared-contracts.md#schemas-and-types) and [client projects](web-client.md#projects) identify related interfaces.
 These are verification entry points, not a fresh claim of live-provider or GitHub validation.
-Update this record, the owning guides and affected tests when step semantics, approvals, admission or trigger behavior change.
+Update this design and affected tests when step semantics, approvals, admission or trigger behavior change.

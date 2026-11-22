@@ -1,6 +1,13 @@
 import type { ImportedTheme } from "./theme-schema.ts";
 
-// Console UI adaptations of upstream palettes; sources in docs/packages/web.md.
+// Console UI adaptations of upstream palettes:
+// Catppuccin: https://catppuccin.com/palette/
+// Tokyo Night: https://github.com/tokyo-night/tokyo-night-vscode-theme
+// Nord: https://www.nordtheme.com/
+// Dracula: https://draculatheme.com/contribute
+// Solarized: https://ethanschoonover.com/solarized/
+// Gruvbox: https://github.com/morhetz/gruvbox
+// Rosé Pine: https://rosepinetheme.com/palette/
 function palette(
   id: string,
   name: string,
