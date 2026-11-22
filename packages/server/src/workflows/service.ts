@@ -4,8 +4,8 @@ import type {
   WorkflowRunView,
   WorkflowVersion,
 } from "@console/contracts";
-import { copyJson } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
+import { copyJson } from "@earendil-works/chord/json";
 import type { TaskId } from "@earendil-works/pi-durable";
 import { CronExpressionParser } from "cron-parser";
 import { ReviewRequests } from "../harnesses/background-review.ts";

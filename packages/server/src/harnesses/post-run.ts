@@ -6,7 +6,7 @@ import {
   defineTask,
   GenerationTask,
   hook,
-  runEndTask,
+  hookTask,
   ToolResultEntry,
 } from "@earendil-works/pi-durable";
 import { codeModeCalls } from "./advanced-tools.ts";
@@ -197,7 +197,7 @@ export const PostRunExtension = defineExtension({
         if (edited || attempt > 0 || retryOf !== undefined)
           return {
             tasks: [
-              runEndTask(CheckTask, {
+              hookTask(CheckTask, {
                 command,
                 ...(retryOf !== undefined && { retryOf }),
                 attempt,

@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import { copyJson } from "@earendil-works/chord";
 import {
   BACKGROUND_CONTEXT as context,
   withAbortSignal,
 } from "@earendil-works/chord/context";
+import { copyJson } from "@earendil-works/chord/json";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type {
   AgentState,

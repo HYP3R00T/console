@@ -368,7 +368,8 @@ export function taskGraphView(
         ...(task.kind === RecurringReview.definition.name && {
           stoppable: true,
         }),
-        ...(state.status === "sleeping" && { wakeAt: state.until }),
+        ...(state.status === "sleeping" &&
+          state.until !== undefined && { wakeAt: state.until }),
       });
     }
   }

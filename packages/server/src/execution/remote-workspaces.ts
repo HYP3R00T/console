@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isAbsolute, posix } from "node:path";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import { defineDoc } from "@earendil-works/pi-durable";
 import {
   type Connection,

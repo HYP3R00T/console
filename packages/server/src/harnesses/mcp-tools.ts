@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { dirname, isAbsolute } from "node:path";
-import { copyJson } from "@earendil-works/chord";
+import { copyJson } from "@earendil-works/chord/json";
 import {
   defineExtension,
   defineTool,

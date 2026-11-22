@@ -4,7 +4,7 @@ import type {
   WorkflowRunView,
   WorkflowStep,
 } from "@console/contracts";
-import { copyJson } from "@earendil-works/chord";
+import { copyJson } from "@earendil-works/chord/json";
 import {
   defineDocFamily,
   defineExtension,

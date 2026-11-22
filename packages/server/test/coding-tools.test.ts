@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
@@ -541,18 +542,32 @@ test("crash after a committed tool result recovers without repeating that tool",
   const fixtureUrl = new URL("./support/harness-fixture.ts", import.meta.url)
     .href;
   const aiUrl = import.meta.resolve("@earendil-works/pi-ai");
+  const contextUrl = import.meta.resolve("@earendil-works/chord/context");
   const source = `import {fixture} from ${JSON.stringify(fixtureUrl)};
     import {fauxAssistantMessage,fauxToolCall} from ${JSON.stringify(aiUrl)};
-    let descriptor;
+    import {BACKGROUND_CONTEXT as context} from ${JSON.stringify(contextUrl)};
+    const requestId = ${JSON.stringify(randomUUID())};
+    let root, session;
     const f = await fixture(${JSON.stringify(directory)}, faux => faux.setResponses([
       fauxAssistantMessage(fauxToolCall('read',{path:'README.md'}),{stopReason:'toolUse'}),
-      async () => { process.send(descriptor); await new Promise(() => {}); }
+      async () => {
+        const descriptor = await root.commit(async (tx) => {
+          const submission = await tx.submissionByRequest(root.id, requestId);
+          const tasks = await tx.scanTasks({conversationId:root.id,kind:"pi.generation",status:"running"},10);
+          const task = tasks.items[0];
+          if (submission?.status !== "placed" || tasks.items.length !== 1 || task.version !== 3)
+            throw Error("Expected a placed submission and an active generation v3");
+          return {sessionId:session.sessionId,id:root.id,submissionId:submission.id,taskId:task.id};
+        }, context);
+        process.send(descriptor);
+        await new Promise(() => {});
+      }
     ]));
     const project = await f.projects.register('Recovery',${JSON.stringify(path)});
-    const session = (await f.service.list(project.id)).sessions[0];
-    const list = await f.service.conversations(session.sessionId);
-    descriptor = {sessionId:session.sessionId,id:list.conversations[0].id};
-    await f.service.submit(session.sessionId,String(descriptor.id),'Inspect',${JSON.stringify(randomUUID())},{model:{provider:'test',modelId:'test-model'}});`;
+    session = (await f.service.list(project.id)).sessions[0];
+    const {harness} = await f.service.session(session.sessionId);
+    root = await harness.root(context);
+    await f.service.submit(session.sessionId,String(root.id),'Inspect',requestId,{model:{provider:'test',modelId:'test-model'}});`;
   const child = spawn(process.execPath, ["--input-type=module", "-e", source], {
     stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
@@ -570,6 +585,26 @@ test("crash after a committed tool result recovers without repeating that tool",
   const exited = once(child, "exit");
   child.kill("SIGKILL");
   await exited;
+  const db = new DatabaseSync(
+    join(directory, "sessions", `${descriptor.sessionId}.sqlite`),
+    { readOnly: true },
+  );
+  try {
+    const task = db
+      .prepare(
+        "SELECT json_extract(kind, '$') AS kind, status, json_extract(record, '$.version') AS version FROM tasks WHERE id = ?",
+      )
+      .get(descriptor.taskId);
+    assert.equal(task?.kind, "pi.generation");
+    assert.equal(task?.status, "running");
+    assert.equal(task?.version, 3);
+    const input = db
+      .prepare("SELECT status FROM submissions WHERE id = ?")
+      .get(descriptor.submissionId);
+    assert.equal(input?.status, "placed");
+  } finally {
+    db.close();
+  }
   // A replayed read would see different data; the committed result must remain original.
   await writeFile(join(path, "README.md"), "Changed after crash\n");
   const f = await fixture(directory, (faux) =>
@@ -586,9 +621,10 @@ test("crash after a committed tool result recovers without repeating that tool",
     ]),
   );
   t.after(() => f.app.close());
-  await (await f.service.session(descriptor.sessionId)).harness.waitForIdle(
-    context,
-  );
+  const { harness } = await f.service.session(descriptor.sessionId);
+  await harness.waitForIdle(context);
+  const original = await harness.submission(descriptor.submissionId, context);
+  assert.equal((await original?.status(context))?.status, "done");
   const history = (
     await f.service.history(descriptor.sessionId, String(descriptor.id))
   ).items;
@@ -597,7 +633,10 @@ test("crash after a committed tool result recovers without repeating that tool",
     messages(history).filter((message) => message.role === "tool").length,
     1,
   );
-  assert.ok(
-    JSON.stringify(history).includes("Recovered from stored evidence."),
+  assert.equal(
+    messages(history).filter(
+      (message) => message.text === "Recovered from stored evidence.",
+    ).length,
+    1,
   );
 });

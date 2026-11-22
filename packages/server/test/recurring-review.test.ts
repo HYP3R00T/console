@@ -187,10 +187,10 @@ for (const cancel of [false, true]) {
         "Parent Stop must leave its background schedule running",
       );
       await f.service.stopReview(sessionId, String(root.id), String(job.id));
-      assert.equal(aborted, true);
     }
     const task = await harness.waitForTask(job.id as TaskId, context);
     assert.equal(task.state.outcome?.status, cancel ? "aborted" : "failed");
+    if (cancel) assert.equal(aborted, true);
     const children = await harness.commit(
       (tx) =>
         tx.scanTasks({ conversationId: root.id, status: "terminal" }, 100),
