@@ -1,7 +1,6 @@
 [tools]
 biome = "latest"
 node = "lts"
-"npm:@changesets/cli" = "latest"
 pnpm = "latest"
 prek = "latest"
 rumdl = "latest"

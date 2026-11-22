@@ -82,11 +82,6 @@ url = "https://nodejs.org/dist/v24.22.2/node-v24.22.2-darwin-x64.tar.gz"
 checksum = "sha256:ca1bff5d8ead13c9f2ea404a176db46bd430704d5b5113734049fa365e7799e2"
 url = "https://nodejs.org/dist/v24.22.2/node-v24.22.2-win-x64.zip"
 
-[[tools."npm:@changesets/cli"]]
-version = "3.0.3"
-backend = "npm:@changesets/cli"
-specifiers = ["latest"]
-
 [[tools.pnpm]]
 version = "12.18.0"
 backend = "aqua:pnpm/pnpm"

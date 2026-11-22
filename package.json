@@ -3,7 +3,6 @@
   "private": true,
   "scripts": {
     "build": "pnpm -r --if-present build",
-    "changeset": "changeset",
     "check": "biome check .",
     "check:fix": "biome check --write .",
     "dev:server": "pnpm --filter @console/server dev",

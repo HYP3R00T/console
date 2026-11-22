@@ -73,15 +73,9 @@ Tombi formats and lints TOML. Mise installs it for direct use.
 
 Both commands discover TOML files recursively, including `mise.toml` and `rumdl.toml`. Run Tombi directly for linting and formatting. The Git hook checks TOML syntax.
 
-## Changesets
+## Release notes
 
-Changesets records package changes and prepares version/changelog updates for the private workspace packages.
-
-- `pnpm changeset`: record a user-visible package change and choose its bump level.
-- `pnpm changeset status`: inspect pending changes relative to `main`.
-- `pnpm changeset version`: apply pending version/changelog updates.
-
-The [Changesets configuration](../.changeset/config.json) uses `main` as its base and enables versioning for private packages. Documentation-only changes need no entry. Run version preparation only for an authorized release. Changesets does not commit or publish automatically.
+The project owner writes release notes by hand when a release or deployment needs them and chooses where to publish them at that time.
 
 ## Verification
 
